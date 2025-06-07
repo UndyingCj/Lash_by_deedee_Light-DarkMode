@@ -97,9 +97,9 @@ export default function HomePage() {
           <h2 className="text-3xl font-bold text-center text-pink-500 mb-12">Our Services</h2>
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { name: "Ombré Brows", price: "₦50,000", duration: "2.5 hours" },
-              { name: "Classic Lashes", price: "₦35,000", duration: "2 hours" },
-              { name: "Volume Lashes", price: "₦45,000", duration: "2.5 hours" },
+              { name: "Microshading", price: "55,000", duration: "2.5 hours" },
+              { name: "Classic Lashes", price: "15,000", duration: "2 hours" },
+              { name: "Volume Lashes", price: "25,000", duration: "2.5 hours" },
             ].map((service, index) => (
               <Card
                 key={index}
@@ -110,7 +110,7 @@ export default function HomePage() {
                     <Sparkles className="w-8 h-8 text-pink-500 dark:text-pink-400" />
                   </div>
                   <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-2">{service.name}</h3>
-                  <p className="text-2xl font-bold text-pink-500 dark:text-pink-400 mb-1">{service.price}</p>
+                  <p className="text-2xl font-bold text-pink-500 dark:text-pink-400 mb-1">₦{service.price}</p>
                   <p className="text-gray-600 dark:text-gray-300">{service.duration}</p>
                 </CardContent>
               </Card>

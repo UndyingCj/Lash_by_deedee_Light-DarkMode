@@ -8,66 +8,117 @@ export default function ServicesPage() {
   const services = {
     brows: [
       {
-        name: "Ombré Brows",
-        price: "₦50,000",
+        name: "Microshading",
+        price: "55,000",
         duration: "2.5 hours",
         description:
-          "A soft, powdered brow look that's darker at the tail and lighter at the front. Perfect for all skin types and lasts 1-2 years.",
+          "Perfect for all skin types. A soft, powdered brow look that's darker at the tail and lighter at the front. Lasts 1-2 years.",
         icon: <Brush className="w-6 h-6" />,
       },
       {
-        name: "Microblading",
-        price: "₦45,000",
-        duration: "2 hours",
+        name: "Brow Lamination",
+        price: "15,000",
+        duration: "1 hour",
         description:
-          "Hair-like strokes that create natural-looking brows. Ideal for those who want a more defined brow shape.",
+          "Straightens and lifts brow hairs for a fuller, more defined look. Perfect for unruly or sparse brows.",
         icon: <Eye className="w-6 h-6" />,
       },
       {
-        name: "Combo Brows",
-        price: "₦55,000",
-        duration: "3 hours",
-        description: "Combination of microblading and shading for the most natural and full-looking brows.",
+        name: "Brow Lamination & Tint",
+        price: "25,000",
+        duration: "1.5 hours",
+        description: "Combination of brow lamination with tinting for enhanced color and definition.",
         icon: <Sparkles className="w-6 h-6" />,
       },
     ],
     lashes: [
       {
-        name: "Classic Lashes",
-        price: "₦35,000",
+        name: "Classic Set",
+        price: "15,000",
         duration: "2 hours",
         description: "One extension per natural lash for a natural, mascara-like effect. Perfect for everyday wear.",
         icon: <Eye className="w-6 h-6" />,
       },
       {
-        name: "Volume Lashes",
-        price: "₦45,000",
+        name: "Hybrid Set",
+        price: "20,000",
+        duration: "2.5 hours",
+        description: "Mix of classic and volume techniques for textured, natural-looking fullness.",
+        icon: <Brush className="w-6 h-6" />,
+      },
+      {
+        name: "Volume Set",
+        price: "25,000",
         duration: "2.5 hours",
         description: "Multiple lightweight extensions per natural lash for dramatic, full lashes.",
         icon: <Sparkles className="w-6 h-6" />,
       },
       {
-        name: "Hybrid Lashes",
-        price: "₦40,000",
-        duration: "2.5 hours",
-        description: "Mix of classic and volume techniques for textured, natural-looking fullness.",
+        name: "Mega Volume Set",
+        price: "30,000",
+        duration: "3 hours",
+        description: "Maximum volume and drama with ultra-fine extensions for the boldest look.",
+        icon: <Sparkles className="w-6 h-6" />,
+      },
+    ],
+    addons: [
+      {
+        name: "Wispy Effect",
+        price: "3,000",
+        duration: "30 mins",
+        description: "Add wispy, fluttery effect to any lash set for extra texture.",
+        icon: <Eye className="w-6 h-6" />,
+      },
+      {
+        name: "Full Effect",
+        price: "2,000",
+        duration: "20 mins",
+        description: "Enhance fullness across the entire lash line.",
+        icon: <Sparkles className="w-6 h-6" />,
+      },
+      {
+        name: "Bottom Lashes",
+        price: "6,000",
+        duration: "45 mins",
+        description: "Extensions for bottom lashes to complete your look.",
+        icon: <Eye className="w-6 h-6" />,
+      },
+      {
+        name: "Lash Removal",
+        price: "4,000",
+        duration: "30 mins",
+        description: "Safe and gentle removal of existing lash extensions.",
         icon: <Brush className="w-6 h-6" />,
       },
     ],
     touchups: [
       {
-        name: "Brow Touch-Up (4-8 weeks)",
-        price: "₦20,000",
+        name: "Brow Touch-Up (2-4 months) - Done by Deedee",
+        price: "25,000",
         duration: "1.5 hours",
-        description: "Refresh and perfect your brows within the healing period.",
+        description: "Refresh and perfect your brows within 2-4 months if originally done by Lashed by Deedee.",
         icon: <Brush className="w-6 h-6" />,
       },
       {
-        name: "Lash Fill (2-3 weeks)",
-        price: "₦25,000",
-        duration: "1.5 hours",
-        description: "Maintain your lash extensions with regular fills.",
-        icon: <Eye className="w-6 h-6" />,
+        name: "Brow Touch-Up (2-4 months) - Not done by Deedee",
+        price: "30,000",
+        duration: "2 hours",
+        description: "Touch-up service for brows not originally done by Lashed by Deedee (2-4 months).",
+        icon: <Brush className="w-6 h-6" />,
+      },
+      {
+        name: "Brow Touch-Up (5-9 months) - Done by Deedee",
+        price: "30,000",
+        duration: "2 hours",
+        description: "Refresh and perfect your brows within 5-9 months if originally done by Lashed by Deedee.",
+        icon: <Brush className="w-6 h-6" />,
+      },
+      {
+        name: "Brow Touch-Up (5-9 months) - Not done by Deedee",
+        price: "35,000",
+        duration: "2.5 hours",
+        description: "Touch-up service for brows not originally done by Lashed by Deedee (5-9 months).",
+        icon: <Brush className="w-6 h-6" />,
       },
     ],
   }
@@ -83,7 +134,7 @@ export default function ServicesPage() {
             <CardTitle className="text-xl text-gray-800 dark:text-gray-100">{service.name}</CardTitle>
           </div>
           <Badge variant="secondary" className="bg-pink-100 dark:bg-pink-900/50 text-pink-700 dark:text-pink-300">
-            {service.price}
+            ₦{service.price}
           </Badge>
         </div>
       </CardHeader>
@@ -126,8 +177,18 @@ export default function ServicesPage() {
         {/* Lashes Section */}
         <section className="mb-16">
           <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-8 text-center">Lash Services</h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {services.lashes.map((service, index) => (
+              <ServiceCard key={index} service={service} />
+            ))}
+          </div>
+        </section>
+
+        {/* Add-ons Section */}
+        <section className="mb-16">
+          <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-8 text-center">Add-ons & Extras</h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {services.addons.map((service, index) => (
               <ServiceCard key={index} service={service} />
             ))}
           </div>
@@ -143,6 +204,37 @@ export default function ServicesPage() {
               <ServiceCard key={index} service={service} />
             ))}
           </div>
+        </section>
+
+        {/* Infill Pricing Info */}
+        <section className="mb-16">
+          <Card className="border-pink-200 dark:border-pink-700 bg-pink-50 dark:bg-gray-800">
+            <CardContent className="p-8 text-center">
+              <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">Lash Infill Pricing</h3>
+              <div className="grid md:grid-cols-2 gap-6 text-left">
+                <div className="bg-white dark:bg-gray-700 p-6 rounded-lg">
+                  <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">2 Weeks Infills</h4>
+                  <p className="text-gray-600 dark:text-gray-300 mb-2">50% of the full set price</p>
+                  <ul className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+                    <li>• Classic: ₦7,500</li>
+                    <li>• Hybrid: ₦10,000</li>
+                    <li>• Volume: ₦12,500</li>
+                    <li>• Mega Volume: ₦15,000</li>
+                  </ul>
+                </div>
+                <div className="bg-white dark:bg-gray-700 p-6 rounded-lg">
+                  <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">3 Weeks Infills</h4>
+                  <p className="text-gray-600 dark:text-gray-300 mb-2">70% of the full set price</p>
+                  <ul className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+                    <li>• Classic: ₦10,500</li>
+                    <li>• Hybrid: ₦14,000</li>
+                    <li>• Volume: ₦17,500</li>
+                    <li>• Mega Volume: ₦21,000</li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </section>
 
         {/* CTA Section */}

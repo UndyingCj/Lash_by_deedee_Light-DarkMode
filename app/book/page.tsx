@@ -15,14 +15,21 @@ export default function BookingPage() {
   const [selectedTime, setSelectedTime] = useState("")
 
   const services = [
-    { name: "Ombré Brows", price: "₦50,000", duration: "2.5 hours" },
-    { name: "Microblading", price: "₦45,000", duration: "2 hours" },
-    { name: "Combo Brows", price: "₦55,000", duration: "3 hours" },
-    { name: "Classic Lashes", price: "₦35,000", duration: "2 hours" },
-    { name: "Volume Lashes", price: "₦45,000", duration: "2.5 hours" },
-    { name: "Hybrid Lashes", price: "₦40,000", duration: "2.5 hours" },
-    { name: "Brow Touch-Up", price: "₦20,000", duration: "1.5 hours" },
-    { name: "Lash Fill", price: "₦25,000", duration: "1.5 hours" },
+    { name: "Microshading", price: "55,000", duration: "2.5 hours" },
+    { name: "Brow Lamination", price: "15,000", duration: "1 hour" },
+    { name: "Brow Lamination & Tint", price: "25,000", duration: "1.5 hours" },
+    { name: "Classic Lashes", price: "15,000", duration: "2 hours" },
+    { name: "Hybrid Lashes", price: "20,000", duration: "2.5 hours" },
+    { name: "Volume Lashes", price: "25,000", duration: "2.5 hours" },
+    { name: "Mega Volume Lashes", price: "30,000", duration: "3 hours" },
+    { name: "Brow Touch-Up (2-4 months) - Done by Deedee", price: "25,000", duration: "1.5 hours" },
+    { name: "Brow Touch-Up (2-4 months) - Not done by Deedee", price: "30,000", duration: "2 hours" },
+    { name: "Brow Touch-Up (5-9 months) - Done by Deedee", price: "30,000", duration: "2 hours" },
+    { name: "Brow Touch-Up (5-9 months) - Not done by Deedee", price: "35,000", duration: "2.5 hours" },
+    { name: "Wispy Effect (Add-on)", price: "3,000", duration: "30 mins" },
+    { name: "Full Effect (Add-on)", price: "2,000", duration: "20 mins" },
+    { name: "Bottom Lashes", price: "6,000", duration: "45 mins" },
+    { name: "Lash Removal", price: "4,000", duration: "30 mins" },
   ]
 
   const timeSlots = [
@@ -42,7 +49,7 @@ export default function BookingPage() {
       <div className="max-w-4xl mx-auto px-4">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-pink-500 mb-4">Book an Appointment</h1>
-          <p className="text-xl text-gray-600">
+          <p className="text-xl text-gray-600 dark:text-gray-300">
             Select a service, pick a date, and secure your spot with a 50% deposit. Pay with Paystack, Flutterwave, or
             upload transfer proof.
           </p>
@@ -53,7 +60,7 @@ export default function BookingPage() {
           <div className="lg:col-span-2">
             <Card className="border-pink-200 dark:border-pink-700 dark:bg-gray-800">
               <CardHeader>
-                <CardTitle className="text-2xl text-gray-800 flex items-center space-x-2">
+                <CardTitle className="text-2xl text-gray-800 dark:text-gray-100 flex items-center space-x-2">
                   <Calendar className="w-6 h-6 text-pink-500" />
                   <span>Booking Details</span>
                 </CardTitle>
@@ -71,7 +78,7 @@ export default function BookingPage() {
                     <SelectContent>
                       {services.map((service, index) => (
                         <SelectItem key={index} value={service.name}>
-                          {service.name} - {service.price} ({service.duration})
+                          {service.name} - ₦{service.price} ({service.duration})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -158,55 +165,49 @@ export default function BookingPage() {
                 <CardTitle className="text-xl text-gray-800 dark:text-gray-100">Booking Summary</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {
+                {selectedService && (
                   <div className="p-4 bg-pink-50 dark:bg-pink-900/20 rounded-lg border dark:border-pink-800">
                     <h4 className="font-semibold text-gray-800 dark:text-gray-100">{selectedService}</h4>
                     <p className="text-sm text-gray-600 dark:text-gray-300">
                       {services.find((s) => s.name === selectedService)?.duration}
                     </p>
                     <p className="text-lg font-bold text-pink-500 dark:text-pink-400">
-                      {services.find((s) => s.name === selectedService)?.price}
+                      ₦{services.find((s) => s.name === selectedService)?.price}
                     </p>
                   </div>
-                }
+                )}
 
-                {
+                {selectedDate && (
                   <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
                     <Calendar className="w-4 h-4" />
                     <span>{new Date(selectedDate).toLocaleDateString()}</span>
                   </div>
-                }
+                )}
 
-                {
+                {selectedTime && (
                   <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
                     <Clock className="w-4 h-4" />
                     <span>{selectedTime}</span>
                   </div>
-                }
+                )}
 
-                {
-                  <div className="border-t dark:border-gray-700 pt-4">
-                    <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-300 mb-2">
-                      <CreditCard className="w-4 h-4" />
-                      <span>50% deposit required</span>
-                    </div>
-                    {selectedService && (
-                      <p className="text-lg font-bold text-gray-800 dark:text-gray-100">
-                        Deposit:{" "}
-                        {services.find((s) => s.name === selectedService)?.price
-                          ? `₦${(
-                              Number.parseInt(
-                                services
-                                  .find((s) => s.name === selectedService)!
-                                  .price.replace("₦", "")
-                                  .replace(",", ""),
-                              ) / 2
-                            ).toLocaleString()}`
-                          : "₦0"}
-                      </p>
-                    )}
+                <div className="border-t dark:border-gray-700 pt-4">
+                  <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-300 mb-2">
+                    <CreditCard className="w-4 h-4" />
+                    <span>50% deposit required</span>
                   </div>
-                }
+                  {selectedService && (
+                    <p className="text-lg font-bold text-gray-800 dark:text-gray-100">
+                      Deposit:{" "}
+                      {services.find((s) => s.name === selectedService)?.price
+                        ? `₦${(
+                            Number.parseInt(services.find((s) => s.name === selectedService)!.price.replace(",", "")) /
+                              2
+                          ).toLocaleString()}`
+                        : "₦0"}
+                    </p>
+                  )}
+                </div>
 
                 <Button
                   className="w-full bg-pink-500 hover:bg-pink-600 text-white"
@@ -215,36 +216,32 @@ export default function BookingPage() {
                   Proceed to Payment
                 </Button>
 
-                {
-                  <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                    <p>Payment methods:</p>
-                    <p>Paystack • Flutterwave • Bank Transfer</p>
-                  </div>
-                }
+                <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                  <p>Payment methods:</p>
+                  <p>Paystack • Flutterwave • Bank Transfer</p>
+                </div>
               </CardContent>
             </Card>
 
             {/* Contact Card */}
-            {
-              <Card className="border-pink-200 dark:border-pink-700 dark:bg-gray-800 mt-6">
-                <CardContent className="p-4">
-                  <div className="flex items-center space-x-2 text-pink-500 dark:text-pink-400 mb-2">
-                    <MessageSquare className="w-5 h-5" />
-                    <span className="font-medium">Need Help?</span>
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
-                    Have questions about your booking? Contact us directly.
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full border-pink-300 dark:border-pink-700 text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-900/20"
-                  >
-                    WhatsApp Us
-                  </Button>
-                </CardContent>
-              </Card>
-            }
+            <Card className="border-pink-200 dark:border-pink-700 dark:bg-gray-800 mt-6">
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-2 text-pink-500 dark:text-pink-400 mb-2">
+                  <MessageSquare className="w-5 h-5" />
+                  <span className="font-medium">Need Help?</span>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
+                  Have questions about your booking? Contact us directly.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-pink-300 dark:border-pink-700 text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-900/20"
+                >
+                  WhatsApp Us
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
