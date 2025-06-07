@@ -67,7 +67,7 @@ export default function FAQsPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-pink-50 to-rose-50 py-12">
+    <div className="min-h-screen bg-gradient-to-b from-pink-50 to-rose-50 dark:from-gray-900 dark:to-gray-800 py-12">
       <div className="max-w-4xl mx-auto px-4">
         <div className="text-center mb-12">
           <div className="flex justify-center mb-4">
@@ -76,21 +76,21 @@ export default function FAQsPage() {
             </div>
           </div>
           <h1 className="text-4xl font-bold text-pink-500 mb-4">Frequently Asked Questions</h1>
-          <p className="text-xl text-gray-600">
+          <p className="text-xl text-gray-600 dark:text-gray-300">
             Find answers to common questions about our services, policies, and procedures.
           </p>
         </div>
 
-        <Card className="border-pink-200">
+        <Card className="border-pink-200 dark:border-pink-700 dark:bg-gray-800">
           <CardHeader>
-            <CardTitle className="text-2xl text-gray-800">Common Questions</CardTitle>
+            <CardTitle className="text-2xl text-gray-800 dark:text-gray-100">Common Questions</CardTitle>
           </CardHeader>
           <CardContent>
             <Accordion type="single" collapsible className="w-full">
               {faqs.map((faq, index) => (
                 <AccordionItem key={index} value={`item-${index}`}>
                   <AccordionTrigger className="text-left hover:text-pink-500">{faq.question}</AccordionTrigger>
-                  <AccordionContent className="text-gray-600">{faq.answer}</AccordionContent>
+                  <AccordionContent className="text-gray-600 dark:text-gray-300">{faq.answer}</AccordionContent>
                 </AccordionItem>
               ))}
             </Accordion>
@@ -98,10 +98,10 @@ export default function FAQsPage() {
         </Card>
 
         {/* Still have questions section */}
-        <Card className="mt-8 border-pink-200 bg-pink-50">
+        <Card className="mt-8 border-pink-200 dark:border-pink-700 bg-pink-50 dark:bg-gray-800">
           <CardContent className="p-8 text-center">
-            <h3 className="text-2xl font-bold text-gray-800 mb-4">Still Have Questions?</h3>
-            <p className="text-gray-600 mb-6">
+            <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">Still Have Questions?</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
               Can't find what you're looking for? I'm here to help! Reach out via WhatsApp or Instagram for personalized
               answers.
             </p>
