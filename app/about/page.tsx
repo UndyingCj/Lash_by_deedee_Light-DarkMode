@@ -2,6 +2,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Star, Heart, Award, Users, Clock, MapPin } from "lucide-react"
 import Link from "next/link"
+import Image from "next/image"
 
 export default function AboutPage() {
   const achievements = [
@@ -41,18 +42,18 @@ export default function AboutPage() {
 
         {/* Main Content */}
         <div className="grid lg:grid-cols-2 gap-12 items-center mb-16">
-          {/* Image Placeholder */}
+          {/* Professional Photo */}
           <div className="order-2 lg:order-1">
             <Card className="overflow-hidden shadow-lg border-pink-200 dark:border-pink-700 dark:bg-gray-800">
               <CardContent className="p-0">
-                <div className="aspect-square bg-gradient-to-br from-pink-100 to-rose-100 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="w-32 h-32 mx-auto mb-4 bg-pink-200 dark:bg-pink-800 rounded-full flex items-center justify-center">
-                      <Heart className="w-16 h-16 text-pink-500" />
-                    </div>
-                    <p className="text-gray-600 dark:text-gray-300 font-medium">Deedee's Photo</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Professional headshot coming soon</p>
-                  </div>
+                <div className="aspect-square relative">
+                  <Image
+                    src="/images/deedee-photo.png"
+                    alt="Deedee - Professional Beauty Artist"
+                    fill
+                    className="object-cover"
+                    priority
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -87,6 +88,63 @@ export default function AboutPage() {
             </div>
           </div>
         </div>
+
+        {/* Showcase Work - Ombré Brows Before & After */}
+        <section className="mb-16">
+          <h2 className="text-3xl font-bold text-center text-gray-800 dark:text-gray-100 mb-12">My Work</h2>
+          <Card className="border-pink-200 dark:border-pink-700 dark:bg-gray-800 overflow-hidden">
+            <CardContent className="p-8">
+              <h3 className="text-2xl font-bold text-center text-pink-500 mb-8">Ombré Brows Transformation</h3>
+              <div className="grid md:grid-cols-2 gap-8">
+                {/* Before */}
+                <div className="text-center">
+                  <h4 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Before</h4>
+                  <Card className="overflow-hidden border-gray-200 dark:border-gray-700">
+                    <CardContent className="p-0">
+                      <div className="aspect-square relative">
+                        <Image
+                          src="/images/ombre-before.png"
+                          alt="Before Ombré Brows Treatment"
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <p className="text-gray-600 dark:text-gray-300 mt-3">Natural brows before treatment</p>
+                </div>
+
+                {/* After */}
+                <div className="text-center">
+                  <h4 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4">After</h4>
+                  <Card className="overflow-hidden border-pink-200 dark:border-pink-700">
+                    <CardContent className="p-0">
+                      <div className="aspect-square relative">
+                        <Image
+                          src="/images/ombre-after.png"
+                          alt="After Ombré Brows Treatment"
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <p className="text-gray-600 dark:text-gray-300 mt-3">Beautiful ombré brows with perfect gradient</p>
+                </div>
+              </div>
+
+              <div className="text-center mt-8">
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                  This stunning ombré brow transformation showcases the soft, powdered look that's darker at the tail
+                  and lighter at the front - perfect for all skin types and lasting 1-2 years.
+                </p>
+                <Link href="/gallery">
+                  <Button className="bg-pink-500 hover:bg-pink-600 text-white">View More Transformations</Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
 
         {/* Achievements */}
         <section className="mb-16">

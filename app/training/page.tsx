@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { GraduationCap, Clock, Users, Award, BookOpen, Star, CreditCard } from "lucide-react"
+import { GraduationCap, Clock, Users, Award, BookOpen, Star, CreditCard, Package } from "lucide-react"
 
 export default function TrainingPage() {
   const courses = [
@@ -11,6 +11,7 @@ export default function TrainingPage() {
       level: "Beginner",
       price: "80,000",
       students: "6 max",
+      materials: "Basic materials included",
       description: "Comprehensive 7-day lash extension training covering all fundamental techniques.",
       includes: [
         "Classic lash application",
@@ -29,6 +30,7 @@ export default function TrainingPage() {
       level: "Beginner",
       price: "110,000",
       students: "8 max",
+      materials: "Basic materials included",
       description: "Complete 7-day brow training covering microblading, shading, and lamination techniques.",
       includes: [
         "Microblading techniques",
@@ -47,6 +49,7 @@ export default function TrainingPage() {
       level: "Beginner to Intermediate",
       price: "140,000",
       students: "6 max",
+      materials: "Basic materials included",
       description: "Extended 2-week lash course with advanced techniques and more practice time.",
       includes: [
         "Classic & volume techniques",
@@ -65,6 +68,7 @@ export default function TrainingPage() {
       level: "Beginner to Intermediate",
       price: "220,000",
       students: "8 max",
+      materials: "Basic materials included",
       description: "Comprehensive 2-week brow training with all techniques and business guidance.",
       includes: [
         "All brow techniques",
@@ -76,7 +80,6 @@ export default function TrainingPage() {
         "Certificate of completion",
         "Basic materials included",
       ],
-      popular: true,
     },
     {
       title: "2 Weeks Lash & Brows Combined",
@@ -84,7 +87,8 @@ export default function TrainingPage() {
       level: "Beginner to Intermediate",
       price: "300,000",
       students: "6 max",
-      description: "Complete beauty training covering both lash and brow techniques in one comprehensive course.",
+      materials: "WITH basic materials",
+      description: "Complete beauty training covering both lash and brow techniques with basic materials included.",
       includes: [
         "All lash techniques",
         "All brow techniques",
@@ -103,7 +107,8 @@ export default function TrainingPage() {
       level: "Beginner to Advanced",
       price: "450,000",
       students: "6 max",
-      description: "The most comprehensive training program covering all techniques with extensive practice.",
+      materials: "WITH basic materials",
+      description: "The most comprehensive training program with basic materials included.",
       includes: [
         "All lash & brow techniques",
         "Advanced troubleshooting",
@@ -114,6 +119,7 @@ export default function TrainingPage() {
         "Certificate of completion",
         "Basic materials included",
       ],
+      popular: true,
     },
     {
       title: "Brow Lamination & Tint",
@@ -121,7 +127,8 @@ export default function TrainingPage() {
       level: "Beginner",
       price: "40,000",
       students: "8 max",
-      description: "Quick 2-day course focusing specifically on brow lamination and tinting techniques.",
+      materials: "Studio materials only",
+      description: "Quick 2-day course using studio materials (not take-home).",
       includes: [
         "Lamination techniques",
         "Tinting methods",
@@ -129,7 +136,7 @@ export default function TrainingPage() {
         "Client consultation",
         "Aftercare guidance",
         "Certificate of completion",
-        "Basic materials included",
+        "Studio materials provided",
       ],
     },
     {
@@ -138,6 +145,7 @@ export default function TrainingPage() {
       level: "Intermediate",
       price: "50,000",
       students: "6 max",
+      materials: "Basic materials included",
       description: "Advanced lash course for those looking to upgrade their existing skills.",
       includes: [
         "Advanced volume techniques",
@@ -155,6 +163,7 @@ export default function TrainingPage() {
       level: "Intermediate",
       price: "80,000",
       students: "8 max",
+      materials: "Basic materials included",
       description: "Advanced brow course for professionals looking to enhance their skills.",
       includes: [
         "Advanced techniques",
@@ -276,6 +285,19 @@ export default function TrainingPage() {
                         <Users className="w-3 h-3 mr-1" />
                         {course.students}
                       </Badge>
+                      <Badge
+                        variant="secondary"
+                        className={`${
+                          course.materials.includes("WITH")
+                            ? "bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300"
+                            : course.materials.includes("Studio")
+                              ? "bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300"
+                              : "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300"
+                        }`}
+                      >
+                        <Package className="w-3 h-3 mr-1" />
+                        {course.materials}
+                      </Badge>
                     </div>
                   </div>
                   <div className="text-right">
@@ -303,7 +325,71 @@ export default function TrainingPage() {
           ))}
         </div>
 
-        {/* Payment & Materials Info */}
+        {/* Materials Clarification */}
+        <Card className="border-pink-200 dark:border-pink-700 bg-pink-50 dark:bg-gray-800 mb-12">
+          <CardHeader>
+            <CardTitle className="text-2xl text-gray-800 dark:text-gray-100 text-center flex items-center justify-center space-x-2">
+              <Package className="w-8 h-8 text-pink-500" />
+              <span>Materials Policy</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-3 gap-6">
+              <div className="bg-white dark:bg-gray-700 p-6 rounded-lg text-center">
+                <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center">
+                  <Package className="w-8 h-8 text-blue-500" />
+                </div>
+                <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-3">Basic Materials Included</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
+                  Most courses include basic starter materials that you can take home
+                </p>
+                <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                  <li>• 7 Days Lash Course</li>
+                  <li>• 7 Days Brow Course</li>
+                  <li>• 2 Weeks Lash Course</li>
+                  <li>• 2 Weeks Brow Course</li>
+                  <li>• 5 Days Upgrade Courses</li>
+                </ul>
+              </div>
+
+              <div className="bg-white dark:bg-gray-700 p-6 rounded-lg text-center">
+                <div className="w-16 h-16 mx-auto mb-4 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center">
+                  <Package className="w-8 h-8 text-green-500" />
+                </div>
+                <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-3">WITH Basic Materials</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
+                  Premium courses with comprehensive material packages included
+                </p>
+                <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                  <li>• 2 Weeks Lash & Brows (₦300k)</li>
+                  <li>• 1 Month Lash & Brows (₦450k)</li>
+                </ul>
+              </div>
+
+              <div className="bg-white dark:bg-gray-700 p-6 rounded-lg text-center">
+                <div className="w-16 h-16 mx-auto mb-4 bg-orange-100 dark:bg-orange-900/50 rounded-full flex items-center justify-center">
+                  <Package className="w-8 h-8 text-orange-500" />
+                </div>
+                <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-3">Studio Materials Only</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
+                  Materials provided during training but not for take-home
+                </p>
+                <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                  <li>• Brow Lamination & Tint</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+              <p className="text-sm text-gray-700 dark:text-gray-300 text-center">
+                <strong>Note:</strong> Additional materials will be provided by the studio during all training sessions,
+                but these are not for take-home use unless specified in your course package.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Payment & Support Info */}
         <div className="grid md:grid-cols-2 gap-8 mb-12">
           <Card className="border-pink-200 dark:border-pink-700 dark:bg-gray-800">
             <CardHeader>
@@ -340,27 +426,29 @@ export default function TrainingPage() {
 
           <Card className="border-pink-200 dark:border-pink-700 dark:bg-gray-800">
             <CardHeader>
-              <CardTitle className="text-xl text-gray-800 dark:text-gray-100">Materials & Equipment</CardTitle>
+              <CardTitle className="text-xl text-gray-800 dark:text-gray-100">After Training Support</CardTitle>
             </CardHeader>
             <CardContent>
               <ul className="space-y-3">
                 <li className="flex items-start space-x-3">
                   <div className="w-2 h-2 bg-pink-500 rounded-full mt-2 flex-shrink-0"></div>
-                  <span className="text-gray-600 dark:text-gray-300">Basic materials included with all courses</span>
+                  <span className="text-gray-600 dark:text-gray-300">30 days of WhatsApp support</span>
                 </li>
                 <li className="flex items-start space-x-3">
                   <div className="w-2 h-2 bg-pink-500 rounded-full mt-2 flex-shrink-0"></div>
-                  <span className="text-gray-600 dark:text-gray-300">
-                    Additional materials provided by studio during training
-                  </span>
+                  <span className="text-gray-600 dark:text-gray-300">Business setup guidance</span>
                 </li>
                 <li className="flex items-start space-x-3">
                   <div className="w-2 h-2 bg-pink-500 rounded-full mt-2 flex-shrink-0"></div>
-                  <span className="text-gray-600 dark:text-gray-300">Studio materials are not for take-home use</span>
+                  <span className="text-gray-600 dark:text-gray-300">Supplier recommendations</span>
                 </li>
                 <li className="flex items-start space-x-3">
                   <div className="w-2 h-2 bg-pink-500 rounded-full mt-2 flex-shrink-0"></div>
-                  <span className="text-gray-600 dark:text-gray-300">Starter kit provided upon course completion</span>
+                  <span className="text-gray-600 dark:text-gray-300">Marketing tips and strategies</span>
+                </li>
+                <li className="flex items-start space-x-3">
+                  <div className="w-2 h-2 bg-pink-500 rounded-full mt-2 flex-shrink-0"></div>
+                  <span className="text-gray-600 dark:text-gray-300">Alumni network access</span>
                 </li>
               </ul>
             </CardContent>

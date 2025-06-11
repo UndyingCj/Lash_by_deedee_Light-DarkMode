@@ -16,15 +16,25 @@ export default function Footer() {
               Where Beauty Meets Precision. Professional lash and brow services in Port Harcourt.
             </p>
             <div className="flex space-x-4">
-              <Link href="#" className="text-pink-500 hover:text-pink-400">
+              <a
+                href="https://instagram.com/lashedbydeedee"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-pink-500 hover:text-pink-400"
+              >
                 <Instagram className="w-5 h-5" />
-              </Link>
-              <Link href="#" className="text-pink-500 hover:text-pink-400">
+              </a>
+              <a
+                href="https://wa.me/2348000000000"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-pink-500 hover:text-pink-400"
+              >
                 <MessageCircle className="w-5 h-5" />
-              </Link>
-              <Link href="#" className="text-pink-500 hover:text-pink-400">
+              </a>
+              <a href="mailto:hello@lashedbydeedee.com" className="text-pink-500 hover:text-pink-400">
                 <Mail className="w-5 h-5" />
-              </Link>
+              </a>
             </div>
           </div>
 
@@ -60,8 +70,26 @@ export default function Footer() {
             <h4 className="font-semibold mb-4">Contact</h4>
             <ul className="space-y-2 text-gray-400">
               <li>Rumuodara, Port Harcourt</li>
-              <li>WhatsApp: +234 XXX XXX XXXX</li>
-              <li>Instagram: @lashedbydeedee</li>
+              <li>
+                <a
+                  href="https://wa.me/2348000000000"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-white"
+                >
+                  WhatsApp: +234 XXX XXX XXXX
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://instagram.com/lashedbydeedee"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-white"
+                >
+                  Instagram: @lashedbydeedee
+                </a>
+              </li>
             </ul>
           </div>
         </div>
