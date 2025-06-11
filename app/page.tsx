@@ -97,7 +97,7 @@ export default function HomePage() {
           <h2 className="text-3xl font-bold text-center text-pink-500 mb-12">Our Services</h2>
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { name: "Microshading", price: "55,000", duration: "2.5 hours" },
+              { name: "Ombré Brows", price: "45,000", duration: "2.5 hours" },
               { name: "Classic Lashes", price: "15,000", duration: "2 hours" },
               { name: "Volume Lashes", price: "25,000", duration: "2.5 hours" },
             ].map((service, index) => (

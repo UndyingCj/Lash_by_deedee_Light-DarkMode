@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, Clock, CreditCard, MessageSquare } from "lucide-react"
+import { Calendar, Clock, CreditCard, MessageSquare, AlertTriangle } from "lucide-react"
 
 export default function BookingPage() {
   const [selectedService, setSelectedService] = useState("")
@@ -15,6 +15,9 @@ export default function BookingPage() {
   const [selectedTime, setSelectedTime] = useState("")
 
   const services = [
+    { name: "Microblading", price: "40,000", duration: "2.5 hours" },
+    { name: "Ombré Brows", price: "45,000", duration: "2.5 hours" },
+    { name: "Combo Brows", price: "50,000", duration: "3 hours" },
     { name: "Microshading", price: "55,000", duration: "2.5 hours" },
     { name: "Brow Lamination", price: "15,000", duration: "1 hour" },
     { name: "Brow Lamination & Tint", price: "25,000", duration: "1.5 hours" },
@@ -32,17 +35,7 @@ export default function BookingPage() {
     { name: "Lash Removal", price: "4,000", duration: "30 mins" },
   ]
 
-  const timeSlots = [
-    "9:00 AM",
-    "10:00 AM",
-    "11:00 AM",
-    "12:00 PM",
-    "1:00 PM",
-    "2:00 PM",
-    "3:00 PM",
-    "4:00 PM",
-    "5:00 PM",
-  ]
+  const timeSlots = ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"]
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-pink-50 to-rose-50 dark:from-gray-900 dark:to-gray-800 py-12">
@@ -50,10 +43,50 @@ export default function BookingPage() {
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-pink-500 mb-4">Book an Appointment</h1>
           <p className="text-xl text-gray-600 dark:text-gray-300">
-            Select a service, pick a date, and secure your spot with a 50% deposit. Pay with Paystack, Flutterwave, or
-            upload transfer proof.
+            Select a service, pick a date, and secure your spot with a 50% deposit. Each session takes approximately 2-3
+            hours.
           </p>
         </div>
+
+        {/* Booking Policies Notice */}
+        <Card className="border-pink-200 dark:border-pink-700 bg-pink-50 dark:bg-gray-800 mb-8">
+          <CardContent className="p-6">
+            <div className="flex items-start space-x-3">
+              <AlertTriangle className="w-6 h-6 text-pink-500 flex-shrink-0 mt-1" />
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">
+                  Important Booking Policies
+                </h3>
+                <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                  <li>
+                    • <strong>Session Time:</strong> Each session takes approximately 2-3 hours. Please schedule
+                    accordingly.
+                  </li>
+                  <li>
+                    • <strong>Deposit:</strong> 50% non-refundable deposit required to confirm your appointment.
+                  </li>
+                  <li>
+                    • <strong>Punctuality:</strong> Arrivals more than 1 hour late will result in cancellation and
+                    rescheduling.
+                  </li>
+                  <li>
+                    • <strong>Rescheduling:</strong> You can reschedule only once. Missing after rescheduling forfeits
+                    your deposit.
+                  </li>
+                  <li>
+                    • <strong>Cancellations:</strong> 24 hours advance notice required for cancellations.
+                  </li>
+                  <li>
+                    • <strong>No-Shows:</strong> Deposit will be forfeited for no-shows or failure to notify us.
+                  </li>
+                  <li>
+                    • <strong>Makeup Policy:</strong> Please avoid wearing makeup to ensure the best results.
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Booking Form */}
@@ -103,7 +136,7 @@ export default function BookingPage() {
                 {/* Time Selection */}
                 <div>
                   <Label htmlFor="time" className="text-base font-medium text-gray-900 dark:text-gray-100">
-                    Preferred Time *
+                    Preferred Time * (2 hours each slot)
                   </Label>
                   <Select value={selectedTime} onValueChange={setSelectedTime}>
                     <SelectTrigger className="mt-2">
@@ -194,7 +227,7 @@ export default function BookingPage() {
                 <div className="border-t dark:border-gray-700 pt-4">
                   <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-300 mb-2">
                     <CreditCard className="w-4 h-4" />
-                    <span>50% deposit required</span>
+                    <span>50% deposit required (non-refundable)</span>
                   </div>
                   {selectedService && (
                     <p className="text-lg font-bold text-gray-800 dark:text-gray-100">

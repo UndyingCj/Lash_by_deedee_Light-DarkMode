@@ -8,11 +8,34 @@ export default function ServicesPage() {
   const services = {
     brows: [
       {
+        name: "Microblading",
+        price: "40,000",
+        duration: "2.5 hours",
+        description:
+          "Hair-like strokes that create natural-looking brows. Ideal for those who want a more defined brow shape.",
+        icon: <Eye className="w-6 h-6" />,
+      },
+      {
+        name: "Ombré Brows",
+        price: "45,000",
+        duration: "2.5 hours",
+        description:
+          "A soft, powdered brow look that's darker at the tail and lighter at the front. Perfect for all skin types and lasts 1-2 years.",
+        icon: <Brush className="w-6 h-6" />,
+      },
+      {
+        name: "Combo Brows",
+        price: "50,000",
+        duration: "3 hours",
+        description: "Combination of microblading and shading for the most natural and full-looking brows.",
+        icon: <Sparkles className="w-6 h-6" />,
+      },
+      {
         name: "Microshading",
         price: "55,000",
         duration: "2.5 hours",
         description:
-          "Perfect for all skin types. A soft, powdered brow look that's darker at the tail and lighter at the front. Lasts 1-2 years.",
+          "Perfect for all skin types. A soft, powdered brow look created with machine technique. Lasts 1-2 years.",
         icon: <Brush className="w-6 h-6" />,
       },
       {
