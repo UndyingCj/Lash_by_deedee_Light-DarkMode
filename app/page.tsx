@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import Link from "next/link"
 import { Star, Heart, Sparkles } from "lucide-react"
+import Image from "next/image"
 
 export default function HomePage() {
   return (
@@ -25,17 +26,14 @@ export default function HomePage() {
             Where Beauty Meets Precision
           </p>
 
-          {/* Hero Image Placeholder */}
+          {/* Hero Image */}
           <div className="max-w-2xl mx-auto mb-8">
             <Card className="overflow-hidden shadow-lg border-pink-200 dark:border-pink-800 dark:bg-gray-800">
               <CardContent className="p-0">
-                <div className="aspect-video bg-gradient-to-br from-pink-100 to-rose-100 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="w-24 h-24 mx-auto mb-4 bg-pink-200 dark:bg-pink-800 rounded-full flex items-center justify-center">
-                      <Sparkles className="w-12 h-12 text-pink-500" />
-                    </div>
-                    <p className="text-gray-600 dark:text-gray-300 font-medium">Beautiful Lash & Brow Work</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Showcase your best transformations here</p>
+                <div className="aspect-video bg-gradient-to-br from-pink-100 to-rose-100 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center relative">
+                  <div className="flex flex-col items-center">
+                    <Heart className="w-24 h-24 text-pink-500 mb-4" />
+                    <p className="text-pink-500 font-medium">Lashed by Deedee</p>
                   </div>
                 </div>
               </CardContent>
@@ -60,29 +58,32 @@ export default function HomePage() {
             <div>
               <h2 className="text-3xl font-bold text-pink-500 mb-6">About Me</h2>
               <p className="text-gray-700 dark:text-gray-300 text-lg leading-relaxed mb-6">
-                Hi, I'm Deedee! I specialize in high-precision lash and brow services in a cozy home studio in
-                Rumuodara, Port Harcourt. With years of experience and an eye for detail, I ensure every client leaves
-                confident and glowing.
+                Hi, I'm Deedee! I specialize in high-precision lash and brow services in a cozy home studio in Rumigbo,
+                Port Harcourt. With years of experience and an eye for detail, I ensure every client leaves confident
+                and glowing.
               </p>
               <div className="flex items-center space-x-4">
                 <div className="flex text-yellow-400">
                   {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-5 h-5 fill-current" />
+                    <Star
+                      key={i}
+                      className={`w-5 h-5 ${i < 4 ? "fill-current" : i === 4 ? "fill-current opacity-50" : ""}`}
+                    />
                   ))}
                 </div>
-                <span className="text-gray-600 dark:text-gray-400">Trusted by 200+ clients</span>
+                <span className="text-gray-600 dark:text-gray-400">4.9 Rating • Trusted by 200+ clients</span>
               </div>
             </div>
             <div className="flex justify-center">
               <Card className="overflow-hidden shadow-lg border-pink-200 dark:border-pink-800 dark:bg-gray-800">
                 <CardContent className="p-0">
-                  <div className="aspect-square bg-gradient-to-br from-pink-100 to-rose-100 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center w-80">
-                    <div className="text-center">
-                      <div className="w-32 h-32 mx-auto mb-4 bg-pink-200 dark:bg-pink-800 rounded-full flex items-center justify-center">
-                        <Heart className="w-16 h-16 text-pink-500" />
-                      </div>
-                      <p className="text-gray-600 dark:text-gray-300 font-medium">Your Photo Here</p>
-                    </div>
+                  <div className="aspect-square relative w-80 h-80">
+                    <Image
+                      src="/images/deedee-portrait.png"
+                      alt="Deedee - Professional Beauty Artist"
+                      fill
+                      className="object-cover"
+                    />
                   </div>
                 </CardContent>
               </Card>

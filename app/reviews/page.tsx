@@ -62,7 +62,7 @@ export default function ReviewsPage() {
 
   const stats = [
     { number: "200+", label: "Happy Clients" },
-    { number: "5.0", label: "Average Rating" },
+    { number: "4.9", label: "Average Rating" },
     { number: "98%", label: "Satisfaction Rate" },
     { number: "150+", label: "5-Star Reviews" },
   ]
@@ -169,7 +169,9 @@ export default function ReviewsPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <a
-                href="#"
+                href="https://www.instagram.com/lashedbydeedee?igsh=MWR3NzV6amtpZHdpbg=="
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center justify-center px-6 py-3 bg-pink-500 text-white rounded-full hover:bg-pink-600 transition-colors"
               >
                 Instagram Reviews

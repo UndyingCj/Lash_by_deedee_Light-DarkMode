@@ -9,9 +9,9 @@ export default function TrainingPage() {
       title: "7 Days Lash Course",
       duration: "1 Week",
       level: "Beginner",
-      price: "80,000",
+      price: "140,000",
       students: "6 max",
-      materials: "Basic materials included",
+      materials: "WITH basic materials",
       description: "Comprehensive 7-day lash extension training covering all fundamental techniques.",
       includes: [
         "Classic lash application",
@@ -28,9 +28,9 @@ export default function TrainingPage() {
       title: "7 Days Brow Course",
       duration: "1 Week",
       level: "Beginner",
-      price: "110,000",
+      price: "175,000",
       students: "8 max",
-      materials: "Basic materials included",
+      materials: "WITH basic materials",
       description: "Complete 7-day brow training covering microblading, shading, and lamination techniques.",
       includes: [
         "Microblading techniques",
@@ -319,7 +319,9 @@ export default function TrainingPage() {
                   ))}
                 </ul>
 
-                <Button className="w-full bg-pink-500 hover:bg-pink-600 text-white">Enroll Now</Button>
+                <a href="https://wa.me/message/X5M2NOA553NGK1" target="_blank" rel="noopener noreferrer">
+                  <Button className="w-full bg-pink-500 hover:bg-pink-600 text-white">Enroll Now</Button>
+                </a>
               </CardContent>
             </Card>
           ))}
@@ -344,8 +346,6 @@ export default function TrainingPage() {
                   Most courses include basic starter materials that you can take home
                 </p>
                 <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                  <li>• 7 Days Lash Course</li>
-                  <li>• 7 Days Brow Course</li>
                   <li>• 2 Weeks Lash Course</li>
                   <li>• 2 Weeks Brow Course</li>
                   <li>• 5 Days Upgrade Courses</li>
@@ -361,6 +361,8 @@ export default function TrainingPage() {
                   Premium courses with comprehensive material packages included
                 </p>
                 <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                  <li>• 7 Days Lash Course (₦140k)</li>
+                  <li>• 7 Days Brow Course (₦175k)</li>
                   <li>• 2 Weeks Lash & Brows (₦300k)</li>
                   <li>• 1 Month Lash & Brows (₦450k)</li>
                 </ul>
@@ -467,16 +469,11 @@ export default function TrainingPage() {
               AM. Limited spots available for each course.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" className="bg-pink-500 hover:bg-pink-600 text-white px-8 py-3">
-                View Course Schedule
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-pink-300 dark:border-pink-700 text-pink-600 dark:text-pink-400 px-8 py-3"
-              >
-                Contact for Details
-              </Button>
+              <a href="https://wa.me/message/X5M2NOA553NGK1" target="_blank" rel="noopener noreferrer">
+                <Button size="lg" className="bg-pink-500 hover:bg-pink-600 text-white px-8 py-3">
+                  Contact for Details
+                </Button>
+              </a>
             </div>
           </CardContent>
         </Card>

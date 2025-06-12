@@ -161,7 +161,11 @@ export default function BookingPage() {
           setIsProcessing(false)
           // Payment successful
           alert(
-            `Payment successful! 🎉\n\nReference: ${response.reference}\n\nWe'll contact you within 24 hours to confirm your appointment details. Thank you for choosing Lashed by Deedee!`,
+            `Payment successful! 🎉
+
+Reference: ${response.reference}
+
+We'll contact you within 24 hours to confirm your appointment details. Thank you for choosing Lashed by Deedee!`,
           )
 
           // Reset form
@@ -206,7 +210,7 @@ ${formData.notes ? `📝 Notes: ${formData.notes}` : ""}
 
 Please confirm my appointment and let me know how to pay the deposit. Thank you!`
 
-    const whatsappUrl = `https://wa.me/2348000000000?text=${encodeURIComponent(message)}`
+    const whatsappUrl = `https://wa.me/message/X5M2NOA553NGK1?text=${encodeURIComponent(message)}`
     window.open(whatsappUrl, "_blank")
   }
 
@@ -450,14 +454,16 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
 
                   <div className="text-center text-sm text-gray-500 dark:text-gray-400">or</div>
 
-                  <Button
-                    variant="outline"
-                    className="w-full border-green-500 text-green-600 hover:bg-green-50 dark:border-green-400 dark:text-green-400 dark:hover:bg-green-900/20"
-                    disabled={!selectedService || !selectedDate || !selectedTime || !formData.name || !formData.phone}
-                    onClick={handleAlternativeBooking}
-                  >
-                    Book via WhatsApp
-                  </Button>
+                  <a href="https://wa.me/message/X5M2NOA553NGK1" target="_blank" rel="noopener noreferrer">
+                    <Button
+                      variant="outline"
+                      className="w-full border-green-500 text-green-600 hover:bg-green-50 dark:border-green-400 dark:text-green-400 dark:hover:bg-green-900/20"
+                      disabled={!selectedService || !selectedDate || !selectedTime || !formData.name || !formData.phone}
+                      onClick={handleAlternativeBooking}
+                    >
+                      Book via WhatsApp
+                    </Button>
+                  </a>
                 </div>
 
                 <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
@@ -477,7 +483,7 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
                   Have questions about your booking? Contact us directly.
                 </p>
-                <a href="https://wa.me/2348000000000" target="_blank" rel="noopener noreferrer">
+                <a href="https://wa.me/message/X5M2NOA553NGK1" target="_blank" rel="noopener noreferrer">
                   <Button
                     variant="outline"
                     size="sm"

@@ -17,7 +17,7 @@ export default function Footer() {
             </p>
             <div className="flex space-x-4">
               <a
-                href="https://instagram.com/lashedbydeedee"
+                href="https://www.instagram.com/lashedbydeedee?igsh=MWR3NzV6amtpZHdpbg=="
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-pink-500 hover:text-pink-400"
@@ -25,7 +25,7 @@ export default function Footer() {
                 <Instagram className="w-5 h-5" />
               </a>
               <a
-                href="https://wa.me/2348000000000"
+                href="https://wa.me/message/X5M2NOA553NGK1"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-pink-500 hover:text-pink-400"
@@ -69,20 +69,20 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold mb-4">Contact</h4>
             <ul className="space-y-2 text-gray-400">
-              <li>Rumuodara, Port Harcourt</li>
+              <li>Rumigbo, Port Harcourt</li>
               <li>
                 <a
-                  href="https://wa.me/2348000000000"
+                  href="https://wa.me/message/X5M2NOA553NGK1"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-white"
                 >
-                  WhatsApp: +234 XXX XXX XXXX
+                  WhatsApp: Contact Us
                 </a>
               </li>
               <li>
                 <a
-                  href="https://instagram.com/lashedbydeedee"
+                  href="https://www.instagram.com/lashedbydeedee?igsh=MWR3NzV6amtpZHdpbg=="
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-white"

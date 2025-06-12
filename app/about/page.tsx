@@ -21,7 +21,7 @@ export default function AboutPage() {
       title: "3+ Years Experience",
       description: "Perfecting beauty with precision since 2021",
     },
-    { icon: <MapPin className="w-6 h-6" />, title: "Home Studio", description: "Cozy, private space in Rumuodara" },
+    { icon: <MapPin className="w-6 h-6" />, title: "Home Studio", description: "Cozy, private space in Rumigbo" },
   ]
 
   return (
@@ -48,7 +48,7 @@ export default function AboutPage() {
               <CardContent className="p-0">
                 <div className="aspect-square relative">
                   <Image
-                    src="/images/deedee-photo.png"
+                    src="/images/deedee-portrait.png"
                     alt="Deedee - Professional Beauty Artist"
                     fill
                     className="object-cover"
@@ -69,7 +69,7 @@ export default function AboutPage() {
               </p>
               <p>
                 After years of perfecting my craft and training with industry professionals, I opened my home studio in
-                Rumuodara, Port Harcourt. Here, I specialize in precision lash extensions and ombré brow techniques that
+                Rumigbo, Port Harcourt. Here, I specialize in precision lash extensions and ombré brow techniques that
                 enhance your natural beauty.
               </p>
               <p>
@@ -81,10 +81,13 @@ export default function AboutPage() {
             <div className="flex items-center space-x-4 mt-6">
               <div className="flex text-yellow-400">
                 {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-5 h-5 fill-current" />
+                  <Star
+                    key={i}
+                    className={`w-5 h-5 ${i < 4 ? "fill-current" : i === 4 ? "fill-current opacity-50" : ""}`}
+                  />
                 ))}
               </div>
-              <span className="text-gray-600 dark:text-gray-400 font-medium">5.0 Rating • 200+ Reviews</span>
+              <span className="text-gray-600 dark:text-gray-400 font-medium">4.9 Rating • 200+ Reviews</span>
             </div>
           </div>
         </div>
@@ -103,8 +106,8 @@ export default function AboutPage() {
                     <CardContent className="p-0">
                       <div className="aspect-square relative">
                         <Image
-                          src="/images/ombre-before.png"
-                          alt="Before Ombré Brows Treatment"
+                          src="/images/brows-before.png"
+                          alt="Natural brows before treatment"
                           fill
                           className="object-cover"
                         />
@@ -121,8 +124,8 @@ export default function AboutPage() {
                     <CardContent className="p-0">
                       <div className="aspect-square relative">
                         <Image
-                          src="/images/ombre-after.png"
-                          alt="After Ombré Brows Treatment"
+                          src="/images/brows-after.png"
+                          alt="Beautiful ombré brows with perfect gradient"
                           fill
                           className="object-cover"
                         />

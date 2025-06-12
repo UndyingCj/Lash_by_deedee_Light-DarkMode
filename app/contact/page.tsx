@@ -11,15 +11,15 @@ export default function ContactPage() {
     {
       icon: <MapPin className="w-6 h-6" />,
       title: "Location",
-      details: ["Rumuodara, Port Harcourt", "Rivers State, Nigeria"],
+      details: ["Rumigbo, Port Harcourt", "Rivers State, Nigeria"],
       note: "Home studio - exact address provided upon booking",
     },
     {
       icon: <Phone className="w-6 h-6" />,
       title: "Phone & WhatsApp",
-      details: ["+234 XXX XXX XXXX"],
-      note: "Available for calls and WhatsApp messages",
-      link: "https://wa.me/2348000000000",
+      details: ["Contact via WhatsApp"],
+      note: "Available for WhatsApp messages",
+      link: "https://wa.me/message/X5M2NOA553NGK1",
     },
     {
       icon: <Mail className="w-6 h-6" />,
@@ -47,9 +47,9 @@ export default function ContactPage() {
     {
       icon: <MessageCircle className="w-6 h-6" />,
       name: "WhatsApp",
-      handle: "+234 XXX XXX XXXX",
+      handle: "Contact Us",
       color: "bg-green-500",
-      link: "https://wa.me/2348000000000",
+      link: "https://wa.me/message/X5M2NOA553NGK1",
     },
   ]
 
