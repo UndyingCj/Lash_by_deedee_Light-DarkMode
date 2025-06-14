@@ -2,12 +2,14 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Menu, X, Heart } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 export default function Navigation() {
   const [isOpen, setIsOpen] = useState(false)
+  const pathname = usePathname()
 
   const navItems = [
     { name: "About", href: "/about" },
@@ -20,6 +22,12 @@ export default function Navigation() {
     { name: "Reviews", href: "/reviews" },
     { name: "Training", href: "/training" },
   ]
+
+  const isActive = (href: string) => {
+    if (href === "/" && pathname === "/") return true
+    if (href !== "/" && pathname.startsWith(href)) return true
+    return false
+  }
 
   return (
     <nav className="fixed top-0 w-full z-50 bg-black dark:bg-gray-900 text-white shadow-lg">
@@ -50,7 +58,11 @@ export default function Navigation() {
               <Link
                 key={item.name}
                 href={item.href}
-                className="text-white hover:text-pink-200 transition-colors font-medium"
+                className={`px-4 py-2 rounded-full transition-all font-medium ${
+                  isActive(item.href)
+                    ? "bg-white/20 text-white border border-white/30"
+                    : "text-white hover:text-pink-200 hover:bg-white/10"
+                }`}
               >
                 {item.name}
               </Link>
@@ -79,7 +91,11 @@ export default function Navigation() {
                 <Link
                   key={item.name}
                   href={item.href}
-                  className="block text-white hover:text-pink-200 transition-colors py-2"
+                  className={`block px-4 py-3 rounded-lg transition-all ${
+                    isActive(item.href)
+                      ? "bg-white/20 text-white border border-white/30"
+                      : "text-white hover:text-pink-200 hover:bg-white/10"
+                  }`}
                   onClick={() => setIsOpen(false)}
                 >
                   {item.name}
