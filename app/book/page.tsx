@@ -1,22 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, Clock, CreditCard, MessageSquare, AlertTriangle, XCircle, CheckCircle } from "lucide-react"
-
-declare global {
-  interface Window {
-    PaystackPop?: any
-  }
-}
+import { Calendar, Clock, CreditCard, MessageSquare, AlertTriangle } from "lucide-react"
 
 export default function BookingPage() {
-  // Basic form state
   const [selectedService, setSelectedService] = useState("")
   const [selectedDate, setSelectedDate] = useState("")
   const [selectedTime, setSelectedTime] = useState("")
@@ -28,14 +21,6 @@ export default function BookingPage() {
     notes: "",
   })
 
-  // Availability state with safe defaults
-  const [blockedDates, setBlockedDates] = useState<string[]>([])
-  const [blockedTimeSlots, setBlockedTimeSlots] = useState<Record<string, string[]>>({})
-  const [availabilityLoaded, setAvailabilityLoaded] = useState(false)
-  const [loadingAvailability, setLoadingAvailability] = useState(true)
-  const [paystackLoaded, setPaystackLoaded] = useState(false)
-
-  // Services data
   const services = [
     { name: "Microblading", price: "40,000", duration: "2.5 hours" },
     { name: "Ombré Brows", price: "45,000", duration: "2.5 hours" },
@@ -59,284 +44,48 @@ export default function BookingPage() {
 
   const timeSlots = ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"]
 
-  // Load availability data with comprehensive error handling
-  useEffect(() => {
-    let mounted = true
+  const getDepositAmount = () => {
+    const service = services.find((s) => s.name === selectedService)
+    if (!service) return 0
+    const price = Number.parseInt(service.price.replace(",", ""))
+    return Math.floor(price / 2)
+  }
 
-    const loadAvailability = async () => {
-      try {
-        setLoadingAvailability(true)
+  const getMinDate = () => {
+    return new Date().toISOString().split("T")[0]
+  }
 
-        const response = await fetch("/api/admin/availability", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        })
-
-        if (!mounted) return
-
-        if (response.ok) {
-          const data = await response.json()
-
-          if (data && typeof data === "object") {
-            // Safely handle blocked dates
-            if (Array.isArray(data.blockedDates)) {
-              const dates = data.blockedDates
-                .filter((item) => item && typeof item === "object" && item.blocked_date)
-                .map((item) => item.blocked_date)
-              setBlockedDates(dates)
-            }
-
-            // Safely handle blocked time slots
-            if (Array.isArray(data.blockedSlots)) {
-              const slotsMap: Record<string, string[]> = {}
-              data.blockedSlots
-                .filter((slot) => slot && typeof slot === "object" && slot.blocked_date && slot.blocked_time)
-                .forEach((slot) => {
-                  if (!slotsMap[slot.blocked_date]) {
-                    slotsMap[slot.blocked_date] = []
-                  }
-                  slotsMap[slot.blocked_date].push(slot.blocked_time)
-                })
-              setBlockedTimeSlots(slotsMap)
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error loading availability:", error)
-        // Continue with empty defaults
-      } finally {
-        if (mounted) {
-          setAvailabilityLoaded(true)
-          setLoadingAvailability(false)
-        }
-      }
-    }
-
-    loadAvailability()
-
-    return () => {
-      mounted = false
-    }
-  }, [])
-
-  // Load Paystack script with error handling
-  useEffect(() => {
-    let mounted = true
-
-    const loadPaystack = () => {
-      try {
-        if (typeof window === "undefined") return
-
-        if (window.PaystackPop) {
-          if (mounted) setPaystackLoaded(true)
-          return
-        }
-
-        const script = document.createElement("script")
-        script.src = "https://js.paystack.co/v1/inline.js"
-        script.async = true
-        script.onload = () => {
-          if (mounted) setPaystackLoaded(true)
-        }
-        script.onerror = () => {
-          console.error("Failed to load Paystack")
-          if (mounted) setPaystackLoaded(false)
-        }
-        document.head.appendChild(script)
-      } catch (error) {
-        console.error("Error loading Paystack script:", error)
-        if (mounted) setPaystackLoaded(false)
-      }
-    }
-
-    loadPaystack()
-
-    return () => {
-      mounted = false
-    }
-  }, [])
-
-  // Safe utility functions
-  const isDateBlocked = (date: string): boolean => {
-    try {
-      return Array.isArray(blockedDates) && blockedDates.includes(date)
-    } catch {
+  const validateForm = () => {
+    if (!selectedService) {
+      alert("Please select a service")
       return false
     }
-  }
-
-  const getAvailableTimeSlots = (date: string): string[] => {
-    try {
-      if (!date || isDateBlocked(date)) return []
-
-      const blocked = blockedTimeSlots[date] || []
-      return timeSlots.filter((slot) => !blocked.includes(slot))
-    } catch {
-      return timeSlots
-    }
-  }
-
-  const isTimeSlotAvailable = (date: string, time: string): boolean => {
-    try {
-      if (!date || !time || isDateBlocked(date)) return false
-
-      const blocked = blockedTimeSlots[date] || []
-      return !blocked.includes(time)
-    } catch {
-      return true
-    }
-  }
-
-  const getDepositAmount = (): number => {
-    try {
-      const service = services.find((s) => s.name === selectedService)
-      if (!service) return 0
-
-      const price = Number.parseInt(service.price.replace(/,/g, ""), 10)
-      return Math.floor(price / 2)
-    } catch {
-      return 0
-    }
-  }
-
-  const getMinDate = (): string => {
-    try {
-      return new Date().toISOString().split("T")[0]
-    } catch {
-      return ""
-    }
-  }
-
-  // Form handlers
-  const handleInputChange = (field: string, value: string) => {
-    try {
-      setFormData((prev) => ({ ...prev, [field]: value }))
-    } catch (error) {
-      console.error("Error updating form:", error)
-    }
-  }
-
-  const handleDateChange = (value: string) => {
-    try {
-      setSelectedDate(value)
-      setSelectedTime("")
-    } catch (error) {
-      console.error("Error changing date:", error)
-    }
-  }
-
-  const handleTimeChange = (value: string) => {
-    try {
-      if (selectedDate && !isDateBlocked(selectedDate)) {
-        setSelectedTime(value)
-      }
-    } catch (error) {
-      console.error("Error changing time:", error)
-    }
-  }
-
-  // Validation
-  const validateForm = (): boolean => {
-    try {
-      if (!selectedService) {
-        alert("Please select a service")
-        return false
-      }
-      if (!selectedDate) {
-        alert("Please select a date")
-        return false
-      }
-      if (isDateBlocked(selectedDate)) {
-        alert("This date is fully booked. Please select another date.")
-        return false
-      }
-      if (!selectedTime) {
-        alert("Please select a time")
-        return false
-      }
-      if (!isTimeSlotAvailable(selectedDate, selectedTime)) {
-        alert("This time slot is no longer available.")
-        return false
-      }
-      if (!formData.name.trim()) {
-        alert("Please enter your full name")
-        return false
-      }
-      if (!formData.phone.trim()) {
-        alert("Please enter your phone number")
-        return false
-      }
-      return true
-    } catch (error) {
-      console.error("Validation error:", error)
-      alert("Please check your booking details and try again.")
+    if (!selectedDate) {
+      alert("Please select a date")
       return false
     }
-  }
-
-  // Payment handlers
-  const handlePaystackPayment = async () => {
-    try {
-      if (!validateForm()) return
-
-      if (!paystackLoaded || typeof window === "undefined" || !window.PaystackPop) {
-        alert("Payment system is loading. Please try again in a moment.")
-        return
-      }
-
-      setIsProcessing(true)
-      const depositAmount = getDepositAmount()
-
-      const handler = window.PaystackPop.setup({
-        key: "pk_test_your_paystack_public_key",
-        email: formData.email || `${formData.phone.replace(/\D/g, "")}@temp.com`,
-        amount: depositAmount * 100,
-        currency: "NGN",
-        ref: `LBD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        metadata: {
-          custom_fields: [
-            { display_name: "Service", variable_name: "service", value: selectedService },
-            { display_name: "Date", variable_name: "date", value: selectedDate },
-            { display_name: "Time", variable_name: "time", value: selectedTime },
-            { display_name: "Phone", variable_name: "phone", value: formData.phone },
-            { display_name: "Notes", variable_name: "notes", value: formData.notes || "No special notes" },
-          ],
-        },
-        callback: (response: any) => {
-          setIsProcessing(false)
-          alert(
-            `Payment successful! 🎉\n\nReference: ${response.reference}\n\nWe'll contact you within 24 hours to confirm your appointment details. Thank you for choosing Lashed by Deedee!`,
-          )
-
-          // Reset form
-          setSelectedService("")
-          setSelectedDate("")
-          setSelectedTime("")
-          setFormData({ name: "", phone: "", email: "", notes: "" })
-        },
-        onClose: () => {
-          setIsProcessing(false)
-        },
-      })
-
-      handler.openIframe()
-    } catch (error) {
-      setIsProcessing(false)
-      console.error("Payment error:", error)
-      alert("There was an error processing your payment. Please try again or contact us directly.")
+    if (!selectedTime) {
+      alert("Please select a time")
+      return false
     }
+    if (!formData.name.trim()) {
+      alert("Please enter your full name")
+      return false
+    }
+    if (!formData.phone.trim()) {
+      alert("Please enter your phone number")
+      return false
+    }
+    return true
   }
 
   const handleWhatsAppBooking = () => {
-    try {
-      if (!validateForm()) return
+    if (!validateForm()) return
 
-      const service = services.find((s) => s.name === selectedService)
-      const depositAmount = getDepositAmount()
+    const service = services.find((s) => s.name === selectedService)
+    const depositAmount = getDepositAmount()
 
-      const message = `Hi! I'd like to book an appointment:
+    const message = `Hi! I'd like to book an appointment:
 
 📅 Service: ${selectedService}
 💰 Price: ₦${service?.price} (Deposit: ₦${depositAmount.toLocaleString()})
@@ -349,77 +98,8 @@ ${formData.notes ? `📝 Notes: ${formData.notes}` : ""}
 
 Please confirm my appointment and let me know how to pay the deposit. Thank you!`
 
-      const whatsappUrl = `https://wa.me/message/X5M2NOA553NGK1?text=${encodeURIComponent(message)}`
-      if (typeof window !== "undefined") {
-        window.open(whatsappUrl, "_blank")
-      }
-    } catch (error) {
-      console.error("WhatsApp booking error:", error)
-      alert("There was an error processing your booking request. Please try again.")
-    }
-  }
-
-  // Render availability message
-  const renderAvailabilityMessage = () => {
-    try {
-      if (!selectedDate || !availabilityLoaded) return null
-
-      if (isDateBlocked(selectedDate)) {
-        return (
-          <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-            <div className="flex items-center space-x-2 text-red-700 dark:text-red-300">
-              <XCircle className="w-5 h-5" />
-              <span className="font-medium">Fully Booked</span>
-            </div>
-            <p className="text-sm text-red-600 dark:text-red-400 mt-1">
-              This date is fully booked. Please select another date.
-            </p>
-          </div>
-        )
-      }
-
-      const availableSlots = getAvailableTimeSlots(selectedDate)
-      if (availableSlots.length === 0) {
-        return (
-          <div className="mt-2 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-            <div className="flex items-center space-x-2 text-orange-700 dark:text-orange-300">
-              <XCircle className="w-5 h-5" />
-              <span className="font-medium">No Available Slots</span>
-            </div>
-            <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
-              All time slots are booked. Please select another date.
-            </p>
-          </div>
-        )
-      }
-
-      return (
-        <div className="mt-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-          <div className="flex items-center space-x-2 text-green-700 dark:text-green-300">
-            <CheckCircle className="w-5 h-5" />
-            <span className="font-medium">Available Slots</span>
-          </div>
-          <p className="text-sm text-green-600 dark:text-green-400 mt-1">
-            {availableSlots.length} time slot{availableSlots.length !== 1 ? "s" : ""} available.
-          </p>
-        </div>
-      )
-    } catch (error) {
-      console.error("Error rendering availability message:", error)
-      return null
-    }
-  }
-
-  // Show loading state
-  if (loadingAvailability) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-pink-50 to-rose-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-300">Loading booking information...</p>
-        </div>
-      </div>
-    )
+    const whatsappUrl = `https://wa.me/message/X5M2NOA553NGK1?text=${encodeURIComponent(message)}`
+    window.open(whatsappUrl, "_blank")
   }
 
   return (
@@ -443,10 +123,15 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                 </h3>
                 <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
                   <li>
+                    • <strong>Session Time:</strong> Each session takes approximately 2-3 hours. Please schedule
+                    accordingly.
+                  </li>
+                  <li>
                     • <strong>Deposit:</strong> 50% non-refundable deposit required to confirm your appointment.
                   </li>
                   <li>
-                    • <strong>Punctuality:</strong> Arrivals more than 1 hour late will result in cancellation.
+                    • <strong>Punctuality:</strong> Arrivals more than 1 hour late will result in cancellation and
+                    rescheduling.
                   </li>
                   <li>
                     • <strong>Rescheduling:</strong> You can reschedule only once. Missing after rescheduling forfeits
@@ -454,6 +139,12 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                   </li>
                   <li>
                     • <strong>Cancellations:</strong> 24 hours advance notice required for cancellations.
+                  </li>
+                  <li>
+                    • <strong>No-Shows:</strong> Deposit will be forfeited for no-shows or failure to notify us.
+                  </li>
+                  <li>
+                    • <strong>Makeup Policy:</strong> Please avoid wearing makeup to ensure the best results.
                   </li>
                 </ul>
               </div>
@@ -495,50 +186,28 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                   <Input
                     type="date"
                     value={selectedDate}
-                    onChange={(e) => handleDateChange(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedDate(e.target.value)
+                      setSelectedTime("")
+                    }}
                     className="mt-2"
                     min={getMinDate()}
                   />
-                  {renderAvailabilityMessage()}
                 </div>
 
                 {/* Time Selection */}
                 <div>
                   <Label className="text-base font-medium text-gray-900 dark:text-gray-100">Preferred Time *</Label>
-                  <Select
-                    value={selectedTime}
-                    onValueChange={handleTimeChange}
-                    disabled={!selectedDate || isDateBlocked(selectedDate)}
-                  >
+                  <Select value={selectedTime} onValueChange={setSelectedTime} disabled={!selectedDate}>
                     <SelectTrigger className="mt-2">
-                      <SelectValue
-                        placeholder={
-                          !selectedDate
-                            ? "Select a date first"
-                            : isDateBlocked(selectedDate)
-                              ? "Date fully booked"
-                              : "Choose your time"
-                        }
-                      />
+                      <SelectValue placeholder={!selectedDate ? "Select a date first" : "Choose your time"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {selectedDate && !isDateBlocked(selectedDate) ? (
-                        getAvailableTimeSlots(selectedDate).length > 0 ? (
-                          getAvailableTimeSlots(selectedDate).map((time, index) => (
-                            <SelectItem key={index} value={time}>
-                              {time}
-                            </SelectItem>
-                          ))
-                        ) : (
-                          <SelectItem value="" disabled>
-                            No available time slots
-                          </SelectItem>
-                        )
-                      ) : (
-                        <SelectItem value="" disabled>
-                          {!selectedDate ? "Please select a date first" : "Date fully booked"}
+                      {timeSlots.map((time, index) => (
+                        <SelectItem key={index} value={time}>
+                          {time}
                         </SelectItem>
-                      )}
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -551,7 +220,7 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                       placeholder="Your full name"
                       className="mt-2"
                       value={formData.name}
-                      onChange={(e) => handleInputChange("name", e.target.value)}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                     />
                   </div>
                   <div>
@@ -560,7 +229,7 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                       placeholder="+234 XXX XXX XXXX"
                       className="mt-2"
                       value={formData.phone}
-                      onChange={(e) => handleInputChange("phone", e.target.value)}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
                     />
                   </div>
                 </div>
@@ -572,18 +241,18 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                     placeholder="your.email@example.com"
                     className="mt-2"
                     value={formData.email}
-                    onChange={(e) => handleInputChange("email", e.target.value)}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
                   />
                 </div>
 
                 <div>
                   <Label className="text-base font-medium text-gray-900 dark:text-gray-100">Special Notes</Label>
                   <Textarea
-                    placeholder="Any special requests or notes"
+                    placeholder="Any special requests or notes (e.g., 'I want natural-looking brows')"
                     className="mt-2"
                     rows={3}
                     value={formData.notes}
-                    onChange={(e) => handleInputChange("notes", e.target.value)}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
                   />
                 </div>
               </CardContent>
@@ -613,9 +282,6 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                   <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
                     <Calendar className="w-4 h-4" />
                     <span>{new Date(selectedDate).toLocaleDateString()}</span>
-                    {isDateBlocked(selectedDate) && (
-                      <span className="text-red-500 text-sm font-medium">(Fully Booked)</span>
-                    )}
                   </div>
                 )}
 
@@ -638,7 +304,7 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                   )}
                 </div>
 
-                {/* Payment Buttons */}
+                {/* Booking Button */}
                 <div className="space-y-3">
                   <Button
                     className="w-full bg-pink-500 hover:bg-pink-600 text-white"
@@ -648,39 +314,17 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                       !selectedTime ||
                       !formData.name ||
                       !formData.phone ||
-                      isProcessing ||
-                      !paystackLoaded ||
-                      isDateBlocked(selectedDate) ||
-                      !isTimeSlotAvailable(selectedDate, selectedTime)
-                    }
-                    onClick={handlePaystackPayment}
-                  >
-                    {isProcessing ? "Processing..." : !paystackLoaded ? "Loading Payment..." : "Pay with Paystack"}
-                  </Button>
-
-                  <div className="text-center text-sm text-gray-500 dark:text-gray-400">or</div>
-
-                  <Button
-                    variant="outline"
-                    className="w-full border-green-500 text-green-600 hover:bg-green-50 dark:border-green-400 dark:text-green-400 dark:hover:bg-green-900/20"
-                    disabled={
-                      !selectedService ||
-                      !selectedDate ||
-                      !selectedTime ||
-                      !formData.name ||
-                      !formData.phone ||
-                      isDateBlocked(selectedDate) ||
-                      !isTimeSlotAvailable(selectedDate, selectedTime)
+                      isProcessing
                     }
                     onClick={handleWhatsAppBooking}
                   >
-                    Book via WhatsApp
+                    {isProcessing ? "Processing..." : "Book via WhatsApp"}
                   </Button>
                 </div>
 
                 <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                  <p>Payment methods:</p>
-                  <p>Paystack • WhatsApp • Bank Transfer</p>
+                  <p>Contact us via WhatsApp to confirm your appointment</p>
+                  <p>and arrange payment details</p>
                 </div>
               </CardContent>
             </Card>
