@@ -172,33 +172,64 @@ export default function BookingPage() {
     }
   }
 
-  // Get available time slots for a specific date - with safety checks
+  // Get available time slots for a specific date - with enhanced safety checks
   const getAvailableTimeSlots = (date: string) => {
     try {
-      if (!date) return []
-
-      if (isDateBlocked(date)) {
-        return [] // No slots available if entire date is blocked
+      // Return empty array for invalid inputs
+      if (!date || typeof date !== "string") {
+        return []
       }
 
-      const blockedSlots = blockedTimeSlots[date] || []
-      return allTimeSlots.filter((slot) => !blockedSlots.includes(slot))
+      // Return empty array if date is blocked
+      if (isDateBlocked(date)) {
+        return []
+      }
+
+      // Safely get blocked slots for this date
+      const blockedSlots = blockedTimeSlots && typeof blockedTimeSlots === "object" ? blockedTimeSlots[date] || [] : []
+
+      // Ensure blockedSlots is an array
+      const safeBlockedSlots = Array.isArray(blockedSlots) ? blockedSlots : []
+
+      // Filter available slots
+      return allTimeSlots.filter((slot) => {
+        try {
+          return !safeBlockedSlots.includes(slot)
+        } catch (filterError) {
+          console.error("Error filtering time slot:", filterError)
+          return true // Default to available if error occurs
+        }
+      })
     } catch (error) {
       console.error("Error getting available time slots:", error)
-      return allTimeSlots // Return all slots if error occurs
+      return [] // Return empty array on error to prevent crashes
     }
   }
 
-  // Check if a specific time slot is available - with safety checks
+  // Check if a specific time slot is available - with enhanced safety checks
   const isTimeSlotAvailable = (date: string, time: string) => {
     try {
-      if (!date || !time) return false
-      if (isDateBlocked(date)) return false
-      const blockedSlots = blockedTimeSlots[date] || []
-      return !blockedSlots.includes(time)
+      // Return false for invalid inputs
+      if (!date || !time || typeof date !== "string" || typeof time !== "string") {
+        return false
+      }
+
+      // Return false if date is blocked
+      if (isDateBlocked(date)) {
+        return false
+      }
+
+      // Safely get blocked slots for this date
+      const blockedSlots = blockedTimeSlots && typeof blockedTimeSlots === "object" ? blockedTimeSlots[date] || [] : []
+
+      // Ensure blockedSlots is an array
+      const safeBlockedSlots = Array.isArray(blockedSlots) ? blockedSlots : []
+
+      // Check if time is not in blocked slots
+      return !safeBlockedSlots.includes(time)
     } catch (error) {
       console.error("Error checking time slot availability:", error)
-      return true // Default to available if error occurs
+      return false // Default to unavailable if error occurs
     }
   }
 
@@ -545,7 +576,16 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                   </Label>
                   <Select
                     value={selectedTime}
-                    onValueChange={setSelectedTime}
+                    onValueChange={(value) => {
+                      try {
+                        // Only set time if date is available and time is valid
+                        if (selectedDate && !isDateBlocked(selectedDate) && value) {
+                          setSelectedTime(value)
+                        }
+                      } catch (error) {
+                        console.error("Error selecting time:", error)
+                      }
+                    }}
                     disabled={!selectedDate || isDateBlocked(selectedDate)}
                   >
                     <SelectTrigger className="mt-2">
@@ -560,25 +600,69 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      {selectedDate &&
-                        !isDateBlocked(selectedDate) &&
-                        getAvailableTimeSlots(selectedDate).map((time, index) => (
-                          <SelectItem key={index} value={time}>
-                            {time}
-                          </SelectItem>
-                        ))}
-                      {selectedDate && getAvailableTimeSlots(selectedDate).length === 0 && (
-                        <SelectItem value="" disabled>
-                          No available time slots
-                        </SelectItem>
-                      )}
+                      {(() => {
+                        try {
+                          if (!selectedDate) {
+                            return (
+                              <SelectItem value="" disabled>
+                                Please select a date first
+                              </SelectItem>
+                            )
+                          }
+
+                          if (isDateBlocked(selectedDate)) {
+                            return (
+                              <SelectItem value="" disabled>
+                                This date is fully booked
+                              </SelectItem>
+                            )
+                          }
+
+                          const availableSlots = getAvailableTimeSlots(selectedDate)
+
+                          if (availableSlots.length === 0) {
+                            return (
+                              <SelectItem value="" disabled>
+                                No available time slots
+                              </SelectItem>
+                            )
+                          }
+
+                          return availableSlots.map((time, index) => (
+                            <SelectItem key={`${selectedDate}-${time}-${index}`} value={time}>
+                              {time}
+                            </SelectItem>
+                          ))
+                        } catch (error) {
+                          console.error("Error rendering time slots:", error)
+                          return (
+                            <SelectItem value="" disabled>
+                              Error loading time slots
+                            </SelectItem>
+                          )
+                        }
+                      })()}
                     </SelectContent>
                   </Select>
-                  {selectedDate && !isDateBlocked(selectedDate) && getAvailableTimeSlots(selectedDate).length > 0 && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                      Available slots: {getAvailableTimeSlots(selectedDate).join(", ")}
-                    </p>
-                  )}
+                  {(() => {
+                    try {
+                      if (
+                        selectedDate &&
+                        !isDateBlocked(selectedDate) &&
+                        getAvailableTimeSlots(selectedDate).length > 0
+                      ) {
+                        return (
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                            Available slots: {getAvailableTimeSlots(selectedDate).join(", ")}
+                          </p>
+                        )
+                      }
+                      return null
+                    } catch (error) {
+                      console.error("Error showing available slots:", error)
+                      return null
+                    }
+                  })()}
                 </div>
 
                 {/* Personal Information */}
