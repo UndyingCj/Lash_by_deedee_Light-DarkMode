@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { CalendarIcon, Clock, Plus, Trash2, AlertCircle } from "lucide-react"
+import { CalendarIcon, Clock, Plus, Trash2, AlertCircle, CheckCircle } from "lucide-react"
 import { AdminLayout } from "@/components/admin/admin-layout"
 import Calendar from "react-calendar"
 import "react-calendar/dist/Calendar.css"
@@ -24,115 +24,77 @@ interface BlockedTimeSlot {
 
 const CalendarPage = () => {
   const [date, setDate] = useState(new Date())
-  const [blockedDates, setBlockedDates] = useState<string[]>([])
-  const [blockedTimeSlots, setBlockedTimeSlots] = useState<Record<string, string[]>>({})
+  const [blockedDates, setBlockedDates] = useState<string[]>([
+    "2025-06-15",
+    "2025-06-16",
+    "2025-06-18",
+    "2025-06-20",
+    "2025-06-28",
+  ])
+  const [blockedTimeSlots, setBlockedTimeSlots] = useState<Record<string, string[]>>({
+    "2025-06-17": ["09:00 AM", "02:00 PM"],
+    "2025-06-19": ["11:00 AM"],
+  })
   const [availableTimeSlots] = useState(["09:00 AM", "11:00 AM", "02:00 PM", "04:00 PM"])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
-  useEffect(() => {
-    fetchBlockedData()
-  }, [])
+  const showMessage = (type: "success" | "error", text: string) => {
+    setMessage({ type, text })
+    setTimeout(() => setMessage(null), 3000)
+  }
 
-  const fetchBlockedData = async () => {
+  const handleDateClick = async (dateString: string) => {
+    const isBlocked = blockedDates.includes(dateString)
+    setLoading(true)
+
     try {
-      setLoading(true)
-      const [datesResponse, timesResponse] = await Promise.all([
-        fetch("/api/admin/calendar?type=dates"),
-        fetch("/api/admin/calendar?type=timeslots"),
-      ])
-
-      if (datesResponse.ok) {
-        const datesData = await datesResponse.json()
-        if (datesData.success) {
-          setBlockedDates(datesData.data.map((item: BlockedDate) => item.blocked_date))
-        }
-      }
-
-      if (timesResponse.ok) {
-        const timesData = await timesResponse.json()
-        if (timesData.success) {
-          const timeSlots: { [key: string]: string[] } = {}
-          timesData.data.forEach((item: BlockedTimeSlot) => {
-            if (!timeSlots[item.blocked_date]) {
-              timeSlots[item.blocked_date] = []
-            }
-            timeSlots[item.blocked_date].push(item.blocked_time)
-          })
-          setBlockedTimeSlots(timeSlots)
-        }
+      if (isBlocked) {
+        // Unblock date
+        setBlockedDates((prev) => prev.filter((d) => d !== dateString))
+        // Also remove any blocked time slots for this date
+        setBlockedTimeSlots((prev) => {
+          const updated = { ...prev }
+          delete updated[dateString]
+          return updated
+        })
+        showMessage("success", `Date ${new Date(dateString).toLocaleDateString()} has been unblocked`)
+      } else {
+        // Block date
+        setBlockedDates((prev) => [...prev, dateString])
+        showMessage("success", `Date ${new Date(dateString).toLocaleDateString()} has been blocked`)
       }
     } catch (error) {
-      console.error("Error fetching blocked data:", error)
+      showMessage("error", "Failed to update date. Please try again.")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleDateClick = async (date: string) => {
-    const isBlocked = blockedDates.includes(date)
-
-    try {
-      if (isBlocked) {
-        // Unblock date
-        const response = await fetch(`/api/admin/calendar?type=date&date=${date}`, {
-          method: "DELETE",
-        })
-
-        if (response.ok) {
-          setBlockedDates((prev) => prev.filter((d) => d !== date))
-        }
-      } else {
-        // Block date
-        const reason = prompt("Reason for blocking this date (optional):")
-        const response = await fetch("/api/admin/calendar", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "date", date, reason }),
-        })
-
-        if (response.ok) {
-          setBlockedDates((prev) => [...prev, date])
-        }
-      }
-    } catch (error) {
-      console.error("Error updating blocked date:", error)
-    }
-  }
-
-  const handleTimeSlotClick = async (date: string, time: string) => {
-    const isBlocked = blockedTimeSlots[date]?.includes(time)
+  const handleTimeSlotClick = async (dateString: string, time: string) => {
+    const isBlocked = blockedTimeSlots[dateString]?.includes(time)
+    setLoading(true)
 
     try {
       if (isBlocked) {
         // Unblock time slot
-        const response = await fetch(`/api/admin/calendar?type=timeslot&date=${date}&time=${time}`, {
-          method: "DELETE",
-        })
-
-        if (response.ok) {
-          setBlockedTimeSlots((prev) => ({
-            ...prev,
-            [date]: prev[date]?.filter((t) => t !== time) || [],
-          }))
-        }
+        setBlockedTimeSlots((prev) => ({
+          ...prev,
+          [dateString]: prev[dateString]?.filter((t) => t !== time) || [],
+        }))
+        showMessage("success", `Time slot ${time} has been unblocked`)
       } else {
         // Block time slot
-        const reason = prompt("Reason for blocking this time slot (optional):")
-        const response = await fetch("/api/admin/calendar", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "timeslot", date, time, reason }),
-        })
-
-        if (response.ok) {
-          setBlockedTimeSlots((prev) => ({
-            ...prev,
-            [date]: [...(prev[date] || []), time],
-          }))
-        }
+        setBlockedTimeSlots((prev) => ({
+          ...prev,
+          [dateString]: [...(prev[dateString] || []), time],
+        }))
+        showMessage("success", `Time slot ${time} has been blocked`)
       }
     } catch (error) {
-      console.error("Error updating blocked time slot:", error)
+      showMessage("error", "Failed to update time slot. Please try again.")
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -154,20 +116,70 @@ const CalendarPage = () => {
 
   const selectedDateString = formatDate(date)
   const selectedDateBlocked = blockedDates.includes(selectedDateString)
+  const selectedDateFormatted = date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  })
 
-  if (loading) {
-    return (
-      <AdminLayout title="Availability Calendar" subtitle="Loading calendar data...">
-        <div className="flex items-center justify-center py-16">
-          <div className="animate-spin rounded-full h-8 w-8 border-4 border-pink-200 border-t-pink-500"></div>
-          <span className="ml-3 text-slate-600 dark:text-slate-400">Loading calendar...</span>
-        </div>
-      </AdminLayout>
-    )
-  }
+  const totalBlockedDates = blockedDates.length
+  const totalBlockedSlots = Object.values(blockedTimeSlots).reduce((sum, slots) => sum + slots.length, 0)
 
   return (
     <AdminLayout title="Availability Calendar" subtitle="Manage your available dates and time slots">
+      {/* Success/Error Message */}
+      {message && (
+        <div
+          className={`mb-6 p-4 rounded-lg flex items-center space-x-2 ${
+            message.type === "success"
+              ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
+              : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800"
+          }`}
+        >
+          {message.type === "success" ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          <span>{message.text}</span>
+        </div>
+      )}
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Card className="border-0 shadow-lg bg-gradient-to-r from-red-500 to-red-600 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-red-100">Blocked Dates</p>
+                <p className="text-3xl font-bold">{totalBlockedDates}</p>
+              </div>
+              <CalendarIcon className="w-8 h-8 text-red-200" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-lg bg-gradient-to-r from-orange-500 to-orange-600 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-orange-100">Blocked Time Slots</p>
+                <p className="text-3xl font-bold">{totalBlockedSlots}</p>
+              </div>
+              <Clock className="w-8 h-8 text-orange-200" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-lg bg-gradient-to-r from-green-500 to-green-600 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-green-100">Available Slots/Day</p>
+                <p className="text-3xl font-bold">{availableTimeSlots.length}</p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-green-200" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="grid lg:grid-cols-2 gap-8">
         {/* Calendar Section */}
         <Card className="border-0 shadow-lg bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
@@ -188,9 +200,12 @@ const CalendarPage = () => {
                 tileClassName={tileClassName}
                 onClickDay={(value) => {
                   const dateString = formatDate(value)
-                  handleDateClick(dateString)
+                  if (!loading) {
+                    handleDateClick(dateString)
+                  }
                 }}
                 className="custom-calendar"
+                tileDisabled={({ date }) => loading}
               />
             </div>
 
@@ -206,7 +221,7 @@ const CalendarPage = () => {
                 </div>
               </div>
               <Badge variant="outline" className="text-slate-600 dark:text-slate-400">
-                {blockedDates.length} blocked dates
+                {totalBlockedDates} blocked dates
               </Badge>
             </div>
           </CardContent>
@@ -221,11 +236,7 @@ const CalendarPage = () => {
                 <span>Time Slots</span>
               </div>
               <Badge variant="outline" className={selectedDateBlocked ? "border-red-500 text-red-600" : ""}>
-                {date.toLocaleDateString("en-US", {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                })}
+                {selectedDateFormatted}
               </Badge>
             </CardTitle>
             <p className="text-sm text-slate-600 dark:text-slate-400">
@@ -241,12 +252,13 @@ const CalendarPage = () => {
                   This entire date is blocked. Unblock the date first to manage individual time slots.
                 </p>
                 <Button
-                  onClick={() => handleDateClick(selectedDateString)}
+                  onClick={() => !loading && handleDateClick(selectedDateString)}
                   variant="outline"
                   className="border-red-500 text-red-600 hover:bg-red-50"
+                  disabled={loading}
                 >
                   <Trash2 className="w-4 h-4 mr-2" />
-                  Unblock Date
+                  {loading ? "Unblocking..." : "Unblock Date"}
                 </Button>
               </div>
             ) : (
@@ -256,17 +268,20 @@ const CalendarPage = () => {
                   return (
                     <Button
                       key={time}
-                      onClick={() => handleTimeSlotClick(selectedDateString, time)}
+                      onClick={() => !loading && handleTimeSlotClick(selectedDateString, time)}
                       variant={isBlocked ? "destructive" : "outline"}
                       className={`h-16 flex flex-col items-center justify-center transition-all ${
                         isBlocked
                           ? "bg-red-500 hover:bg-red-600 text-white"
                           : "border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
                       }`}
+                      disabled={loading}
                     >
                       <Clock className="w-5 h-5 mb-1" />
                       <span className="text-sm font-medium">{time}</span>
-                      <span className="text-xs opacity-75">{isBlocked ? "Blocked" : "Available"}</span>
+                      <span className="text-xs opacity-75">
+                        {loading ? "Updating..." : isBlocked ? "Blocked" : "Available"}
+                      </span>
                     </Button>
                   )
                 })}
@@ -279,18 +294,19 @@ const CalendarPage = () => {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => handleDateClick(selectedDateString)}
+                  onClick={() => !loading && handleDateClick(selectedDateString)}
                   className={selectedDateBlocked ? "border-green-500 text-green-600" : "border-red-500 text-red-600"}
+                  disabled={loading}
                 >
                   {selectedDateBlocked ? (
                     <>
                       <Plus className="w-4 h-4 mr-1" />
-                      Unblock Date
+                      {loading ? "Unblocking..." : "Unblock Date"}
                     </>
                   ) : (
                     <>
                       <Trash2 className="w-4 h-4 mr-1" />
-                      Block Entire Date
+                      {loading ? "Blocking..." : "Block Entire Date"}
                     </>
                   )}
                 </Button>
@@ -364,12 +380,18 @@ const CalendarPage = () => {
           color: rgb(71 85 105);
           border-radius: 6px;
           transition: all 0.2s;
+          cursor: pointer;
         }
         
         .custom-calendar .react-calendar__tile:enabled:hover,
         .custom-calendar .react-calendar__tile:enabled:focus {
           background-color: rgb(248 250 252);
           color: rgb(15 23 42);
+        }
+        
+        .custom-calendar .react-calendar__tile:disabled {
+          cursor: not-allowed;
+          opacity: 0.5;
         }
         
         .custom-calendar .react-calendar__tile--now {
