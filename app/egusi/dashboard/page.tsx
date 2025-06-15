@@ -26,6 +26,23 @@ import {
 import Link from "next/link"
 import { AdminLayout } from "@/components/admin/admin-layout"
 
+// Function to get greeting based on Lagos time
+const getTimeBasedGreeting = () => {
+  const now = new Date()
+  const lagosTime = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Lagos" }))
+  const hour = lagosTime.getHours()
+
+  if (hour >= 5 && hour < 12) {
+    return "Good morning, Deedee! 🌅"
+  } else if (hour >= 12 && hour < 17) {
+    return "Good afternoon, Deedee! ☀️"
+  } else if (hour >= 17 && hour < 21) {
+    return "Good evening, Deedee! 🌆"
+  } else {
+    return "Good night, Deedee! 🌙"
+  }
+}
+
 interface DashboardStats {
   todayBookings: number
   weeklyBookings: number
@@ -61,8 +78,10 @@ const DashboardPage = () => {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [greeting, setGreeting] = useState("")
 
   useEffect(() => {
+    setGreeting(getTimeBasedGreeting())
     fetchDashboardData()
   }, [])
 
@@ -199,7 +218,7 @@ const DashboardPage = () => {
   }
 
   return (
-    <AdminLayout title="Good morning, Deedee! 👋" subtitle="Here's what's happening with your business today.">
+    <AdminLayout title={greeting} subtitle="Here's what's happening with your business today.">
       {/* Action Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div className="flex items-center space-x-2">
