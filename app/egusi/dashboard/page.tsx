@@ -49,13 +49,13 @@ export default function AdminDashboard() {
     // Check authentication
     const isAuth = localStorage.getItem("adminAuth")
     if (!isAuth) {
-      window.location.href = "/admin"
+      window.location.href = "/egusi"
     }
   }, [])
 
   const handleLogout = () => {
     localStorage.removeItem("adminAuth")
-    window.location.href = "/admin"
+    window.location.href = "/egusi"
   }
 
   const getStatusColor = (status: string) => {
@@ -82,7 +82,7 @@ export default function AdminDashboard() {
               <p className="text-gray-600 dark:text-gray-400">Lashed by Deedee Management</p>
             </div>
             <div className="flex items-center space-x-4">
-              <Link href="/admin/settings">
+              <Link href="/egusi/settings">
                 <Button variant="outline" size="sm">
                   <Settings className="w-4 h-4 mr-2" />
                   Settings
@@ -161,7 +161,7 @@ export default function AdminDashboard() {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Link href="/admin/bookings">
+          <Link href="/egusi/bookings">
             <Card className="hover:shadow-lg transition-shadow cursor-pointer">
               <CardContent className="p-6 text-center">
                 <Calendar className="w-12 h-12 mx-auto mb-4 text-pink-500" />
@@ -171,7 +171,7 @@ export default function AdminDashboard() {
             </Card>
           </Link>
 
-          <Link href="/admin/calendar">
+          <Link href="/egusi/calendar">
             <Card className="hover:shadow-lg transition-shadow cursor-pointer">
               <CardContent className="p-6 text-center">
                 <Clock className="w-12 h-12 mx-auto mb-4 text-pink-500" />
@@ -181,7 +181,7 @@ export default function AdminDashboard() {
             </Card>
           </Link>
 
-          <Link href="/admin/clients">
+          <Link href="/egusi/clients">
             <Card className="hover:shadow-lg transition-shadow cursor-pointer">
               <CardContent className="p-6 text-center">
                 <Users className="w-12 h-12 mx-auto mb-4 text-pink-500" />
@@ -197,7 +197,7 @@ export default function AdminDashboard() {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle className="text-xl font-bold text-gray-900 dark:text-gray-100">Recent Bookings</CardTitle>
-              <Link href="/admin/bookings">
+              <Link href="/egusi/bookings">
                 <Button size="sm" className="bg-pink-500 hover:bg-pink-600">
                   View All
                 </Button>

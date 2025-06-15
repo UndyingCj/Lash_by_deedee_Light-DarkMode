@@ -28,7 +28,7 @@ export default function AdminLoginPage() {
       if (credentials.username === "deedee" && credentials.password === "admin123") {
         // Store auth token/session
         localStorage.setItem("adminAuth", "authenticated")
-        window.location.href = "/admin/dashboard"
+        window.location.href = "/egusi/dashboard"
       } else {
         setError("Invalid credentials")
       }
