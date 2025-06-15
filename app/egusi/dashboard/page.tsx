@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Input } from "@/components/ui/input"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   Calendar,
   Users,
@@ -20,6 +22,9 @@ import {
   Filter,
   Download,
   RefreshCw,
+  Trash2,
+  CheckCircle,
+  XCircle,
 } from "lucide-react"
 import Link from "next/link"
 import { AddBookingModal } from "@/components/admin/add-booking-modal"
@@ -51,6 +56,9 @@ const DashboardPage = () => {
   const [recentBookings, setRecentBookings] = useState<Booking[]>([])
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   useEffect(() => {
     // Check authentication
@@ -65,6 +73,7 @@ const DashboardPage = () => {
 
   const fetchDashboardData = async () => {
     try {
+      setIsRefreshing(true)
       const response = await fetch("/api/admin/stats")
       const result = await response.json()
 
@@ -76,12 +85,77 @@ const DashboardPage = () => {
       console.error("Error fetching dashboard data:", error)
     } finally {
       setIsLoading(false)
+      setIsRefreshing(false)
     }
   }
 
   const handleLogout = () => {
     localStorage.removeItem("adminAuth")
     window.location.href = "/egusi"
+  }
+
+  const handleExportData = () => {
+    // Create CSV data
+    const csvData = [
+      ["Client Name", "Service", "Date", "Time", "Status", "Amount"],
+      ...recentBookings.map((booking) => [
+        booking.client_name,
+        booking.service,
+        booking.booking_date,
+        booking.booking_time,
+        booking.status,
+        booking.amount.toString(),
+      ]),
+    ]
+
+    const csvContent = csvData.map((row) => row.join(",")).join("\n")
+    const blob = new Blob([csvContent], { type: "text/csv" })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `bookings-${new Date().toISOString().split("T")[0]}.csv`
+    a.click()
+    window.URL.revokeObjectURL(url)
+  }
+
+  const handleStatusUpdate = async (bookingId: number, newStatus: string) => {
+    try {
+      const response = await fetch("/api/admin/bookings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: bookingId, status: newStatus }),
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        await fetchDashboardData()
+      } else {
+        alert("Failed to update booking status")
+      }
+    } catch (error) {
+      console.error("Error updating booking:", error)
+      alert("Error updating booking status")
+    }
+  }
+
+  const handleDeleteBooking = async (bookingId: number) => {
+    if (!confirm("Are you sure you want to delete this booking?")) return
+
+    try {
+      const response = await fetch(`/api/admin/bookings?id=${bookingId}`, {
+        method: "DELETE",
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        await fetchDashboardData()
+      } else {
+        alert("Failed to delete booking")
+      }
+    } catch (error) {
+      console.error("Error deleting booking:", error)
+      alert("Error deleting booking")
+    }
   }
 
   const getStatusColor = (status: string) => {
@@ -99,6 +173,14 @@ const DashboardPage = () => {
     }
   }
 
+  const filteredBookings = recentBookings.filter((booking) => {
+    const matchesSearch =
+      booking.client_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      booking.service.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesStatus = statusFilter === "all" || booking.status === statusFilter
+    return matchesSearch && matchesStatus
+  })
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
@@ -115,10 +197,10 @@ const DashboardPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      {/* Professional Header */}
-      <header className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg border-b border-slate-200/50 dark:border-slate-700/50 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
+      {/* Fixed Header - No overlapping */}
+      <header className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-lg border-b border-slate-200/50 dark:border-slate-700/50 fixed top-0 left-0 right-0 z-50 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-3">
                 <div className="relative">
@@ -136,46 +218,64 @@ const DashboardPage = () => {
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
-              <Button variant="outline" size="sm" className="hidden sm:flex">
-                <Search className="w-4 h-4 mr-2" />
-                Search
-              </Button>
+            <div className="flex items-center space-x-2">
+              {/* Search */}
+              <div className="relative hidden sm:block">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <Input
+                  placeholder="Search bookings..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 w-64"
+                />
+              </div>
 
+              {/* Notifications */}
               <Button variant="outline" size="sm" className="relative">
                 <Bell className="w-4 h-4" />
                 <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
               </Button>
 
+              {/* Add Booking */}
               <Button
                 onClick={() => setIsAddModalOpen(true)}
                 className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white shadow-lg"
                 size="sm"
               >
                 <Plus className="w-4 h-4 mr-2" />
-                New Booking
+                <span className="hidden sm:inline">New Booking</span>
               </Button>
 
-              <div className="flex items-center space-x-2">
-                <Avatar className="w-8 h-8">
-                  <AvatarImage src="/images/deedee-portrait.png" />
-                  <AvatarFallback className="bg-pink-100 text-pink-600">DD</AvatarFallback>
-                </Avatar>
-
-                <Button variant="ghost" size="sm" onClick={handleLogout} className="text-slate-600 dark:text-slate-400">
-                  <LogOut className="w-4 h-4" />
-                </Button>
-              </div>
+              {/* User Menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src="/images/deedee-portrait.png" />
+                      <AvatarFallback className="bg-pink-100 text-pink-600">DD</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Log out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 lg:px-8 py-8">
+      {/* Spacer to prevent content overlap */}
+      <div className="h-16"></div>
+
+      {/* Main Content - Proper spacing to avoid overlap */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
         {/* Welcome Section */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Good morning, Deedee! 👋</h2>
               <p className="text-slate-600 dark:text-slate-400 mt-1">
@@ -183,20 +283,20 @@ const DashboardPage = () => {
               </p>
             </div>
             <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={handleExportData}>
                 <Download className="w-4 h-4 mr-2" />
                 Export
               </Button>
-              <Button variant="outline" size="sm" onClick={fetchDashboardData}>
-                <RefreshCw className="w-4 h-4 mr-2" />
+              <Button variant="outline" size="sm" onClick={fetchDashboardData} disabled={isRefreshing}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
                 Refresh
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {/* Stats Cards - Responsive grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card className="relative overflow-hidden border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -212,7 +312,6 @@ const DashboardPage = () => {
                   <Calendar className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                 </div>
               </div>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -translate-y-16 translate-x-16"></div>
             </CardContent>
           </Card>
 
@@ -231,7 +330,6 @@ const DashboardPage = () => {
                   <Users className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
                 </div>
               </div>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full -translate-y-16 translate-x-16"></div>
             </CardContent>
           </Card>
 
@@ -252,7 +350,6 @@ const DashboardPage = () => {
                   <DollarSign className="w-8 h-8 text-purple-600 dark:text-purple-400" />
                 </div>
               </div>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full -translate-y-16 translate-x-16"></div>
             </CardContent>
           </Card>
 
@@ -271,12 +368,11 @@ const DashboardPage = () => {
                   <Clock className="w-8 h-8 text-amber-600 dark:text-amber-400" />
                 </div>
               </div>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full -translate-y-16 translate-x-16"></div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Enhanced Quick Actions */}
+        {/* Quick Actions - Responsive grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card className="group hover:shadow-xl transition-all duration-300 border-0 shadow-lg bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
             <Link href="/egusi/bookings">
@@ -285,7 +381,6 @@ const DashboardPage = () => {
                   <div className="p-4 bg-gradient-to-r from-pink-500 to-rose-500 rounded-2xl w-16 h-16 mx-auto group-hover:scale-110 transition-transform duration-300 shadow-lg">
                     <Calendar className="w-8 h-8 text-white mx-auto" />
                   </div>
-                  <div className="absolute inset-0 bg-pink-500/20 rounded-2xl w-16 h-16 mx-auto animate-pulse"></div>
                 </div>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-3">Manage Bookings</h3>
                 <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
@@ -306,7 +401,6 @@ const DashboardPage = () => {
                   <div className="p-4 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-2xl w-16 h-16 mx-auto group-hover:scale-110 transition-transform duration-300 shadow-lg">
                     <Clock className="w-8 h-8 text-white mx-auto" />
                   </div>
-                  <div className="absolute inset-0 bg-blue-500/20 rounded-2xl w-16 h-16 mx-auto animate-pulse"></div>
                 </div>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-3">Availability</h3>
                 <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
@@ -327,7 +421,6 @@ const DashboardPage = () => {
                   <div className="p-4 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl w-16 h-16 mx-auto group-hover:scale-110 transition-transform duration-300 shadow-lg">
                     <Users className="w-8 h-8 text-white mx-auto" />
                   </div>
-                  <div className="absolute inset-0 bg-emerald-500/20 rounded-2xl w-16 h-16 mx-auto animate-pulse"></div>
                 </div>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-3">Client Management</h3>
                 <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
@@ -342,19 +435,30 @@ const DashboardPage = () => {
           </Card>
         </div>
 
-        {/* Enhanced Recent Bookings */}
+        {/* Recent Bookings */}
         <Card className="border-0 shadow-lg bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
           <CardHeader className="border-b border-slate-200/50 dark:border-slate-700/50 bg-white/50 dark:bg-slate-800/50">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <CardTitle className="text-2xl font-bold text-slate-900 dark:text-slate-100">Recent Bookings</CardTitle>
                 <p className="text-slate-600 dark:text-slate-400 mt-1">Latest appointments and their status</p>
               </div>
               <div className="flex items-center space-x-2">
-                <Button variant="outline" size="sm">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filter
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Filter className="w-4 h-4 mr-2" />
+                      Filter
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onClick={() => setStatusFilter("all")}>All Status</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setStatusFilter("pending")}>Pending</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setStatusFilter("confirmed")}>Confirmed</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setStatusFilter("completed")}>Completed</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setStatusFilter("cancelled")}>Cancelled</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button
                   size="sm"
                   className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white"
@@ -367,15 +471,16 @@ const DashboardPage = () => {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-slate-200/50 dark:divide-slate-700/50">
-              {recentBookings.length === 0 ? (
+              {filteredBookings.length === 0 ? (
                 <div className="text-center py-16">
                   <div className="relative mb-6">
                     <Calendar className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto" />
-                    <div className="absolute inset-0 bg-slate-200/50 dark:bg-slate-700/50 rounded-full w-16 h-16 mx-auto animate-pulse"></div>
                   </div>
-                  <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">No recent bookings</h3>
+                  <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">No bookings found</h3>
                   <p className="text-slate-500 dark:text-slate-400 mb-6">
-                    New bookings will appear here when they're created
+                    {searchQuery || statusFilter !== "all"
+                      ? "Try adjusting your search or filter criteria"
+                      : "New bookings will appear here when they're created"}
                   </p>
                   <Button
                     onClick={() => setIsAddModalOpen(true)}
@@ -386,10 +491,10 @@ const DashboardPage = () => {
                   </Button>
                 </div>
               ) : (
-                recentBookings.map((booking, index) => (
+                filteredBookings.map((booking) => (
                   <div
                     key={booking.id}
-                    className="flex items-center justify-between p-6 hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors group"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-6 hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors group gap-4"
                   >
                     <div className="flex items-center space-x-4 flex-1">
                       <Avatar className="w-12 h-12">
@@ -417,8 +522,8 @@ const DashboardPage = () => {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-4">
-                      <div className="text-right">
+                    <div className="flex items-center justify-between sm:justify-end space-x-4">
+                      <div className="text-left sm:text-right">
                         <p className="font-bold text-slate-900 dark:text-slate-100 text-lg">
                           ₦{booking.amount.toLocaleString()}
                         </p>
@@ -426,13 +531,35 @@ const DashboardPage = () => {
                           {booking.status}
                         </Badge>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <MoreHorizontal className="w-4 h-4" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleStatusUpdate(booking.id, "confirmed")}>
+                            <CheckCircle className="mr-2 h-4 w-4" />
+                            Confirm
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusUpdate(booking.id, "completed")}>
+                            <CheckCircle className="mr-2 h-4 w-4" />
+                            Mark Complete
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusUpdate(booking.id, "cancelled")}>
+                            <XCircle className="mr-2 h-4 w-4" />
+                            Cancel
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDeleteBooking(booking.id)} className="text-red-600">
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 ))
@@ -442,7 +569,7 @@ const DashboardPage = () => {
         </Card>
       </main>
 
-      {/* Enhanced Add Booking Modal */}
+      {/* Add Booking Modal */}
       <AddBookingModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
