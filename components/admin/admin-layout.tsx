@@ -46,7 +46,7 @@ export function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
   const isActive = (href: string) => pathname === href
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+    <div className="flex min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
       {/* Fixed Header */}
       <header className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-lg border-b border-slate-200/50 dark:border-slate-700/50 fixed top-0 left-0 right-0 z-50 shadow-sm">
         <div className="px-4 sm:px-6 lg:px-8">
@@ -102,8 +102,8 @@ export function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
       </header>
 
       {/* Sidebar for desktop */}
-      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:w-64 lg:flex lg:flex-col lg:pt-16">
-        <div className="flex flex-col flex-1 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border-r border-slate-200/50 dark:border-slate-700/50">
+      <aside className="hidden lg:block fixed left-0 top-0 h-screen w-64 z-40 pt-16 overflow-y-auto">
+        <div className="flex flex-col h-full bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border-r border-slate-200/50 dark:border-slate-700/50">
           <nav className="flex-1 px-4 py-6 space-y-2">
             {navigation.map((item) => {
               const Icon = item.icon
@@ -130,7 +130,7 @@ export function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
       {sidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-40 pt-16">
           <div className="fixed inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-          <div className="fixed left-0 top-16 bottom-0 w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700">
+          <div className="fixed left-0 top-16 bottom-0 w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 overflow-y-auto">
             <nav className="flex-1 px-4 py-6 space-y-2">
               {navigation.map((item) => {
                 const Icon = item.icon
@@ -155,9 +155,9 @@ export function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
         </div>
       )}
 
-      {/* Main content */}
-      <main className="lg:pl-64 pt-16">
-        <div className="px-4 sm:px-6 lg:px-8 py-8">
+      {/* Main content wrapper */}
+      <main className="flex-1 lg:ml-64 pt-16 min-h-screen flex flex-col">
+        <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8">
           {/* Page header */}
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">{title}</h2>
@@ -165,8 +165,27 @@ export function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
           </div>
 
           {/* Page content */}
-          {children}
+          <div className="flex-1">{children}</div>
         </div>
+
+        {/* Admin Footer */}
+        <footer className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border-t border-slate-200/50 dark:border-slate-700/50 px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center space-y-2 sm:space-y-0">
+            <div className="flex items-center space-x-2">
+              <div className="w-6 h-6 bg-gradient-to-r from-pink-500 to-rose-500 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-xs">L</span>
+              </div>
+              <span className="text-sm text-slate-600 dark:text-slate-400">
+                © {new Date().getFullYear()} Lashed by Deedee Admin Panel
+              </span>
+            </div>
+            <div className="flex items-center space-x-4 text-sm text-slate-500 dark:text-slate-400">
+              <span>Version 1.0</span>
+              <span>•</span>
+              <span>Professional Beauty Management</span>
+            </div>
+          </div>
+        </footer>
       </main>
     </div>
   )
