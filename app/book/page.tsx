@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,8 @@ import {
   XCircle,
   CheckCircle,
   RefreshCw,
+  Wifi,
+  WifiOff,
 } from "lucide-react"
 
 interface BlockedDate {
@@ -51,6 +53,16 @@ export default function BookingPage() {
   const [loadingAvailability, setLoadingAvailability] = useState(true)
   const [availabilityError, setAvailabilityError] = useState<string | null>(null)
 
+  // Real-time update state
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [isOnline, setIsOnline] = useState(true)
+  const [updateCount, setUpdateCount] = useState(0)
+
+  // Refs for cleanup
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const mountedRef = useRef(true)
+
   const services = [
     { name: "Microblading", price: "40,000", duration: "2.5 hours" },
     { name: "Ombré Brows", price: "45,000", duration: "2.5 hours" },
@@ -74,75 +86,173 @@ export default function BookingPage() {
 
   const timeSlots = ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"]
 
-  // Load availability data
-  useEffect(() => {
-    let mounted = true
-
-    const loadAvailability = async () => {
+  // Load availability data with real-time updates
+  const loadAvailability = useCallback(
+    async (isPolling = false) => {
       try {
-        setLoadingAvailability(true)
+        if (!isPolling) {
+          setLoadingAvailability(true)
+        } else {
+          setIsRefreshing(true)
+        }
         setAvailabilityError(null)
 
         const response = await fetch("/api/admin/availability", {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
           },
         })
 
-        if (!mounted) return
+        if (!mountedRef.current) return
 
         if (response.ok) {
           const data = await response.json()
 
           if (data && typeof data === "object") {
             // Handle blocked dates
+            const newBlockedDates: string[] = []
             if (Array.isArray(data.blockedDates)) {
-              const dates = data.blockedDates
+              data.blockedDates
                 .filter((item: BlockedDate) => item && typeof item === "object" && item.blocked_date)
-                .map((item: BlockedDate) => item.blocked_date)
-              setBlockedDates(dates)
+                .forEach((item: BlockedDate) => {
+                  newBlockedDates.push(item.blocked_date)
+                })
             }
 
             // Handle blocked time slots
+            const newBlockedTimeSlots: Record<string, string[]> = {}
             if (Array.isArray(data.blockedSlots)) {
-              const slotsMap: Record<string, string[]> = {}
               data.blockedSlots
                 .filter(
                   (slot: BlockedTimeSlot) => slot && typeof slot === "object" && slot.blocked_date && slot.blocked_time,
                 )
                 .forEach((slot: BlockedTimeSlot) => {
-                  if (!slotsMap[slot.blocked_date]) {
-                    slotsMap[slot.blocked_date] = []
+                  if (!newBlockedTimeSlots[slot.blocked_date]) {
+                    newBlockedTimeSlots[slot.blocked_date] = []
                   }
-                  slotsMap[slot.blocked_date].push(slot.blocked_time)
+                  newBlockedTimeSlots[slot.blocked_date].push(slot.blocked_time)
                 })
-              setBlockedTimeSlots(slotsMap)
+            }
+
+            // Check if data has changed
+            const datesChanged = JSON.stringify(newBlockedDates.sort()) !== JSON.stringify(blockedDates.sort())
+            const slotsChanged = JSON.stringify(newBlockedTimeSlots) !== JSON.stringify(blockedTimeSlots)
+
+            if (datesChanged || slotsChanged || !availabilityLoaded) {
+              setBlockedDates(newBlockedDates)
+              setBlockedTimeSlots(newBlockedTimeSlots)
+              setLastUpdated(new Date())
+              setUpdateCount((prev) => prev + 1)
+
+              // Clear selected time if the selected date becomes blocked or time slot becomes unavailable
+              if (selectedDate && selectedTime) {
+                if (newBlockedDates.includes(selectedDate)) {
+                  setSelectedTime("")
+                } else if (newBlockedTimeSlots[selectedDate]?.includes(selectedTime)) {
+                  setSelectedTime("")
+                }
+              }
             }
           }
+
+          setIsOnline(true)
         } else {
           console.warn("Failed to load availability data")
-          setAvailabilityError("Unable to load availability. All dates will be shown as available.")
+          if (!availabilityLoaded) {
+            setAvailabilityError("Unable to load availability. All dates will be shown as available.")
+          }
+          setIsOnline(false)
         }
       } catch (error) {
         console.error("Error loading availability:", error)
-        if (mounted) {
-          setAvailabilityError("Connection error. All dates will be shown as available.")
+        if (mountedRef.current) {
+          if (!availabilityLoaded) {
+            setAvailabilityError("Connection error. All dates will be shown as available.")
+          }
+          setIsOnline(false)
         }
       } finally {
-        if (mounted) {
+        if (mountedRef.current) {
           setAvailabilityLoaded(true)
           setLoadingAvailability(false)
+          setIsRefreshing(false)
+        }
+      }
+    },
+    [blockedDates, blockedTimeSlots, availabilityLoaded, selectedDate, selectedTime],
+  )
+
+  // Initial load and setup polling
+  useEffect(() => {
+    mountedRef.current = true
+
+    // Initial load
+    loadAvailability(false)
+
+    // Setup polling for real-time updates
+    const startPolling = () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+      }
+
+      pollingIntervalRef.current = setInterval(() => {
+        if (mountedRef.current && !document.hidden) {
+          loadAvailability(true)
+        }
+      }, 5000) // Poll every 5 seconds
+    }
+
+    startPolling()
+
+    // Handle visibility change to pause/resume polling
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+      } else {
+        startPolling()
+        // Immediate refresh when page becomes visible
+        if (mountedRef.current) {
+          loadAvailability(true)
         }
       }
     }
 
-    loadAvailability()
+    // Handle online/offline status
+    const handleOnline = () => {
+      setIsOnline(true)
+      if (mountedRef.current) {
+        loadAvailability(true)
+      }
+    }
+
+    const handleOffline = () => {
+      setIsOnline(false)
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
 
     return () => {
-      mounted = false
+      mountedRef.current = false
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
     }
-  }, [])
+  }, [loadAvailability])
+
+  // Manual refresh function
+  const handleManualRefresh = useCallback(() => {
+    loadAvailability(true)
+  }, [loadAvailability])
 
   // Utility functions
   const isDateBlocked = (date: string): boolean => {
@@ -365,6 +475,34 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
           <p className="text-xl text-gray-600 dark:text-gray-300">
             Select a service, pick a date, and secure your spot with a 50% deposit.
           </p>
+        </div>
+
+        {/* Real-time Status Bar */}
+        <div className="mb-6 flex items-center justify-between p-3 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2">
+              {isOnline ? <Wifi className="w-4 h-4 text-green-500" /> : <WifiOff className="w-4 h-4 text-red-500" />}
+              <span className="text-sm text-gray-600 dark:text-gray-300">
+                {isOnline ? "Live Updates Active" : "Connection Lost"}
+              </span>
+            </div>
+            {isRefreshing && (
+              <div className="flex items-center space-x-2">
+                <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
+                <span className="text-sm text-blue-600 dark:text-blue-400">Updating...</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center space-x-3">
+            {lastUpdated && (
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                Updated: {lastUpdated.toLocaleTimeString()}
+              </span>
+            )}
+            <Button variant="ghost" size="sm" onClick={handleManualRefresh} disabled={isRefreshing}>
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
         </div>
 
         {/* Availability Error Message */}
