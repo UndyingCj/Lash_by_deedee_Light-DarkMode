@@ -11,33 +11,16 @@ import { Calendar, Clock, CreditCard, MessageSquare, AlertTriangle, XCircle, Che
 
 declare global {
   interface Window {
-    PaystackPop: any
+    PaystackPop?: any
   }
 }
 
-interface BlockedDate {
-  id: number
-  blocked_date: string
-  reason?: string
-}
-
-interface BlockedTimeSlot {
-  id: number
-  blocked_date: string
-  blocked_time: string
-  reason?: string
-}
-
 export default function BookingPage() {
+  // Basic form state
   const [selectedService, setSelectedService] = useState("")
   const [selectedDate, setSelectedDate] = useState("")
   const [selectedTime, setSelectedTime] = useState("")
-  const [paystackLoaded, setPaystackLoaded] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [blockedDates, setBlockedDates] = useState<string[]>([])
-  const [blockedTimeSlots, setBlockedTimeSlots] = useState<Record<string, string[]>>({})
-  const [availabilityLoaded, setAvailabilityLoaded] = useState(false)
-  const [loadingAvailability, setLoadingAvailability] = useState(true)
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -45,6 +28,14 @@ export default function BookingPage() {
     notes: "",
   })
 
+  // Availability state with safe defaults
+  const [blockedDates, setBlockedDates] = useState<string[]>([])
+  const [blockedTimeSlots, setBlockedTimeSlots] = useState<Record<string, string[]>>({})
+  const [availabilityLoaded, setAvailabilityLoaded] = useState(false)
+  const [loadingAvailability, setLoadingAvailability] = useState(true)
+  const [paystackLoaded, setPaystackLoaded] = useState(false)
+
+  // Services data
   const services = [
     { name: "Microblading", price: "40,000", duration: "2.5 hours" },
     { name: "Ombré Brows", price: "45,000", duration: "2.5 hours" },
@@ -66,174 +57,188 @@ export default function BookingPage() {
     { name: "Lash Removal", price: "4,000", duration: "30 mins" },
   ]
 
-  const allTimeSlots = ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"]
+  const timeSlots = ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"]
 
-  // Load availability data
+  // Load availability data with comprehensive error handling
   useEffect(() => {
-    const loadAvailabilityData = async () => {
+    let mounted = true
+
+    const loadAvailability = async () => {
       try {
         setLoadingAvailability(true)
-        const response = await fetch("/api/admin/availability")
+
+        const response = await fetch("/api/admin/availability", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+
+        if (!mounted) return
 
         if (response.ok) {
           const data = await response.json()
 
-          // Handle blocked dates safely
-          if (data.success && data.blockedDates && Array.isArray(data.blockedDates)) {
-            const dates = data.blockedDates.map((item: BlockedDate) => item.blocked_date)
-            setBlockedDates(dates)
-          } else {
-            setBlockedDates([])
-          }
+          if (data && typeof data === "object") {
+            // Safely handle blocked dates
+            if (Array.isArray(data.blockedDates)) {
+              const dates = data.blockedDates
+                .filter((item) => item && typeof item === "object" && item.blocked_date)
+                .map((item) => item.blocked_date)
+              setBlockedDates(dates)
+            }
 
-          // Handle blocked time slots safely
-          if (data.success && data.blockedSlots && Array.isArray(data.blockedSlots)) {
-            const slotsMap: Record<string, string[]> = {}
-            data.blockedSlots.forEach((slot: BlockedTimeSlot) => {
-              if (!slotsMap[slot.blocked_date]) {
-                slotsMap[slot.blocked_date] = []
-              }
-              slotsMap[slot.blocked_date].push(slot.blocked_time)
-            })
-            setBlockedTimeSlots(slotsMap)
-          } else {
-            setBlockedTimeSlots({})
+            // Safely handle blocked time slots
+            if (Array.isArray(data.blockedSlots)) {
+              const slotsMap: Record<string, string[]> = {}
+              data.blockedSlots
+                .filter((slot) => slot && typeof slot === "object" && slot.blocked_date && slot.blocked_time)
+                .forEach((slot) => {
+                  if (!slotsMap[slot.blocked_date]) {
+                    slotsMap[slot.blocked_date] = []
+                  }
+                  slotsMap[slot.blocked_date].push(slot.blocked_time)
+                })
+              setBlockedTimeSlots(slotsMap)
+            }
           }
-        } else {
-          // Set defaults if API fails
-          setBlockedDates([])
-          setBlockedTimeSlots({})
         }
       } catch (error) {
         console.error("Error loading availability:", error)
-        // Set defaults if API fails
-        setBlockedDates([])
-        setBlockedTimeSlots({})
+        // Continue with empty defaults
       } finally {
-        setAvailabilityLoaded(true)
-        setLoadingAvailability(false)
+        if (mounted) {
+          setAvailabilityLoaded(true)
+          setLoadingAvailability(false)
+        }
       }
     }
 
-    loadAvailabilityData()
+    loadAvailability()
+
+    return () => {
+      mounted = false
+    }
   }, [])
 
-  // Load Paystack script
+  // Load Paystack script with error handling
   useEffect(() => {
-    const loadPaystackScript = () => {
-      if (typeof window !== "undefined" && window.PaystackPop) {
-        setPaystackLoaded(true)
-        return
-      }
+    let mounted = true
 
-      if (typeof window !== "undefined") {
+    const loadPaystack = () => {
+      try {
+        if (typeof window === "undefined") return
+
+        if (window.PaystackPop) {
+          if (mounted) setPaystackLoaded(true)
+          return
+        }
+
         const script = document.createElement("script")
         script.src = "https://js.paystack.co/v1/inline.js"
         script.async = true
         script.onload = () => {
-          setPaystackLoaded(true)
+          if (mounted) setPaystackLoaded(true)
         }
         script.onerror = () => {
-          console.error("Failed to load Paystack script")
-          setPaystackLoaded(false)
+          console.error("Failed to load Paystack")
+          if (mounted) setPaystackLoaded(false)
         }
         document.head.appendChild(script)
+      } catch (error) {
+        console.error("Error loading Paystack script:", error)
+        if (mounted) setPaystackLoaded(false)
       }
     }
 
-    loadPaystackScript()
+    loadPaystack()
+
+    return () => {
+      mounted = false
+    }
   }, [])
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const getDepositAmount = () => {
+  // Safe utility functions
+  const isDateBlocked = (date: string): boolean => {
     try {
-      const service = services.find((s) => s.name === selectedService)
-      if (!service) return 0
-      const price = service.price.replace(/,/g, "")
-      const numericPrice = Number.parseInt(price, 10)
-      return Math.floor(numericPrice / 2)
-    } catch (error) {
-      console.error("Error calculating deposit:", error)
-      return 0
-    }
-  }
-
-  // Check if a date is blocked - with safety checks
-  const isDateBlocked = (date: string) => {
-    try {
-      if (!date || !Array.isArray(blockedDates)) return false
-      return blockedDates.includes(date)
-    } catch (error) {
-      console.error("Error checking if date is blocked:", error)
+      return Array.isArray(blockedDates) && blockedDates.includes(date)
+    } catch {
       return false
     }
   }
 
-  // Get available time slots for a specific date - with enhanced safety checks
-  const getAvailableTimeSlots = (date: string) => {
+  const getAvailableTimeSlots = (date: string): string[] => {
     try {
-      // Return empty array for invalid inputs
-      if (!date || typeof date !== "string") {
-        return []
-      }
+      if (!date || isDateBlocked(date)) return []
 
-      // Return empty array if date is blocked
-      if (isDateBlocked(date)) {
-        return []
-      }
-
-      // Safely get blocked slots for this date
-      const blockedSlots = blockedTimeSlots && typeof blockedTimeSlots === "object" ? blockedTimeSlots[date] || [] : []
-
-      // Ensure blockedSlots is an array
-      const safeBlockedSlots = Array.isArray(blockedSlots) ? blockedSlots : []
-
-      // Filter available slots
-      return allTimeSlots.filter((slot) => {
-        try {
-          return !safeBlockedSlots.includes(slot)
-        } catch (filterError) {
-          console.error("Error filtering time slot:", filterError)
-          return true // Default to available if error occurs
-        }
-      })
-    } catch (error) {
-      console.error("Error getting available time slots:", error)
-      return [] // Return empty array on error to prevent crashes
+      const blocked = blockedTimeSlots[date] || []
+      return timeSlots.filter((slot) => !blocked.includes(slot))
+    } catch {
+      return timeSlots
     }
   }
 
-  // Check if a specific time slot is available - with enhanced safety checks
-  const isTimeSlotAvailable = (date: string, time: string) => {
+  const isTimeSlotAvailable = (date: string, time: string): boolean => {
     try {
-      // Return false for invalid inputs
-      if (!date || !time || typeof date !== "string" || typeof time !== "string") {
-        return false
-      }
+      if (!date || !time || isDateBlocked(date)) return false
 
-      // Return false if date is blocked
-      if (isDateBlocked(date)) {
-        return false
-      }
-
-      // Safely get blocked slots for this date
-      const blockedSlots = blockedTimeSlots && typeof blockedTimeSlots === "object" ? blockedTimeSlots[date] || [] : []
-
-      // Ensure blockedSlots is an array
-      const safeBlockedSlots = Array.isArray(blockedSlots) ? blockedSlots : []
-
-      // Check if time is not in blocked slots
-      return !safeBlockedSlots.includes(time)
-    } catch (error) {
-      console.error("Error checking time slot availability:", error)
-      return false // Default to unavailable if error occurs
+      const blocked = blockedTimeSlots[date] || []
+      return !blocked.includes(time)
+    } catch {
+      return true
     }
   }
 
-  const validateForm = async () => {
+  const getDepositAmount = (): number => {
+    try {
+      const service = services.find((s) => s.name === selectedService)
+      if (!service) return 0
+
+      const price = Number.parseInt(service.price.replace(/,/g, ""), 10)
+      return Math.floor(price / 2)
+    } catch {
+      return 0
+    }
+  }
+
+  const getMinDate = (): string => {
+    try {
+      return new Date().toISOString().split("T")[0]
+    } catch {
+      return ""
+    }
+  }
+
+  // Form handlers
+  const handleInputChange = (field: string, value: string) => {
+    try {
+      setFormData((prev) => ({ ...prev, [field]: value }))
+    } catch (error) {
+      console.error("Error updating form:", error)
+    }
+  }
+
+  const handleDateChange = (value: string) => {
+    try {
+      setSelectedDate(value)
+      setSelectedTime("")
+    } catch (error) {
+      console.error("Error changing date:", error)
+    }
+  }
+
+  const handleTimeChange = (value: string) => {
+    try {
+      if (selectedDate && !isDateBlocked(selectedDate)) {
+        setSelectedTime(value)
+      }
+    } catch (error) {
+      console.error("Error changing time:", error)
+    }
+  }
+
+  // Validation
+  const validateForm = (): boolean => {
     try {
       if (!selectedService) {
         alert("Please select a service")
@@ -243,24 +248,18 @@ export default function BookingPage() {
         alert("Please select a date")
         return false
       }
-
-      // Check if date is blocked
       if (isDateBlocked(selectedDate)) {
-        alert("Sorry, this date is fully booked. Please select another date.")
+        alert("This date is fully booked. Please select another date.")
         return false
       }
-
       if (!selectedTime) {
         alert("Please select a time")
         return false
       }
-
-      // Check if time slot is available
       if (!isTimeSlotAvailable(selectedDate, selectedTime)) {
-        alert("Sorry, this time slot is no longer available. Please select another time.")
+        alert("This time slot is no longer available.")
         return false
       }
-
       if (!formData.name.trim()) {
         alert("Please enter your full name")
         return false
@@ -271,16 +270,16 @@ export default function BookingPage() {
       }
       return true
     } catch (error) {
-      console.error("Error validating form:", error)
-      alert("There was an error validating your booking. Please try again.")
+      console.error("Validation error:", error)
+      alert("Please check your booking details and try again.")
       return false
     }
   }
 
+  // Payment handlers
   const handlePaystackPayment = async () => {
     try {
-      const isValid = await validateForm()
-      if (!isValid) return
+      if (!validateForm()) return
 
       if (!paystackLoaded || typeof window === "undefined" || !window.PaystackPop) {
         alert("Payment system is loading. Please try again in a moment.")
@@ -291,38 +290,18 @@ export default function BookingPage() {
       const depositAmount = getDepositAmount()
 
       const handler = window.PaystackPop.setup({
-        key: "pk_test_your_paystack_public_key", // Replace with your actual Paystack public key
+        key: "pk_test_your_paystack_public_key",
         email: formData.email || `${formData.phone.replace(/\D/g, "")}@temp.com`,
-        amount: depositAmount * 100, // Paystack expects amount in kobo
+        amount: depositAmount * 100,
         currency: "NGN",
         ref: `LBD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         metadata: {
           custom_fields: [
-            {
-              display_name: "Service",
-              variable_name: "service",
-              value: selectedService,
-            },
-            {
-              display_name: "Date",
-              variable_name: "date",
-              value: selectedDate,
-            },
-            {
-              display_name: "Time",
-              variable_name: "time",
-              value: selectedTime,
-            },
-            {
-              display_name: "Phone",
-              variable_name: "phone",
-              value: formData.phone,
-            },
-            {
-              display_name: "Notes",
-              variable_name: "notes",
-              value: formData.notes || "No special notes",
-            },
+            { display_name: "Service", variable_name: "service", value: selectedService },
+            { display_name: "Date", variable_name: "date", value: selectedDate },
+            { display_name: "Time", variable_name: "time", value: selectedTime },
+            { display_name: "Phone", variable_name: "phone", value: formData.phone },
+            { display_name: "Notes", variable_name: "notes", value: formData.notes || "No special notes" },
           ],
         },
         callback: (response: any) => {
@@ -336,8 +315,6 @@ export default function BookingPage() {
           setSelectedDate("")
           setSelectedTime("")
           setFormData({ name: "", phone: "", email: "", notes: "" })
-
-          console.log("Payment successful:", response)
         },
         onClose: () => {
           setIsProcessing(false)
@@ -352,10 +329,9 @@ export default function BookingPage() {
     }
   }
 
-  const handleAlternativeBooking = async () => {
+  const handleWhatsAppBooking = () => {
     try {
-      const isValid = await validateForm()
-      if (!isValid) return
+      if (!validateForm()) return
 
       const service = services.find((s) => s.name === selectedService)
       const depositAmount = getDepositAmount()
@@ -378,33 +354,13 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
         window.open(whatsappUrl, "_blank")
       }
     } catch (error) {
-      console.error("Error with WhatsApp booking:", error)
+      console.error("WhatsApp booking error:", error)
       alert("There was an error processing your booking request. Please try again.")
     }
   }
 
-  // Get the minimum date (today)
-  const getMinDate = () => {
-    try {
-      return new Date().toISOString().split("T")[0]
-    } catch (error) {
-      console.error("Error getting minimum date:", error)
-      return ""
-    }
-  }
-
-  // Safe date handling for date selection
-  const handleDateChange = (dateValue: string) => {
-    try {
-      setSelectedDate(dateValue)
-      setSelectedTime("") // Reset time when date changes
-    } catch (error) {
-      console.error("Error handling date change:", error)
-    }
-  }
-
-  // Check if selected date is blocked and show appropriate message - with safety checks
-  const getDateAvailabilityMessage = () => {
+  // Render availability message
+  const renderAvailabilityMessage = () => {
     try {
       if (!selectedDate || !availabilityLoaded) return null
 
@@ -416,7 +372,7 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
               <span className="font-medium">Fully Booked</span>
             </div>
             <p className="text-sm text-red-600 dark:text-red-400 mt-1">
-              This date is fully booked. Please select another date to see available time slots.
+              This date is fully booked. Please select another date.
             </p>
           </div>
         )
@@ -431,7 +387,7 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
               <span className="font-medium">No Available Slots</span>
             </div>
             <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
-              All time slots for this date are booked. Please select another date.
+              All time slots are booked. Please select another date.
             </p>
           </div>
         )
@@ -444,23 +400,17 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
             <span className="font-medium">Available Slots</span>
           </div>
           <p className="text-sm text-green-600 dark:text-green-400 mt-1">
-            {availableSlots.length} time slot{availableSlots.length !== 1 ? "s" : ""} available for this date.
+            {availableSlots.length} time slot{availableSlots.length !== 1 ? "s" : ""} available.
           </p>
         </div>
       )
     } catch (error) {
-      console.error("Error getting date availability message:", error)
-      return (
-        <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded-lg">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Unable to check availability. Please contact us directly.
-          </p>
-        </div>
-      )
+      console.error("Error rendering availability message:", error)
+      return null
     }
   }
 
-  // Show loading state while availability data is loading
+  // Show loading state
   if (loadingAvailability) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-pink-50 to-rose-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
@@ -478,12 +428,11 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-pink-500 mb-4">Book an Appointment</h1>
           <p className="text-xl text-gray-600 dark:text-gray-300">
-            Select a service, pick a date, and secure your spot with a 50% deposit. Each session takes approximately 2-3
-            hours.
+            Select a service, pick a date, and secure your spot with a 50% deposit.
           </p>
         </div>
 
-        {/* Booking Policies Notice */}
+        {/* Booking Policies */}
         <Card className="border-pink-200 dark:border-pink-700 bg-pink-50 dark:bg-gray-800 mb-8">
           <CardContent className="p-6">
             <div className="flex items-start space-x-3">
@@ -494,15 +443,10 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                 </h3>
                 <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
                   <li>
-                    • <strong>Session Time:</strong> Each session takes approximately 2-3 hours. Please schedule
-                    accordingly.
-                  </li>
-                  <li>
                     • <strong>Deposit:</strong> 50% non-refundable deposit required to confirm your appointment.
                   </li>
                   <li>
-                    • <strong>Punctuality:</strong> Arrivals more than 1 hour late will result in cancellation and
-                    rescheduling.
+                    • <strong>Punctuality:</strong> Arrivals more than 1 hour late will result in cancellation.
                   </li>
                   <li>
                     • <strong>Rescheduling:</strong> You can reschedule only once. Missing after rescheduling forfeits
@@ -510,12 +454,6 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                   </li>
                   <li>
                     • <strong>Cancellations:</strong> 24 hours advance notice required for cancellations.
-                  </li>
-                  <li>
-                    • <strong>No-Shows:</strong> Deposit will be forfeited for no-shows or failure to notify us.
-                  </li>
-                  <li>
-                    • <strong>Makeup Policy:</strong> Please avoid wearing makeup to ensure the best results.
                   </li>
                 </ul>
               </div>
@@ -536,9 +474,7 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
               <CardContent className="space-y-6">
                 {/* Service Selection */}
                 <div>
-                  <Label htmlFor="service" className="text-base font-medium text-gray-900 dark:text-gray-100">
-                    Select Service *
-                  </Label>
+                  <Label className="text-base font-medium text-gray-900 dark:text-gray-100">Select Service *</Label>
                   <Select value={selectedService} onValueChange={setSelectedService}>
                     <SelectTrigger className="mt-2">
                       <SelectValue placeholder="Choose your service" />
@@ -555,37 +491,23 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
 
                 {/* Date Selection */}
                 <div>
-                  <Label htmlFor="date" className="text-base font-medium text-gray-900 dark:text-gray-100">
-                    Preferred Date *
-                  </Label>
+                  <Label className="text-base font-medium text-gray-900 dark:text-gray-100">Preferred Date *</Label>
                   <Input
                     type="date"
-                    id="date"
                     value={selectedDate}
                     onChange={(e) => handleDateChange(e.target.value)}
                     className="mt-2"
                     min={getMinDate()}
                   />
-                  {getDateAvailabilityMessage()}
+                  {renderAvailabilityMessage()}
                 </div>
 
                 {/* Time Selection */}
                 <div>
-                  <Label htmlFor="time" className="text-base font-medium text-gray-900 dark:text-gray-100">
-                    Preferred Time * (2 hours each slot)
-                  </Label>
+                  <Label className="text-base font-medium text-gray-900 dark:text-gray-100">Preferred Time *</Label>
                   <Select
                     value={selectedTime}
-                    onValueChange={(value) => {
-                      try {
-                        // Only set time if date is available and time is valid
-                        if (selectedDate && !isDateBlocked(selectedDate) && value) {
-                          setSelectedTime(value)
-                        }
-                      } catch (error) {
-                        console.error("Error selecting time:", error)
-                      }
-                    }}
+                    onValueChange={handleTimeChange}
                     disabled={!selectedDate || isDateBlocked(selectedDate)}
                   >
                     <SelectTrigger className="mt-2">
@@ -600,79 +522,32 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      {(() => {
-                        try {
-                          if (!selectedDate) {
-                            return (
-                              <SelectItem value="" disabled>
-                                Please select a date first
-                              </SelectItem>
-                            )
-                          }
-
-                          if (isDateBlocked(selectedDate)) {
-                            return (
-                              <SelectItem value="" disabled>
-                                This date is fully booked
-                              </SelectItem>
-                            )
-                          }
-
-                          const availableSlots = getAvailableTimeSlots(selectedDate)
-
-                          if (availableSlots.length === 0) {
-                            return (
-                              <SelectItem value="" disabled>
-                                No available time slots
-                              </SelectItem>
-                            )
-                          }
-
-                          return availableSlots.map((time, index) => (
-                            <SelectItem key={`${selectedDate}-${time}-${index}`} value={time}>
+                      {selectedDate && !isDateBlocked(selectedDate) ? (
+                        getAvailableTimeSlots(selectedDate).length > 0 ? (
+                          getAvailableTimeSlots(selectedDate).map((time, index) => (
+                            <SelectItem key={index} value={time}>
                               {time}
                             </SelectItem>
                           ))
-                        } catch (error) {
-                          console.error("Error rendering time slots:", error)
-                          return (
-                            <SelectItem value="" disabled>
-                              Error loading time slots
-                            </SelectItem>
-                          )
-                        }
-                      })()}
+                        ) : (
+                          <SelectItem value="" disabled>
+                            No available time slots
+                          </SelectItem>
+                        )
+                      ) : (
+                        <SelectItem value="" disabled>
+                          {!selectedDate ? "Please select a date first" : "Date fully booked"}
+                        </SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
-                  {(() => {
-                    try {
-                      if (
-                        selectedDate &&
-                        !isDateBlocked(selectedDate) &&
-                        getAvailableTimeSlots(selectedDate).length > 0
-                      ) {
-                        return (
-                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                            Available slots: {getAvailableTimeSlots(selectedDate).join(", ")}
-                          </p>
-                        )
-                      }
-                      return null
-                    } catch (error) {
-                      console.error("Error showing available slots:", error)
-                      return null
-                    }
-                  })()}
                 </div>
 
                 {/* Personal Information */}
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="name" className="text-base font-medium text-gray-900 dark:text-gray-100">
-                      Full Name *
-                    </Label>
+                    <Label className="text-base font-medium text-gray-900 dark:text-gray-100">Full Name *</Label>
                     <Input
-                      id="name"
                       placeholder="Your full name"
                       className="mt-2"
                       value={formData.name}
@@ -680,11 +555,8 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                     />
                   </div>
                   <div>
-                    <Label htmlFor="phone" className="text-base font-medium text-gray-900 dark:text-gray-100">
-                      Phone Number *
-                    </Label>
+                    <Label className="text-base font-medium text-gray-900 dark:text-gray-100">Phone Number *</Label>
                     <Input
-                      id="phone"
                       placeholder="+234 XXX XXX XXXX"
                       className="mt-2"
                       value={formData.phone}
@@ -694,11 +566,8 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                 </div>
 
                 <div>
-                  <Label htmlFor="email" className="text-base font-medium text-gray-900 dark:text-gray-100">
-                    Email Address
-                  </Label>
+                  <Label className="text-base font-medium text-gray-900 dark:text-gray-100">Email Address</Label>
                   <Input
-                    id="email"
                     type="email"
                     placeholder="your.email@example.com"
                     className="mt-2"
@@ -707,14 +576,10 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                   />
                 </div>
 
-                {/* Special Notes */}
                 <div>
-                  <Label htmlFor="notes" className="text-base font-medium text-gray-900 dark:text-gray-100">
-                    Special Notes
-                  </Label>
+                  <Label className="text-base font-medium text-gray-900 dark:text-gray-100">Special Notes</Label>
                   <Textarea
-                    id="notes"
-                    placeholder="Any special requests or notes (e.g., 'I want natural-looking brows')"
+                    placeholder="Any special requests or notes"
                     className="mt-2"
                     rows={3}
                     value={formData.notes}
@@ -807,24 +672,11 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                       isDateBlocked(selectedDate) ||
                       !isTimeSlotAvailable(selectedDate, selectedTime)
                     }
-                    onClick={handleAlternativeBooking}
+                    onClick={handleWhatsAppBooking}
                   >
                     Book via WhatsApp
                   </Button>
                 </div>
-
-                {/* Show booking restriction message if date/time is blocked */}
-                {selectedDate &&
-                  (isDateBlocked(selectedDate) ||
-                    (selectedTime && !isTimeSlotAvailable(selectedDate, selectedTime))) && (
-                    <div className="text-center p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                      <p className="text-sm text-red-600 dark:text-red-400">
-                        {isDateBlocked(selectedDate)
-                          ? "This date is fully booked. Please select another date."
-                          : "This time slot is no longer available. Please select another time."}
-                      </p>
-                    </div>
-                  )}
 
                 <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
                   <p>Payment methods:</p>
