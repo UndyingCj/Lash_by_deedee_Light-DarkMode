@@ -7,7 +7,6 @@ import {
   addBlockedTimeSlot,
   removeBlockedTimeSlot,
 } from "@/lib/supabase"
-import { createNotification } from "@/lib/settings"
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,60 +20,141 @@ export async function GET(request: NextRequest) {
       const blockedSlots = await getBlockedTimeSlots()
       return NextResponse.json(blockedSlots)
     } else {
+      // Return both dates and slots
       const [blockedDates, blockedSlots] = await Promise.all([getBlockedDates(), getBlockedTimeSlots()])
-      return NextResponse.json({ blockedDates, blockedSlots })
+      return NextResponse.json({
+        success: true,
+        blockedDates,
+        blockedSlots,
+      })
     }
   } catch (error) {
     console.error("Error fetching availability:", error)
-    return NextResponse.json({ error: "Failed to fetch availability" }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to fetch availability data",
+      },
+      { status: 500 },
+    )
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { type, date, time, reason, action } = await request.json()
+    const body = await request.json()
+    const { type, date, time, reason, action } = body
+
+    // Validate required fields
+    if (!type || !date || !action) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Missing required fields: type, date, and action are required",
+        },
+        { status: 400 },
+      )
+    }
 
     if (type === "date") {
       if (action === "block") {
-        await addBlockedDate(date, reason)
-        await createNotification(
-          "Date Blocked",
-          `${new Date(date).toLocaleDateString()} has been blocked for bookings`,
-          "info",
-          24,
-        )
+        const result = await addBlockedDate(date, reason || "Blocked by admin")
+        return NextResponse.json({
+          success: true,
+          message: "Date blocked successfully",
+          data: result,
+        })
+      } else if (action === "unblock") {
+        const result = await removeBlockedDate(date)
+        return NextResponse.json({
+          success: true,
+          message: "Date unblocked successfully",
+          data: result,
+        })
       } else {
-        await removeBlockedDate(date)
-        await createNotification(
-          "Date Unblocked",
-          `${new Date(date).toLocaleDateString()} is now available for bookings`,
-          "success",
-          24,
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Invalid action. Use 'block' or 'unblock'",
+          },
+          { status: 400 },
         )
       }
     } else if (type === "slot") {
-      if (action === "block") {
-        await addBlockedTimeSlot(date, time, reason)
-        await createNotification(
-          "Time Slot Blocked",
-          `${time} on ${new Date(date).toLocaleDateString()} has been blocked`,
-          "info",
-          24,
+      if (!time) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Time is required for slot operations",
+          },
+          { status: 400 },
         )
+      }
+
+      if (action === "block") {
+        const result = await addBlockedTimeSlot(date, time, reason || "Blocked by admin")
+        return NextResponse.json({
+          success: true,
+          message: "Time slot blocked successfully",
+          data: result,
+        })
+      } else if (action === "unblock") {
+        const result = await removeBlockedTimeSlot(date, time)
+        return NextResponse.json({
+          success: true,
+          message: "Time slot unblocked successfully",
+          data: result,
+        })
       } else {
-        await removeBlockedTimeSlot(date, time)
-        await createNotification(
-          "Time Slot Unblocked",
-          `${time} on ${new Date(date).toLocaleDateString()} is now available`,
-          "success",
-          24,
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Invalid action. Use 'block' or 'unblock'",
+          },
+          { status: 400 },
+        )
+      }
+    } else {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid type. Use 'date' or 'slot'",
+        },
+        { status: 400 },
+      )
+    }
+  } catch (error) {
+    console.error("Error updating availability:", error)
+
+    // Handle specific database errors
+    if (error instanceof Error) {
+      if (error.message.includes("duplicate key")) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "This date/time is already blocked",
+          },
+          { status: 409 },
+        )
+      }
+
+      if (error.message.includes("not found")) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Date/time slot not found",
+          },
+          { status: 404 },
         )
       }
     }
 
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("Error updating availability:", error)
-    return NextResponse.json({ error: "Failed to update availability" }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to update availability. Please try again.",
+      },
+      { status: 500 },
+    )
   }
 }

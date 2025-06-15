@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { CalendarIcon, Clock, Plus, Trash2, AlertCircle, CheckCircle } from "lucide-react"
+import { CalendarIcon, Clock, Plus, Trash2, AlertCircle, CheckCircle, RefreshCw } from "lucide-react"
 import { AdminLayout } from "@/components/admin/admin-layout"
 import Calendar from "react-calendar"
 import "react-calendar/dist/Calendar.css"
@@ -24,24 +24,57 @@ interface BlockedTimeSlot {
 
 const CalendarPage = () => {
   const [date, setDate] = useState(new Date())
-  const [blockedDates, setBlockedDates] = useState<string[]>([
-    "2025-06-15",
-    "2025-06-16",
-    "2025-06-18",
-    "2025-06-20",
-    "2025-06-28",
-  ])
-  const [blockedTimeSlots, setBlockedTimeSlots] = useState<Record<string, string[]>>({
-    "2025-06-17": ["09:00 AM", "02:00 PM"],
-    "2025-06-19": ["11:00 AM"],
-  })
+  const [blockedDates, setBlockedDates] = useState<string[]>([])
+  const [blockedTimeSlots, setBlockedTimeSlots] = useState<Record<string, string[]>>({})
   const [availableTimeSlots] = useState(["09:00 AM", "11:00 AM", "02:00 PM", "04:00 PM"])
   const [loading, setLoading] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
   const showMessage = (type: "success" | "error", text: string) => {
     setMessage({ type, text })
-    setTimeout(() => setMessage(null), 3000)
+    setTimeout(() => setMessage(null), 5000)
+  }
+
+  // Load initial data
+  useEffect(() => {
+    loadAvailabilityData()
+  }, [])
+
+  const loadAvailabilityData = async () => {
+    try {
+      setInitialLoading(true)
+      const response = await fetch("/api/admin/availability")
+
+      if (response.ok) {
+        const data = await response.json()
+
+        // Handle blocked dates
+        if (data.blockedDates) {
+          const dates = data.blockedDates.map((item: BlockedDate) => item.blocked_date)
+          setBlockedDates(dates)
+        }
+
+        // Handle blocked time slots
+        if (data.blockedSlots) {
+          const slotsMap: Record<string, string[]> = {}
+          data.blockedSlots.forEach((slot: BlockedTimeSlot) => {
+            if (!slotsMap[slot.blocked_date]) {
+              slotsMap[slot.blocked_date] = []
+            }
+            slotsMap[slot.blocked_date].push(slot.blocked_time)
+          })
+          setBlockedTimeSlots(slotsMap)
+        }
+      } else {
+        showMessage("error", "Failed to load availability data")
+      }
+    } catch (error) {
+      console.error("Error loading availability:", error)
+      showMessage("error", "Failed to load availability data")
+    } finally {
+      setInitialLoading(false)
+    }
   }
 
   const handleDateClick = async (dateString: string) => {
@@ -51,15 +84,21 @@ const CalendarPage = () => {
     try {
       const response = await fetch("/api/admin/availability", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
         body: JSON.stringify({
           type: "date",
           date: dateString,
           action: isBlocked ? "unblock" : "block",
+          reason: isBlocked ? undefined : "Blocked by admin",
         }),
       })
 
-      if (response.ok) {
+      const result = await response.json()
+
+      if (response.ok && result.success) {
         if (isBlocked) {
           setBlockedDates((prev) => prev.filter((d) => d !== dateString))
           setBlockedTimeSlots((prev) => {
@@ -73,10 +112,11 @@ const CalendarPage = () => {
           showMessage("success", `Date ${new Date(dateString).toLocaleDateString()} has been blocked`)
         }
       } else {
-        showMessage("error", "Failed to update date availability")
+        showMessage("error", result.error || "Failed to update date availability")
       }
     } catch (error) {
-      showMessage("error", "Failed to update date. Please try again.")
+      console.error("Error updating date:", error)
+      showMessage("error", "Network error. Please check your connection and try again.")
     } finally {
       setLoading(false)
     }
@@ -89,16 +129,22 @@ const CalendarPage = () => {
     try {
       const response = await fetch("/api/admin/availability", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
         body: JSON.stringify({
           type: "slot",
           date: dateString,
           time: time,
           action: isBlocked ? "unblock" : "block",
+          reason: isBlocked ? undefined : "Blocked by admin",
         }),
       })
 
-      if (response.ok) {
+      const result = await response.json()
+
+      if (response.ok && result.success) {
         if (isBlocked) {
           setBlockedTimeSlots((prev) => ({
             ...prev,
@@ -113,10 +159,11 @@ const CalendarPage = () => {
           showMessage("success", `Time slot ${time} has been blocked`)
         }
       } else {
-        showMessage("error", "Failed to update time slot availability")
+        showMessage("error", result.error || "Failed to update time slot availability")
       }
     } catch (error) {
-      showMessage("error", "Failed to update time slot. Please try again.")
+      console.error("Error updating time slot:", error)
+      showMessage("error", "Network error. Please check your connection and try again.")
     } finally {
       setLoading(false)
     }
@@ -149,6 +196,19 @@ const CalendarPage = () => {
   const totalBlockedDates = blockedDates.length
   const totalBlockedSlots = Object.values(blockedTimeSlots).reduce((sum, slots) => sum + slots.length, 0)
 
+  if (initialLoading) {
+    return (
+      <AdminLayout title="Availability Calendar" subtitle="Manage your available dates and time slots">
+        <div className="flex items-center justify-center h-64">
+          <div className="flex items-center space-x-2">
+            <RefreshCw className="w-6 h-6 animate-spin text-pink-500" />
+            <span className="text-lg text-slate-600 dark:text-slate-400">Loading availability data...</span>
+          </div>
+        </div>
+      </AdminLayout>
+    )
+  }
+
   return (
     <AdminLayout title="Availability Calendar" subtitle="Manage your available dates and time slots">
       {/* Success/Error Message */}
@@ -162,8 +222,24 @@ const CalendarPage = () => {
         >
           {message.type === "success" ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
           <span>{message.text}</span>
+          <Button variant="ghost" size="sm" onClick={() => setMessage(null)} className="ml-auto">
+            ×
+          </Button>
         </div>
       )}
+
+      {/* Action Bar */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center space-x-2">
+          <Button onClick={loadAvailabilityData} variant="outline" size="sm" disabled={loading}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            Refresh Data
+          </Button>
+        </div>
+        <div className="text-sm text-slate-600 dark:text-slate-400">
+          Last updated: {new Date().toLocaleTimeString()}
+        </div>
+      </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
