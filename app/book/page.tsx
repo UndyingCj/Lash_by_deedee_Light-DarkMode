@@ -89,16 +89,29 @@ export default function BookingPage() {
 
 📅 Service: ${selectedService}
 💰 Price: ₦${service?.price} (Deposit: ₦${depositAmount.toLocaleString()})
-📅 Date: ${new Date(selectedDate).toLocaleDateString()}
+📅 Date: ${new Date(selectedDate + "T00:00:00").toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })}
 ⏰ Time: ${selectedTime}
 👤 Name: ${formData.name}
-📱 Phone: ${formData.phone}
-${formData.email ? `📧 Email: ${formData.email}` : ""}
-${formData.notes ? `📝 Notes: ${formData.notes}` : ""}
+📱 Phone: ${formData.phone}${
+      formData.email
+        ? `
+📧 Email: ${formData.email}`
+        : ""
+    }${
+      formData.notes
+        ? `
+📝 Notes: ${formData.notes}`
+        : ""
+    }
 
 Please confirm my appointment and let me know how to pay the deposit. Thank you!`
 
-    const whatsappUrl = `https://wa.me/message/X5M2NOA553NGK1?text=${encodeURIComponent(message)}`
+    const whatsappUrl = `https://wa.me/2348165435528?text=${encodeURIComponent(message)}`
     window.open(whatsappUrl, "_blank")
   }
 
