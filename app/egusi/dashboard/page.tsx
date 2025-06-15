@@ -11,7 +11,6 @@ import {
   Calendar,
   Users,
   DollarSign,
-  Plus,
   TrendingUp,
   Eye,
   Search,
@@ -19,6 +18,10 @@ import {
   Download,
   RefreshCw,
   Clock,
+  MoreHorizontal,
+  CheckCircle,
+  XCircle,
+  Trash2,
 } from "lucide-react"
 import Link from "next/link"
 import { AdminLayout } from "@/components/admin/admin-layout"
@@ -28,6 +31,9 @@ interface DashboardStats {
   weeklyBookings: number
   monthlyRevenue: number
   pendingBookings: number
+  totalBookings: number
+  completedBookings: number
+  averageRating: number
 }
 
 interface Booking {
@@ -46,6 +52,9 @@ const DashboardPage = () => {
     weeklyBookings: 0,
     monthlyRevenue: 0,
     pendingBookings: 0,
+    totalBookings: 0,
+    completedBookings: 0,
+    averageRating: 4.9,
   })
   const [recentBookings, setRecentBookings] = useState<Booking[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -60,38 +69,70 @@ const DashboardPage = () => {
   const fetchDashboardData = async () => {
     try {
       setIsRefreshing(true)
-      // Mock data for now to prevent API errors
-      setStats({
-        todayBookings: 5,
-        weeklyBookings: 23,
-        monthlyRevenue: 450000,
-        pendingBookings: 3,
-      })
-      setRecentBookings([
-        {
-          id: 1,
-          client_name: "Sarah Johnson",
-          service: "Volume Lashes",
-          booking_date: "2025-06-15",
-          booking_time: "14:00",
-          status: "confirmed",
-          amount: 25000,
-        },
-        {
-          id: 2,
-          client_name: "Maria Garcia",
-          service: "Ombré Brows",
-          booking_date: "2025-06-16",
-          booking_time: "10:00",
-          status: "pending",
-          amount: 40000,
-        },
-      ])
+
+      // Fetch stats
+      const statsResponse = await fetch("/api/admin/stats")
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json()
+        if (statsData.success) {
+          setStats({
+            todayBookings: statsData.data.stats.todayBookings || 0,
+            weeklyBookings: statsData.data.stats.weeklyBookings || 0,
+            monthlyRevenue: statsData.data.stats.monthlyRevenue || 0,
+            pendingBookings: statsData.data.stats.pendingBookings || 0,
+            totalBookings: statsData.data.recentBookings?.length || 0,
+            completedBookings:
+              statsData.data.recentBookings?.filter((b: Booking) => b.status === "completed").length || 0,
+            averageRating: 4.9,
+          })
+          setRecentBookings(statsData.data.recentBookings || [])
+        }
+      }
     } catch (error) {
       console.error("Error fetching dashboard data:", error)
     } finally {
       setIsLoading(false)
       setIsRefreshing(false)
+    }
+  }
+
+  const handleStatusUpdate = async (bookingId: number, newStatus: string) => {
+    try {
+      const response = await fetch("/api/admin/bookings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: bookingId, status: newStatus }),
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        await fetchDashboardData()
+      } else {
+        alert("Failed to update booking status")
+      }
+    } catch (error) {
+      console.error("Error updating booking:", error)
+      alert("Error updating booking status")
+    }
+  }
+
+  const handleDeleteBooking = async (bookingId: number) => {
+    if (!confirm("Are you sure you want to delete this booking?")) return
+
+    try {
+      const response = await fetch(`/api/admin/bookings?id=${bookingId}`, {
+        method: "DELETE",
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        await fetchDashboardData()
+      } else {
+        alert("Failed to delete booking")
+      }
+    } catch (error) {
+      console.error("Error deleting booking:", error)
+      alert("Error deleting booking")
     }
   }
 
@@ -181,10 +222,6 @@ const DashboardPage = () => {
             <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-          <Button className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white shadow-lg">
-            <Plus className="w-4 h-4 mr-2" />
-            New Booking
-          </Button>
         </div>
       </div>
 
@@ -198,7 +235,7 @@ const DashboardPage = () => {
                 <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">{stats.todayBookings}</p>
                 <div className="flex items-center mt-2">
                   <TrendingUp className="w-4 h-4 text-emerald-500 mr-1" />
-                  <span className="text-sm text-emerald-600 dark:text-emerald-400">+12% from yesterday</span>
+                  <span className="text-sm text-emerald-600 dark:text-emerald-400">Active today</span>
                 </div>
               </div>
               <div className="p-3 bg-blue-500/10 rounded-2xl">
@@ -216,7 +253,7 @@ const DashboardPage = () => {
                 <p className="text-3xl font-bold text-emerald-900 dark:text-emerald-100">{stats.weeklyBookings}</p>
                 <div className="flex items-center mt-2">
                   <TrendingUp className="w-4 h-4 text-emerald-500 mr-1" />
-                  <span className="text-sm text-emerald-600 dark:text-emerald-400">+8% from last week</span>
+                  <span className="text-sm text-emerald-600 dark:text-emerald-400">This week</span>
                 </div>
               </div>
               <div className="p-3 bg-emerald-500/10 rounded-2xl">
@@ -236,7 +273,7 @@ const DashboardPage = () => {
                 </p>
                 <div className="flex items-center mt-2">
                   <TrendingUp className="w-4 h-4 text-emerald-500 mr-1" />
-                  <span className="text-sm text-emerald-600 dark:text-emerald-400">+15% from last month</span>
+                  <span className="text-sm text-emerald-600 dark:text-emerald-400">This month</span>
                 </div>
               </div>
               <div className="p-3 bg-purple-500/10 rounded-2xl">
@@ -377,7 +414,7 @@ const DashboardPage = () => {
                 </p>
               </div>
             ) : (
-              filteredBookings.map((booking) => (
+              filteredBookings.slice(0, 5).map((booking) => (
                 <div
                   key={booking.id}
                   className="flex flex-col sm:flex-row sm:items-center justify-between p-6 hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors group gap-4"
@@ -415,6 +452,35 @@ const DashboardPage = () => {
                       </p>
                       <Badge className={`${getStatusColor(booking.status)} border font-medium`}>{booking.status}</Badge>
                     </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleStatusUpdate(booking.id, "confirmed")}>
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          Confirm
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleStatusUpdate(booking.id, "completed")}>
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          Mark Complete
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleStatusUpdate(booking.id, "cancelled")}>
+                          <XCircle className="mr-2 h-4 w-4" />
+                          Cancel
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDeleteBooking(booking.id)} className="text-red-600">
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               ))
