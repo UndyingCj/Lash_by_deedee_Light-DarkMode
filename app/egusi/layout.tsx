@@ -1,5 +1,9 @@
 import type React from "react"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Inter } from "next/font/google"
+import "../globals.css"
+
+const inter = Inter({ subsets: ["latin"] })
 
 export default function AdminLayout({
   children,
@@ -8,7 +12,9 @@ export default function AdminLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <body
+        className={`${inter.className} bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800`}
+      >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           {children}
         </ThemeProvider>
