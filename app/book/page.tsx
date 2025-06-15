@@ -37,6 +37,7 @@ export default function BookingPage() {
   const [blockedDates, setBlockedDates] = useState<string[]>([])
   const [blockedTimeSlots, setBlockedTimeSlots] = useState<Record<string, string[]>>({})
   const [availabilityLoaded, setAvailabilityLoaded] = useState(false)
+  const [loadingAvailability, setLoadingAvailability] = useState(true)
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -69,63 +70,69 @@ export default function BookingPage() {
 
   // Load availability data
   useEffect(() => {
+    const loadAvailabilityData = async () => {
+      try {
+        setLoadingAvailability(true)
+        const response = await fetch("/api/admin/availability")
+
+        if (response.ok) {
+          const data = await response.json()
+
+          // Handle blocked dates safely
+          if (data.success && data.blockedDates && Array.isArray(data.blockedDates)) {
+            const dates = data.blockedDates.map((item: BlockedDate) => item.blocked_date)
+            setBlockedDates(dates)
+          }
+
+          // Handle blocked time slots safely
+          if (data.success && data.blockedSlots && Array.isArray(data.blockedSlots)) {
+            const slotsMap: Record<string, string[]> = {}
+            data.blockedSlots.forEach((slot: BlockedTimeSlot) => {
+              if (!slotsMap[slot.blocked_date]) {
+                slotsMap[slot.blocked_date] = []
+              }
+              slotsMap[slot.blocked_date].push(slot.blocked_time)
+            })
+            setBlockedTimeSlots(slotsMap)
+          }
+        }
+      } catch (error) {
+        console.error("Error loading availability:", error)
+        // Continue with default empty arrays if API fails
+      } finally {
+        setAvailabilityLoaded(true)
+        setLoadingAvailability(false)
+      }
+    }
+
     loadAvailabilityData()
   }, [])
 
   // Load Paystack script
   useEffect(() => {
     const loadPaystackScript = () => {
-      if (window.PaystackPop) {
+      if (typeof window !== "undefined" && window.PaystackPop) {
         setPaystackLoaded(true)
         return
       }
 
-      const script = document.createElement("script")
-      script.src = "https://js.paystack.co/v1/inline.js"
-      script.async = true
-      script.onload = () => {
-        setPaystackLoaded(true)
+      if (typeof window !== "undefined") {
+        const script = document.createElement("script")
+        script.src = "https://js.paystack.co/v1/inline.js"
+        script.async = true
+        script.onload = () => {
+          setPaystackLoaded(true)
+        }
+        script.onerror = () => {
+          console.error("Failed to load Paystack script")
+          setPaystackLoaded(false)
+        }
+        document.head.appendChild(script)
       }
-      script.onerror = () => {
-        console.error("Failed to load Paystack script")
-        setPaystackLoaded(false)
-      }
-      document.head.appendChild(script)
     }
 
     loadPaystackScript()
   }, [])
-
-  const loadAvailabilityData = async () => {
-    try {
-      const response = await fetch("/api/admin/availability")
-      if (response.ok) {
-        const data = await response.json()
-
-        // Handle blocked dates
-        if (data.blockedDates) {
-          const dates = data.blockedDates.map((item: BlockedDate) => item.blocked_date)
-          setBlockedDates(dates)
-        }
-
-        // Handle blocked time slots
-        if (data.blockedSlots) {
-          const slotsMap: Record<string, string[]> = {}
-          data.blockedSlots.forEach((slot: BlockedTimeSlot) => {
-            if (!slotsMap[slot.blocked_date]) {
-              slotsMap[slot.blocked_date] = []
-            }
-            slotsMap[slot.blocked_date].push(slot.blocked_time)
-          })
-          setBlockedTimeSlots(slotsMap)
-        }
-      }
-    } catch (error) {
-      console.error("Error loading availability:", error)
-    } finally {
-      setAvailabilityLoaded(true)
-    }
-  }
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -201,14 +208,13 @@ export default function BookingPage() {
     const isValid = await validateForm()
     if (!isValid) return
 
-    if (!paystackLoaded || !window.PaystackPop) {
+    if (!paystackLoaded || typeof window === "undefined" || !window.PaystackPop) {
       alert("Payment system is loading. Please try again in a moment.")
       return
     }
 
     setIsProcessing(true)
     const depositAmount = getDepositAmount()
-    const service = services.find((s) => s.name === selectedService)
 
     try {
       const handler = window.PaystackPop.setup({
@@ -248,13 +254,8 @@ export default function BookingPage() {
         },
         callback: (response: any) => {
           setIsProcessing(false)
-          // Payment successful
           alert(
-            `Payment successful! 🎉
-
-Reference: ${response.reference}
-
-We'll contact you within 24 hours to confirm your appointment details. Thank you for choosing Lashed by Deedee!`,
+            `Payment successful! 🎉\n\nReference: ${response.reference}\n\nWe'll contact you within 24 hours to confirm your appointment details. Thank you for choosing Lashed by Deedee!`,
           )
 
           // Reset form
@@ -263,12 +264,10 @@ We'll contact you within 24 hours to confirm your appointment details. Thank you
           setSelectedTime("")
           setFormData({ name: "", phone: "", email: "", notes: "" })
 
-          // Here you would typically send the booking details to your backend
           console.log("Payment successful:", response)
         },
         onClose: () => {
           setIsProcessing(false)
-          // User closed the payment modal
         },
       })
 
@@ -301,7 +300,9 @@ ${formData.notes ? `📝 Notes: ${formData.notes}` : ""}
 Please confirm my appointment and let me know how to pay the deposit. Thank you!`
 
     const whatsappUrl = `https://wa.me/message/X5M2NOA553NGK1?text=${encodeURIComponent(message)}`
-    window.open(whatsappUrl, "_blank")
+    if (typeof window !== "undefined") {
+      window.open(whatsappUrl, "_blank")
+    }
   }
 
   // Get the minimum date (today)
@@ -351,6 +352,18 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
         <p className="text-sm text-green-600 dark:text-green-400 mt-1">
           {availableSlots.length} time slot{availableSlots.length !== 1 ? "s" : ""} available for this date.
         </p>
+      </div>
+    )
+  }
+
+  // Show loading state while availability data is loading
+  if (loadingAvailability) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-pink-50 to-rose-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-300">Loading booking information...</p>
+        </div>
       </div>
     )
   }
@@ -628,36 +641,36 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
 
                   <div className="text-center text-sm text-gray-500 dark:text-gray-400">or</div>
 
-                  <a href="https://wa.me/message/X5M2NOA553NGK1" target="_blank" rel="noopener noreferrer">
-                    <Button
-                      variant="outline"
-                      className="w-full border-green-500 text-green-600 hover:bg-green-50 dark:border-green-400 dark:text-green-400 dark:hover:bg-green-900/20"
-                      disabled={
-                        !selectedService ||
-                        !selectedDate ||
-                        !selectedTime ||
-                        !formData.name ||
-                        !formData.phone ||
-                        isDateBlocked(selectedDate) ||
-                        !isTimeSlotAvailable(selectedDate, selectedTime)
-                      }
-                      onClick={handleAlternativeBooking}
-                    >
-                      Book via WhatsApp
-                    </Button>
-                  </a>
+                  <Button
+                    variant="outline"
+                    className="w-full border-green-500 text-green-600 hover:bg-green-50 dark:border-green-400 dark:text-green-400 dark:hover:bg-green-900/20"
+                    disabled={
+                      !selectedService ||
+                      !selectedDate ||
+                      !selectedTime ||
+                      !formData.name ||
+                      !formData.phone ||
+                      isDateBlocked(selectedDate) ||
+                      !isTimeSlotAvailable(selectedDate, selectedTime)
+                    }
+                    onClick={handleAlternativeBooking}
+                  >
+                    Book via WhatsApp
+                  </Button>
                 </div>
 
                 {/* Show booking restriction message if date/time is blocked */}
-                {(isDateBlocked(selectedDate) || !isTimeSlotAvailable(selectedDate, selectedTime)) && (
-                  <div className="text-center p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                    <p className="text-sm text-red-600 dark:text-red-400">
-                      {isDateBlocked(selectedDate)
-                        ? "This date is fully booked. Please select another date."
-                        : "This time slot is no longer available. Please select another time."}
-                    </p>
-                  </div>
-                )}
+                {selectedDate &&
+                  (isDateBlocked(selectedDate) ||
+                    (selectedTime && !isTimeSlotAvailable(selectedDate, selectedTime))) && (
+                    <div className="text-center p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                      <p className="text-sm text-red-600 dark:text-red-400">
+                        {isDateBlocked(selectedDate)
+                          ? "This date is fully booked. Please select another date."
+                          : "This time slot is no longer available. Please select another time."}
+                      </p>
+                    </div>
+                  )}
 
                 <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
                   <p>Payment methods:</p>
