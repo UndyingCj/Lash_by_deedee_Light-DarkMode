@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getBookings, createBooking, updateBooking, deleteBooking } from "@/lib/supabase"
+import { supabaseAdmin } from "@/lib/supabase-admin"
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,6 +33,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Test connection first
+    const connectionTest = await testConnection()
+    if (!connectionTest) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Database connection failed",
+        },
+        { status: 500 },
+      )
+    }
     const body = await request.json()
     console.log("Received booking data:", body)
 
@@ -69,6 +81,10 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       )
     }
+
+    console.log("Environment check:")
+    console.log("NEXT_PUBLIC_SUPABASE_URL:", process.env.NEXT_PUBLIC_SUPABASE_URL ? "Set" : "Missing")
+    console.log("SUPABASE_SERVICE_ROLE_KEY:", process.env.SUPABASE_SERVICE_ROLE_KEY ? "Set" : "Missing")
 
     const newBooking = await createBooking({
       client_name: body.clientName.trim(),
@@ -209,5 +225,15 @@ export async function DELETE(request: NextRequest) {
       },
       { status: 500 },
     )
+  }
+}
+
+async function testConnection() {
+  try {
+    await supabaseAdmin.from("bookings").select("*").limit(1)
+    return true
+  } catch (error) {
+    console.error("Database connection test failed:", error)
+    return false
   }
 }

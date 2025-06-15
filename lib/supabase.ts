@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
+import { supabaseAdmin, testConnection } from "./supabase-admin"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -17,20 +18,20 @@ if (!supabaseAnonKey) {
 }
 
 // Server-side client with service role key (admin operations)
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-  db: {
-    schema: "public",
-  },
-  global: {
-    headers: {
-      apikey: supabaseServiceKey,
-    },
-  },
-})
+// export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+//   auth: {
+//     autoRefreshToken: false,
+//     persistSession: false,
+//   },
+//   db: {
+//     schema: "public",
+//   },
+//   global: {
+//     headers: {
+//       apikey: supabaseServiceKey,
+//     },
+//   },
+// })
 
 // Client-side Supabase client (public operations only)
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
@@ -349,3 +350,5 @@ export async function getDashboardStats() {
     throw error
   }
 }
+
+export { testConnection }
