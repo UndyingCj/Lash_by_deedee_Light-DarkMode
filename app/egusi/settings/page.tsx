@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,38 +8,31 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { User, Bell, Shield, Clock, Save, AlertCircle, CheckCircle } from "lucide-react"
+import { User, Bell, Shield, Clock, Save, AlertCircle, CheckCircle, Loader2 } from "lucide-react"
 import { AdminLayout } from "@/components/admin/admin-layout"
+import type { BusinessSettings } from "@/lib/settings"
 
 const SettingsPage = () => {
   const [loading, setLoading] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
-  const [settings, setSettings] = useState({
-    // Business Settings
-    businessName: "Lashed by Deedee",
-    businessEmail: "info@lashedbydeedee.com",
-    businessPhone: "+234 801 234 5678",
-    businessAddress: "123 Beauty Street, Lagos, Nigeria",
-    businessDescription: "Where Beauty Meets Precision. Professional lash and brow services in Lagos.",
-
-    // Booking Settings
-    bookingBuffer: "15",
-    maxAdvanceBooking: "30",
-    cancellationPolicy: "24",
+  const [settings, setSettings] = useState<BusinessSettings>({
+    businessName: "",
+    businessEmail: "",
+    businessPhone: "",
+    businessAddress: "",
+    businessDescription: "",
+    bookingBuffer: 15,
+    maxAdvanceBooking: 30,
+    cancellationPolicy: 24,
     autoConfirmBookings: false,
-
-    // Notification Settings
     emailNotifications: true,
     smsNotifications: false,
     bookingReminders: true,
     marketingEmails: false,
-
-    // Security Settings
     twoFactorAuth: false,
-    sessionTimeout: "60",
-    passwordExpiry: "90",
-
-    // Appearance Settings
+    sessionTimeout: 60,
+    passwordExpiry: 90,
     theme: "light",
     primaryColor: "pink",
     timezone: "Africa/Lagos",
@@ -47,24 +40,79 @@ const SettingsPage = () => {
 
   const showMessage = (type: "success" | "error", text: string) => {
     setMessage({ type, text })
-    setTimeout(() => setMessage(null), 3000)
+    setTimeout(() => setMessage(null), 5000)
+  }
+
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch("/api/admin/settings")
+      if (response.ok) {
+        const data = await response.json()
+        setSettings(data)
+      } else {
+        showMessage("error", "Failed to load settings")
+      }
+    } catch (error) {
+      console.error("Error fetching settings:", error)
+      showMessage("error", "Failed to load settings")
+    } finally {
+      setInitialLoading(false)
+    }
   }
 
   const handleSave = async () => {
     setLoading(true)
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      showMessage("success", "Settings saved successfully!")
+      const response = await fetch("/api/admin/settings", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(settings),
+      })
+
+      if (response.ok) {
+        showMessage("success", "Settings saved successfully!")
+
+        // Create notification for settings update
+        await fetch("/api/admin/notifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: "Settings Updated",
+            message: "Business settings have been updated successfully",
+            type: "success",
+            expiresInHours: 24,
+          }),
+        })
+      } else {
+        const errorData = await response.json()
+        showMessage("error", errorData.error || "Failed to save settings")
+      }
     } catch (error) {
+      console.error("Error saving settings:", error)
       showMessage("error", "Failed to save settings. Please try again.")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleInputChange = (field: string, value: string | boolean) => {
+  const handleInputChange = (field: keyof BusinessSettings, value: string | boolean | number) => {
     setSettings((prev) => ({ ...prev, [field]: value }))
+  }
+
+  useEffect(() => {
+    fetchSettings()
+  }, [])
+
+  if (initialLoading) {
+    return (
+      <AdminLayout title="Settings" subtitle="Loading settings...">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
+        </div>
+      </AdminLayout>
+    )
   }
 
   return (
@@ -151,8 +199,8 @@ const SettingsPage = () => {
             <div>
               <Label htmlFor="bookingBuffer">Booking Buffer (minutes)</Label>
               <Select
-                value={settings.bookingBuffer}
-                onValueChange={(value) => handleInputChange("bookingBuffer", value)}
+                value={settings.bookingBuffer.toString()}
+                onValueChange={(value) => handleInputChange("bookingBuffer", Number.parseInt(value))}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -168,8 +216,8 @@ const SettingsPage = () => {
             <div>
               <Label htmlFor="maxAdvanceBooking">Max Advance Booking (days)</Label>
               <Select
-                value={settings.maxAdvanceBooking}
-                onValueChange={(value) => handleInputChange("maxAdvanceBooking", value)}
+                value={settings.maxAdvanceBooking.toString()}
+                onValueChange={(value) => handleInputChange("maxAdvanceBooking", Number.parseInt(value))}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -186,8 +234,8 @@ const SettingsPage = () => {
             <div>
               <Label htmlFor="cancellationPolicy">Cancellation Policy (hours)</Label>
               <Select
-                value={settings.cancellationPolicy}
-                onValueChange={(value) => handleInputChange("cancellationPolicy", value)}
+                value={settings.cancellationPolicy.toString()}
+                onValueChange={(value) => handleInputChange("cancellationPolicy", Number.parseInt(value))}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -275,8 +323,8 @@ const SettingsPage = () => {
             <div>
               <Label htmlFor="sessionTimeout">Session Timeout (minutes)</Label>
               <Select
-                value={settings.sessionTimeout}
-                onValueChange={(value) => handleInputChange("sessionTimeout", value)}
+                value={settings.sessionTimeout.toString()}
+                onValueChange={(value) => handleInputChange("sessionTimeout", Number.parseInt(value))}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -327,8 +375,17 @@ const SettingsPage = () => {
           disabled={loading}
           className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white px-8"
         >
-          <Save className="w-4 h-4 mr-2" />
-          {loading ? "Saving..." : "Save Settings"}
+          {loading ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4 mr-2" />
+              Save Settings
+            </>
+          )}
         </Button>
       </div>
     </AdminLayout>

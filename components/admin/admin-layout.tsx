@@ -6,10 +6,11 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Home, Calendar, Users, BarChart3, Settings, LogOut, Bell, Search, Plus, Menu, X, Heart } from "lucide-react"
+import { Home, Calendar, Users, BarChart3, Settings, LogOut, Search, Plus, Menu, X, Heart } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { AddBookingModal } from "@/components/admin/add-booking-modal"
+import { NotificationBell } from "@/components/admin/notification-bell"
 
 interface AdminLayoutProps {
   children: React.ReactNode
@@ -150,10 +151,7 @@ export function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
                 </div>
 
                 {/* Notifications */}
-                <Button variant="outline" size="sm" className="relative">
-                  <Bell className="w-4 h-4" />
-                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                </Button>
+                <NotificationBell />
 
                 {/* Add Booking */}
                 <Button

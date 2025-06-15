@@ -49,20 +49,31 @@ const CalendarPage = () => {
     setLoading(true)
 
     try {
-      if (isBlocked) {
-        // Unblock date
-        setBlockedDates((prev) => prev.filter((d) => d !== dateString))
-        // Also remove any blocked time slots for this date
-        setBlockedTimeSlots((prev) => {
-          const updated = { ...prev }
-          delete updated[dateString]
-          return updated
-        })
-        showMessage("success", `Date ${new Date(dateString).toLocaleDateString()} has been unblocked`)
+      const response = await fetch("/api/admin/availability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "date",
+          date: dateString,
+          action: isBlocked ? "unblock" : "block",
+        }),
+      })
+
+      if (response.ok) {
+        if (isBlocked) {
+          setBlockedDates((prev) => prev.filter((d) => d !== dateString))
+          setBlockedTimeSlots((prev) => {
+            const updated = { ...prev }
+            delete updated[dateString]
+            return updated
+          })
+          showMessage("success", `Date ${new Date(dateString).toLocaleDateString()} has been unblocked`)
+        } else {
+          setBlockedDates((prev) => [...prev, dateString])
+          showMessage("success", `Date ${new Date(dateString).toLocaleDateString()} has been blocked`)
+        }
       } else {
-        // Block date
-        setBlockedDates((prev) => [...prev, dateString])
-        showMessage("success", `Date ${new Date(dateString).toLocaleDateString()} has been blocked`)
+        showMessage("error", "Failed to update date availability")
       }
     } catch (error) {
       showMessage("error", "Failed to update date. Please try again.")
@@ -76,20 +87,33 @@ const CalendarPage = () => {
     setLoading(true)
 
     try {
-      if (isBlocked) {
-        // Unblock time slot
-        setBlockedTimeSlots((prev) => ({
-          ...prev,
-          [dateString]: prev[dateString]?.filter((t) => t !== time) || [],
-        }))
-        showMessage("success", `Time slot ${time} has been unblocked`)
+      const response = await fetch("/api/admin/availability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "slot",
+          date: dateString,
+          time: time,
+          action: isBlocked ? "unblock" : "block",
+        }),
+      })
+
+      if (response.ok) {
+        if (isBlocked) {
+          setBlockedTimeSlots((prev) => ({
+            ...prev,
+            [dateString]: prev[dateString]?.filter((t) => t !== time) || [],
+          }))
+          showMessage("success", `Time slot ${time} has been unblocked`)
+        } else {
+          setBlockedTimeSlots((prev) => ({
+            ...prev,
+            [dateString]: [...(prev[dateString] || []), time],
+          }))
+          showMessage("success", `Time slot ${time} has been blocked`)
+        }
       } else {
-        // Block time slot
-        setBlockedTimeSlots((prev) => ({
-          ...prev,
-          [dateString]: [...(prev[dateString] || []), time],
-        }))
-        showMessage("success", `Time slot ${time} has been blocked`)
+        showMessage("error", "Failed to update time slot availability")
       }
     } catch (error) {
       showMessage("error", "Failed to update time slot. Please try again.")

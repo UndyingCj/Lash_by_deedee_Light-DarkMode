@@ -85,7 +85,35 @@ export default function BookingPage() {
     return Math.floor(Number.parseInt(service.price.replace(",", "")) / 2)
   }
 
-  const validateForm = () => {
+  // Add this function to check availability
+  const checkAvailability = async (date: string, time?: string) => {
+    try {
+      const response = await fetch("/api/admin/availability")
+      if (response.ok) {
+        const { blockedDates, blockedSlots } = await response.json()
+
+        // Check if date is blocked
+        const isDateBlocked = blockedDates.some((blocked: any) => blocked.blocked_date === date)
+        if (isDateBlocked) return false
+
+        // Check if specific time slot is blocked
+        if (time) {
+          const isTimeBlocked = blockedSlots.some(
+            (blocked: any) => blocked.blocked_date === date && blocked.blocked_time === time,
+          )
+          if (isTimeBlocked) return false
+        }
+
+        return true
+      }
+    } catch (error) {
+      console.error("Error checking availability:", error)
+    }
+    return true // Default to available if check fails
+  }
+
+  // Update the validateForm function to include availability check:
+  const validateForm = async () => {
     if (!selectedService) {
       alert("Please select a service")
       return false
@@ -98,6 +126,14 @@ export default function BookingPage() {
       alert("Please select a time")
       return false
     }
+
+    // Check availability
+    const isAvailable = await checkAvailability(selectedDate, selectedTime)
+    if (!isAvailable) {
+      alert("Sorry, this date and time is no longer available. Please select another slot.")
+      return false
+    }
+
     if (!formData.name.trim()) {
       alert("Please enter your full name")
       return false
@@ -109,8 +145,10 @@ export default function BookingPage() {
     return true
   }
 
-  const handlePaystackPayment = () => {
-    if (!validateForm()) return
+  // Update both payment handlers to use async validateForm:
+  const handlePaystackPayment = async () => {
+    const isValid = await validateForm()
+    if (!isValid) return
 
     if (!paystackLoaded || !window.PaystackPop) {
       alert("Payment system is loading. Please try again in a moment.")
@@ -191,8 +229,9 @@ We'll contact you within 24 hours to confirm your appointment details. Thank you
     }
   }
 
-  const handleAlternativeBooking = () => {
-    if (!validateForm()) return
+  const handleAlternativeBooking = async () => {
+    const isValid = await validateForm()
+    if (!isValid) return
 
     const service = services.find((s) => s.name === selectedService)
     const depositAmount = getDepositAmount()
