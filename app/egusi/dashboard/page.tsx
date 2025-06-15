@@ -268,11 +268,8 @@ const DashboardPage = () => {
         </div>
       </header>
 
-      {/* Spacer to prevent content overlap */}
-      <div className="h-16"></div>
-
-      {/* Main Content - Proper spacing to avoid overlap */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
+      {/* Main Content - Using padding-top for proper spacing */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-20">
         {/* Welcome Section */}
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

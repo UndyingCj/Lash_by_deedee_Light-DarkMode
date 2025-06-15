@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   title: "Lashed by Deedee - Where Beauty Meets Precision",
   description:
     "Professional lash and brow services in Port Harcourt. Ombré brows, classic lashes, volume lashes, and training services.",
-    generator: 'v0.dev'
+  generator: "v0.dev",
 }
 
 export default function RootLayout({
