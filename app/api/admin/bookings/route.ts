@@ -1,23 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-
-// This would typically connect to your database
-// For demo purposes, we'll use in-memory storage
-const bookings = [
-  {
-    id: 1,
-    clientName: "Sarah Johnson",
-    phone: "+234 801 234 5678",
-    email: "sarah@email.com",
-    service: "Ombré Brows",
-    date: "2024-06-15",
-    time: "10:00 AM",
-    status: "confirmed",
-    amount: 45000,
-    notes: "First time client",
-    createdAt: new Date().toISOString(),
-  },
-  // Add more sample bookings...
-]
+import { getBookings, createBooking, updateBooking, deleteBooking } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,22 +7,19 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status")
     const date = searchParams.get("date")
 
-    let filteredBookings = bookings
+    const filters: any = {}
+    if (status) filters.status = status
+    if (date) filters.date = date
 
-    if (status && status !== "all") {
-      filteredBookings = filteredBookings.filter((booking) => booking.status === status)
-    }
-
-    if (date) {
-      filteredBookings = filteredBookings.filter((booking) => booking.date === date)
-    }
+    const bookings = await getBookings(filters)
 
     return NextResponse.json({
       success: true,
-      data: filteredBookings,
-      total: filteredBookings.length,
+      data: bookings,
+      total: bookings.length,
     })
   } catch (error) {
+    console.error("Error fetching bookings:", error)
     return NextResponse.json({ success: false, error: "Failed to fetch bookings" }, { status: 500 })
   }
 }
@@ -49,13 +28,17 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
-    const newBooking = {
-      id: bookings.length + 1,
-      ...body,
-      createdAt: new Date().toISOString(),
-    }
-
-    bookings.push(newBooking)
+    const newBooking = await createBooking({
+      client_name: body.clientName,
+      phone: body.phone,
+      email: body.email,
+      service: body.service,
+      booking_date: body.date,
+      booking_time: body.time,
+      status: body.status || "pending",
+      amount: Number.parseFloat(body.amount),
+      notes: body.notes || "",
+    })
 
     return NextResponse.json({
       success: true,
@@ -63,6 +46,7 @@ export async function POST(request: NextRequest) {
       message: "Booking created successfully",
     })
   } catch (error) {
+    console.error("Error creating booking:", error)
     return NextResponse.json({ success: false, error: "Failed to create booking" }, { status: 500 })
   }
 }
@@ -72,24 +56,27 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const { id, ...updateData } = body
 
-    const bookingIndex = bookings.findIndex((booking) => booking.id === id)
+    // Convert camelCase to snake_case for database
+    const dbUpdateData: any = {}
+    if (updateData.clientName) dbUpdateData.client_name = updateData.clientName
+    if (updateData.phone) dbUpdateData.phone = updateData.phone
+    if (updateData.email) dbUpdateData.email = updateData.email
+    if (updateData.service) dbUpdateData.service = updateData.service
+    if (updateData.date) dbUpdateData.booking_date = updateData.date
+    if (updateData.time) dbUpdateData.booking_time = updateData.time
+    if (updateData.status) dbUpdateData.status = updateData.status
+    if (updateData.amount) dbUpdateData.amount = Number.parseFloat(updateData.amount)
+    if (updateData.notes !== undefined) dbUpdateData.notes = updateData.notes
 
-    if (bookingIndex === -1) {
-      return NextResponse.json({ success: false, error: "Booking not found" }, { status: 404 })
-    }
-
-    bookings[bookingIndex] = {
-      ...bookings[bookingIndex],
-      ...updateData,
-      updatedAt: new Date().toISOString(),
-    }
+    const updatedBooking = await updateBooking(id, dbUpdateData)
 
     return NextResponse.json({
       success: true,
-      data: bookings[bookingIndex],
+      data: updatedBooking,
       message: "Booking updated successfully",
     })
   } catch (error) {
+    console.error("Error updating booking:", error)
     return NextResponse.json({ success: false, error: "Failed to update booking" }, { status: 500 })
   }
 }
@@ -99,13 +86,7 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const id = Number.parseInt(searchParams.get("id") || "0")
 
-    const bookingIndex = bookings.findIndex((booking) => booking.id === id)
-
-    if (bookingIndex === -1) {
-      return NextResponse.json({ success: false, error: "Booking not found" }, { status: 404 })
-    }
-
-    const deletedBooking = bookings.splice(bookingIndex, 1)[0]
+    const deletedBooking = await deleteBooking(id)
 
     return NextResponse.json({
       success: true,
@@ -113,6 +94,7 @@ export async function DELETE(request: NextRequest) {
       message: "Booking deleted successfully",
     })
   } catch (error) {
+    console.error("Error deleting booking:", error)
     return NextResponse.json({ success: false, error: "Failed to delete booking" }, { status: 500 })
   }
 }

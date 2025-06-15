@@ -6,52 +6,62 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, Users, Clock, DollarSign, Settings, LogOut } from "lucide-react"
 import Link from "next/link"
+import { AddBookingModal } from "@/components/admin/add-booking-modal"
+
+interface DashboardStats {
+  todayBookings: number
+  weeklyBookings: number
+  monthlyRevenue: number
+  pendingBookings: number
+}
+
+interface Booking {
+  id: number
+  client_name: string
+  service: string
+  booking_date: string
+  booking_time: string
+  status: string
+  amount: number
+}
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState({
-    todayBookings: 3,
-    weeklyBookings: 12,
-    monthlyRevenue: 450000,
-    pendingBookings: 5,
+  const [stats, setStats] = useState<DashboardStats>({
+    todayBookings: 0,
+    weeklyBookings: 0,
+    monthlyRevenue: 0,
+    pendingBookings: 0,
   })
-
-  const [recentBookings, setRecentBookings] = useState([
-    {
-      id: 1,
-      clientName: "Sarah Johnson",
-      service: "Ombré Brows",
-      date: "2024-06-15",
-      time: "10:00 AM",
-      status: "confirmed",
-      amount: 45000,
-    },
-    {
-      id: 2,
-      clientName: "Grace Okafor",
-      service: "Volume Lashes",
-      date: "2024-06-15",
-      time: "2:00 PM",
-      status: "pending",
-      amount: 25000,
-    },
-    {
-      id: 3,
-      clientName: "Jennifer Eze",
-      service: "Classic Lashes",
-      date: "2024-06-16",
-      time: "11:00 AM",
-      status: "confirmed",
-      amount: 15000,
-    },
-  ])
+  const [recentBookings, setRecentBookings] = useState<Booking[]>([])
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     // Check authentication
     const isAuth = localStorage.getItem("adminAuth")
     if (!isAuth) {
       window.location.href = "/egusi"
+      return
     }
+
+    fetchDashboardData()
   }, [])
+
+  const fetchDashboardData = async () => {
+    try {
+      const response = await fetch("/api/admin/stats")
+      const result = await response.json()
+
+      if (result.success) {
+        setStats(result.data.stats)
+        setRecentBookings(result.data.recentBookings)
+      }
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const handleLogout = () => {
     localStorage.removeItem("adminAuth")
@@ -66,15 +76,28 @@ export default function AdminDashboard() {
         return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300"
       case "cancelled":
         return "bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300"
+      case "completed":
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300"
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-900/50 dark:text-gray-300"
     }
   }
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading dashboard...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <>
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b">
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div>
@@ -82,6 +105,10 @@ export default function AdminDashboard() {
               <p className="text-gray-600 dark:text-gray-400">Lashed by Deedee Management</p>
             </div>
             <div className="flex items-center space-x-4">
+              <Button onClick={() => setIsAddModalOpen(true)} className="bg-pink-500 hover:bg-pink-600">
+                <Calendar className="w-4 h-4 mr-2" />
+                Add Booking
+              </Button>
               <Link href="/egusi/settings">
                 <Button variant="outline" size="sm">
                   <Settings className="w-4 h-4 mr-2" />
@@ -206,32 +233,42 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentBookings.map((booking) => (
-                <div
-                  key={booking.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
-                >
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-gray-900 dark:text-gray-100">{booking.clientName}</h4>
-                    <p className="text-gray-600 dark:text-gray-400">{booking.service}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-500">
-                      {booking.date} at {booking.time}
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="text-right">
-                      <p className="font-semibold text-gray-900 dark:text-gray-100">
-                        ₦{booking.amount.toLocaleString()}
+              {recentBookings.length === 0 ? (
+                <p className="text-gray-500 dark:text-gray-400 text-center py-8">No recent bookings</p>
+              ) : (
+                recentBookings.map((booking) => (
+                  <div
+                    key={booking.id}
+                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                  >
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-gray-900 dark:text-gray-100">{booking.client_name}</h4>
+                      <p className="text-gray-600 dark:text-gray-400">{booking.service}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-500">
+                        {new Date(booking.booking_date).toLocaleDateString()} at {booking.booking_time}
                       </p>
-                      <Badge className={getStatusColor(booking.status)}>{booking.status}</Badge>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <div className="text-right">
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">
+                          ₦{booking.amount.toLocaleString()}
+                        </p>
+                        <Badge className={getStatusColor(booking.status)}>{booking.status}</Badge>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
-    </div>
+
+      <AddBookingModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onBookingAdded={fetchDashboardData}
+      />
+    </>
   )
 }
