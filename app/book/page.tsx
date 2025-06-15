@@ -474,28 +474,20 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                             ? "Select a date first"
                             : isDateBlocked(selectedDate)
                               ? "Date fully booked"
-                              : "Choose your time"
+                              : getAvailableTimeSlots(selectedDate).length === 0
+                                ? "No available time slots"
+                                : "Choose your time"
                         }
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      {selectedDate && !isDateBlocked(selectedDate) ? (
-                        getAvailableTimeSlots(selectedDate).length > 0 ? (
-                          getAvailableTimeSlots(selectedDate).map((time, index) => (
+                      {selectedDate && !isDateBlocked(selectedDate) && getAvailableTimeSlots(selectedDate).length > 0
+                        ? getAvailableTimeSlots(selectedDate).map((time, index) => (
                             <SelectItem key={index} value={time}>
                               {time}
                             </SelectItem>
                           ))
-                        ) : (
-                          <SelectItem value="" disabled>
-                            No available time slots
-                          </SelectItem>
-                        )
-                      ) : (
-                        <SelectItem value="" disabled>
-                          {!selectedDate ? "Please select a date first" : "Date fully booked"}
-                        </SelectItem>
-                      )}
+                        : null}
                     </SelectContent>
                   </Select>
                 </div>
