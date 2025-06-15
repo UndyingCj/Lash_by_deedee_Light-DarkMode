@@ -7,12 +7,25 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, Clock, CreditCard, MessageSquare, AlertTriangle } from "lucide-react"
+import { Calendar, Clock, CreditCard, MessageSquare, AlertTriangle, XCircle, CheckCircle } from "lucide-react"
 
 declare global {
   interface Window {
     PaystackPop: any
   }
+}
+
+interface BlockedDate {
+  id: number
+  blocked_date: string
+  reason?: string
+}
+
+interface BlockedTimeSlot {
+  id: number
+  blocked_date: string
+  blocked_time: string
+  reason?: string
 }
 
 export default function BookingPage() {
@@ -21,6 +34,9 @@ export default function BookingPage() {
   const [selectedTime, setSelectedTime] = useState("")
   const [paystackLoaded, setPaystackLoaded] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [blockedDates, setBlockedDates] = useState<string[]>([])
+  const [blockedTimeSlots, setBlockedTimeSlots] = useState<Record<string, string[]>>({})
+  const [availabilityLoaded, setAvailabilityLoaded] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -49,7 +65,12 @@ export default function BookingPage() {
     { name: "Lash Removal", price: "4,000", duration: "30 mins" },
   ]
 
-  const timeSlots = ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"]
+  const allTimeSlots = ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"]
+
+  // Load availability data
+  useEffect(() => {
+    loadAvailabilityData()
+  }, [])
 
   // Load Paystack script
   useEffect(() => {
@@ -75,6 +96,37 @@ export default function BookingPage() {
     loadPaystackScript()
   }, [])
 
+  const loadAvailabilityData = async () => {
+    try {
+      const response = await fetch("/api/admin/availability")
+      if (response.ok) {
+        const data = await response.json()
+
+        // Handle blocked dates
+        if (data.blockedDates) {
+          const dates = data.blockedDates.map((item: BlockedDate) => item.blocked_date)
+          setBlockedDates(dates)
+        }
+
+        // Handle blocked time slots
+        if (data.blockedSlots) {
+          const slotsMap: Record<string, string[]> = {}
+          data.blockedSlots.forEach((slot: BlockedTimeSlot) => {
+            if (!slotsMap[slot.blocked_date]) {
+              slotsMap[slot.blocked_date] = []
+            }
+            slotsMap[slot.blocked_date].push(slot.blocked_time)
+          })
+          setBlockedTimeSlots(slotsMap)
+        }
+      }
+    } catch (error) {
+      console.error("Error loading availability:", error)
+    } finally {
+      setAvailabilityLoaded(true)
+    }
+  }
+
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
@@ -85,34 +137,28 @@ export default function BookingPage() {
     return Math.floor(Number.parseInt(service.price.replace(",", "")) / 2)
   }
 
-  // Add this function to check availability
-  const checkAvailability = async (date: string, time?: string) => {
-    try {
-      const response = await fetch("/api/admin/availability")
-      if (response.ok) {
-        const { blockedDates, blockedSlots } = await response.json()
-
-        // Check if date is blocked
-        const isDateBlocked = blockedDates.some((blocked: any) => blocked.blocked_date === date)
-        if (isDateBlocked) return false
-
-        // Check if specific time slot is blocked
-        if (time) {
-          const isTimeBlocked = blockedSlots.some(
-            (blocked: any) => blocked.blocked_date === date && blocked.blocked_time === time,
-          )
-          if (isTimeBlocked) return false
-        }
-
-        return true
-      }
-    } catch (error) {
-      console.error("Error checking availability:", error)
-    }
-    return true // Default to available if check fails
+  // Check if a date is blocked
+  const isDateBlocked = (date: string) => {
+    return blockedDates.includes(date)
   }
 
-  // Update the validateForm function to include availability check:
+  // Get available time slots for a specific date
+  const getAvailableTimeSlots = (date: string) => {
+    if (isDateBlocked(date)) {
+      return [] // No slots available if entire date is blocked
+    }
+
+    const blockedSlots = blockedTimeSlots[date] || []
+    return allTimeSlots.filter((slot) => !blockedSlots.includes(slot))
+  }
+
+  // Check if a specific time slot is available
+  const isTimeSlotAvailable = (date: string, time: string) => {
+    if (isDateBlocked(date)) return false
+    const blockedSlots = blockedTimeSlots[date] || []
+    return !blockedSlots.includes(time)
+  }
+
   const validateForm = async () => {
     if (!selectedService) {
       alert("Please select a service")
@@ -122,15 +168,21 @@ export default function BookingPage() {
       alert("Please select a date")
       return false
     }
+
+    // Check if date is blocked
+    if (isDateBlocked(selectedDate)) {
+      alert("Sorry, this date is fully booked. Please select another date.")
+      return false
+    }
+
     if (!selectedTime) {
       alert("Please select a time")
       return false
     }
 
-    // Check availability
-    const isAvailable = await checkAvailability(selectedDate, selectedTime)
-    if (!isAvailable) {
-      alert("Sorry, this date and time is no longer available. Please select another slot.")
+    // Check if time slot is available
+    if (!isTimeSlotAvailable(selectedDate, selectedTime)) {
+      alert("Sorry, this time slot is no longer available. Please select another time.")
       return false
     }
 
@@ -145,7 +197,6 @@ export default function BookingPage() {
     return true
   }
 
-  // Update both payment handlers to use async validateForm:
   const handlePaystackPayment = async () => {
     const isValid = await validateForm()
     if (!isValid) return
@@ -253,6 +304,57 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
     window.open(whatsappUrl, "_blank")
   }
 
+  // Get the minimum date (today)
+  const getMinDate = () => {
+    return new Date().toISOString().split("T")[0]
+  }
+
+  // Check if selected date is blocked and show appropriate message
+  const getDateAvailabilityMessage = () => {
+    if (!selectedDate || !availabilityLoaded) return null
+
+    if (isDateBlocked(selectedDate)) {
+      return (
+        <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <div className="flex items-center space-x-2 text-red-700 dark:text-red-300">
+            <XCircle className="w-5 h-5" />
+            <span className="font-medium">Fully Booked</span>
+          </div>
+          <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+            This date is fully booked. Please select another date to see available time slots.
+          </p>
+        </div>
+      )
+    }
+
+    const availableSlots = getAvailableTimeSlots(selectedDate)
+    if (availableSlots.length === 0) {
+      return (
+        <div className="mt-2 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+          <div className="flex items-center space-x-2 text-orange-700 dark:text-orange-300">
+            <XCircle className="w-5 h-5" />
+            <span className="font-medium">No Available Slots</span>
+          </div>
+          <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
+            All time slots for this date are booked. Please select another date.
+          </p>
+        </div>
+      )
+    }
+
+    return (
+      <div className="mt-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+        <div className="flex items-center space-x-2 text-green-700 dark:text-green-300">
+          <CheckCircle className="w-5 h-5" />
+          <span className="font-medium">Available Slots</span>
+        </div>
+        <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+          {availableSlots.length} time slot{availableSlots.length !== 1 ? "s" : ""} available for this date.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-pink-50 to-rose-50 dark:from-gray-900 dark:to-gray-800 py-12">
       <div className="max-w-4xl mx-auto px-4">
@@ -343,10 +445,14 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                     type="date"
                     id="date"
                     value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedDate(e.target.value)
+                      setSelectedTime("") // Reset time when date changes
+                    }}
                     className="mt-2"
-                    min={new Date().toISOString().split("T")[0]}
+                    min={getMinDate()}
                   />
+                  {getDateAvailabilityMessage()}
                 </div>
 
                 {/* Time Selection */}
@@ -354,18 +460,42 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                   <Label htmlFor="time" className="text-base font-medium text-gray-900 dark:text-gray-100">
                     Preferred Time * (2 hours each slot)
                   </Label>
-                  <Select value={selectedTime} onValueChange={setSelectedTime}>
+                  <Select
+                    value={selectedTime}
+                    onValueChange={setSelectedTime}
+                    disabled={!selectedDate || isDateBlocked(selectedDate)}
+                  >
                     <SelectTrigger className="mt-2">
-                      <SelectValue placeholder="Choose your time" />
+                      <SelectValue
+                        placeholder={
+                          !selectedDate
+                            ? "Select a date first"
+                            : isDateBlocked(selectedDate)
+                              ? "Date fully booked"
+                              : "Choose your time"
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent>
-                      {timeSlots.map((time, index) => (
-                        <SelectItem key={index} value={time}>
-                          {time}
+                      {selectedDate &&
+                        !isDateBlocked(selectedDate) &&
+                        getAvailableTimeSlots(selectedDate).map((time, index) => (
+                          <SelectItem key={index} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      {selectedDate && getAvailableTimeSlots(selectedDate).length === 0 && (
+                        <SelectItem value="" disabled>
+                          No available time slots
                         </SelectItem>
-                      ))}
+                      )}
                     </SelectContent>
                   </Select>
+                  {selectedDate && !isDateBlocked(selectedDate) && getAvailableTimeSlots(selectedDate).length > 0 && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                      Available slots: {getAvailableTimeSlots(selectedDate).join(", ")}
+                    </p>
+                  )}
                 </div>
 
                 {/* Personal Information */}
@@ -451,6 +581,9 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                   <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
                     <Calendar className="w-4 h-4" />
                     <span>{new Date(selectedDate).toLocaleDateString()}</span>
+                    {isDateBlocked(selectedDate) && (
+                      <span className="text-red-500 text-sm font-medium">(Fully Booked)</span>
+                    )}
                   </div>
                 )}
 
@@ -484,7 +617,9 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                       !formData.name ||
                       !formData.phone ||
                       isProcessing ||
-                      !paystackLoaded
+                      !paystackLoaded ||
+                      isDateBlocked(selectedDate) ||
+                      !isTimeSlotAvailable(selectedDate, selectedTime)
                     }
                     onClick={handlePaystackPayment}
                   >
@@ -497,13 +632,32 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                     <Button
                       variant="outline"
                       className="w-full border-green-500 text-green-600 hover:bg-green-50 dark:border-green-400 dark:text-green-400 dark:hover:bg-green-900/20"
-                      disabled={!selectedService || !selectedDate || !selectedTime || !formData.name || !formData.phone}
+                      disabled={
+                        !selectedService ||
+                        !selectedDate ||
+                        !selectedTime ||
+                        !formData.name ||
+                        !formData.phone ||
+                        isDateBlocked(selectedDate) ||
+                        !isTimeSlotAvailable(selectedDate, selectedTime)
+                      }
                       onClick={handleAlternativeBooking}
                     >
                       Book via WhatsApp
                     </Button>
                   </a>
                 </div>
+
+                {/* Show booking restriction message if date/time is blocked */}
+                {(isDateBlocked(selectedDate) || !isTimeSlotAvailable(selectedDate, selectedTime)) && (
+                  <div className="text-center p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <p className="text-sm text-red-600 dark:text-red-400">
+                      {isDateBlocked(selectedDate)
+                        ? "This date is fully booked. Please select another date."
+                        : "This time slot is no longer available. Please select another time."}
+                    </p>
+                  </div>
+                )}
 
                 <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
                   <p>Payment methods:</p>
