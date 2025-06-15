@@ -1,282 +1,249 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Calendar, X, Plus, ArrowLeft, ArrowRight } from "lucide-react"
-import Link from "next/link"
+import { useState, useEffect } from "react"
+import Calendar from "react-calendar"
+import "react-calendar/dist/Calendar.css"
 
-export default function CalendarManagement() {
-  const [currentDate, setCurrentDate] = useState(new Date())
-  const [blockedDates, setBlockedDates] = useState(["2024-06-20", "2024-06-25", "2024-06-30"])
-
-  const [blockedTimeSlots, setBlockedTimeSlots] = useState([
-    { date: "2024-06-15", time: "9:00 AM" },
-    { date: "2024-06-16", time: "2:00 PM" },
+const EgusiCalendarPage = () => {
+  const [date, setDate] = useState(new Date())
+  const [blockedDates, setBlockedDates] = useState<string[]>([])
+  \
+  const [blockedTimeSlots, setBlockedTimeSlots: any] = useState({})
+  const [availableTimeSlots, setAvailableTimeSlots] = useState([
+    "09:00",
+    "10:00",
+    "11:00",
+    "12:00",
+    "13:00",
+    "14:00",
+    "15:00",
+    "16:00",
+    "17:00",
   ])
 
-  const timeSlots = ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"]
+  useEffect(() => {
+    fetchBlockedData()
+  }, [])
 
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear()
-    const month = date.getMonth()
-    const firstDay = new Date(year, month, 1)
-    const lastDay = new Date(year, month + 1, 0)
-    const daysInMonth = lastDay.getDate()
-    const startingDayOfWeek = firstDay.getDay()
+  const fetchBlockedData = async () => {
+    try {
+      const [datesResponse, timesResponse] = await Promise.all([
+        fetch("/api/admin/calendar?type=dates"),
+        fetch("/api/admin/calendar?type=timeslots"),
+      ])
 
-    const days = []
+      if (datesResponse.ok) {
+        const datesData = await datesResponse.json()
+        if (datesData.success) {
+          setBlockedDates(datesData.data.map((item: any) => item.blocked_date))
+        }
+      }
 
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(null)
+      if (timesResponse.ok) {
+        const timesData = await timesResponse.json()
+        if (timesData.success) {
+          const timeSlots: { [key: string]: string[] } = {}
+          timesData.data.forEach((item: any) => {
+            if (!timeSlots[item.blocked_date]) {
+              timeSlots[item.blocked_date] = []
+            }
+            timeSlots[item.blocked_date].push(item.blocked_time)
+          })
+          setBlockedTimeSlots(timeSlots)
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching blocked data:", error)
     }
+  }
 
-    // Add all days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      days.push(new Date(year, month, day))
+  const handleDateClick = async (date: string) => {
+    const isBlocked = blockedDates.includes(date)
+
+    try {
+      if (isBlocked) {
+        // Unblock date
+        const response = await fetch(`/api/admin/calendar?type=date&date=${date}`, {
+          method: "DELETE",
+        })
+
+        if (response.ok) {
+          setBlockedDates((prev) => prev.filter((d) => d !== date))
+        }
+      } else {
+        // Block date
+        const reason = prompt("Reason for blocking this date (optional):")
+        const response = await fetch("/api/admin/calendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "date", date, reason }),
+        })
+
+        if (response.ok) {
+          setBlockedDates((prev) => [...prev, date])
+        }
+      }
+    } catch (error) {
+      console.error("Error updating blocked date:", error)
     }
+  }
 
-    return days
+  const handleTimeSlotClick = async (date: string, time: string) => {
+    const isBlocked = blockedTimeSlots[date]?.includes(time)
+
+    try {
+      if (isBlocked) {
+        // Unblock time slot
+        const response = await fetch(`/api/admin/calendar?type=timeslot&date=${date}&time=${time}`, {
+          method: "DELETE",
+        })
+
+        if (response.ok) {
+          setBlockedTimeSlots((prev) => ({
+            ...prev,
+            [date]: prev[date]?.filter((t) => t !== time) || [],
+          }))
+        }
+      } else {
+        // Block time slot
+        const reason = prompt("Reason for blocking this time slot (optional):")
+        const response = await fetch("/api/admin/calendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "timeslot", date, time, reason }),
+        })
+
+        if (response.ok) {
+          setBlockedTimeSlots((prev) => ({
+            ...prev,
+            [date]: [...(prev[date] || []), time],
+          }))
+        }
+      }
+    } catch (error) {
+      console.error("Error updating blocked time slot:", error)
+    }
+  }
+
+  const tileClassName = ({ date }: any) => {
+    const dateString = date.toISOString().split("T")[0]
+    if (blockedDates.includes(dateString)) {
+      return "blocked"
+    }
+    return null
+  }
+
+  const onChange = (date: any) => {
+    setDate(date)
   }
 
   const formatDate = (date: Date) => {
     return date.toISOString().split("T")[0]
   }
 
-  const isDateBlocked = (date: Date) => {
-    return blockedDates.includes(formatDate(date))
-  }
-
-  const isTimeSlotBlocked = (date: Date, time: string) => {
-    return blockedTimeSlots.some((slot) => slot.date === formatDate(date) && slot.time === time)
-  }
-
-  const toggleDateBlock = (date: Date) => {
-    const dateStr = formatDate(date)
-    if (blockedDates.includes(dateStr)) {
-      setBlockedDates(blockedDates.filter((d) => d !== dateStr))
-    } else {
-      setBlockedDates([...blockedDates, dateStr])
-    }
-  }
-
-  const toggleTimeSlotBlock = (date: Date, time: string) => {
-    const dateStr = formatDate(date)
-    const existingIndex = blockedTimeSlots.findIndex((slot) => slot.date === dateStr && slot.time === time)
-
-    if (existingIndex >= 0) {
-      setBlockedTimeSlots(blockedTimeSlots.filter((_, index) => index !== existingIndex))
-    } else {
-      setBlockedTimeSlots([...blockedTimeSlots, { date: dateStr, time }])
-    }
-  }
-
-  const navigateMonth = (direction: "prev" | "next") => {
-    const newDate = new Date(currentDate)
-    if (direction === "prev") {
-      newDate.setMonth(newDate.getMonth() - 1)
-    } else {
-      newDate.setMonth(newDate.getMonth() + 1)
-    }
-    setCurrentDate(newDate)
-  }
-
-  const days = getDaysInMonth(currentDate)
-  const monthYear = currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })
-
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              <Link href="/egusi/dashboard">
-                <Button variant="outline" size="sm">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back to Dashboard
-                </Button>
-              </Link>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Calendar & Availability</h1>
-                <p className="text-gray-600 dark:text-gray-400">Manage available dates and time slots</p>
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Egusi Calendar</h1>
+      <div className="flex">
+        <Calendar
+          onChange={onChange}
+          value={date}
+          tileClassName={tileClassName}
+          onClickDay={(value, event) => {
+            const dateString = formatDate(value)
+            handleDateClick(dateString)
+          }}
+        />
+        <div className="ml-4">
+          <h2 className="text-lg font-semibold mb-2">Available Time Slots</h2>
+          {availableTimeSlots.map((time) => {
+            const dateString = formatDate(date)
+            const isBlocked = blockedTimeSlots[dateString]?.includes(time)
+            return (
+              <div
+                key={time}
+                className={`p-2 rounded cursor-pointer ${isBlocked ? "bg-red-500 text-white" : "bg-green-200"} mb-1`}
+                onClick={() => handleTimeSlotClick(dateString, time)}
+              >
+                {time} - {isBlocked ? "Blocked" : "Available"}
               </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Calendar */}
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center">
-                    <Calendar className="w-5 h-5 mr-2" />
-                    {monthYear}
-                  </CardTitle>
-                  <div className="flex space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => navigateMonth("prev")}>
-                      <ArrowLeft className="w-4 h-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => navigateMonth("next")}>
-                      <ArrowRight className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-7 gap-1 mb-4">
-                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                    <div key={day} className="p-2 text-center text-sm font-medium text-gray-500 dark:text-gray-400">
-                      {day}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-7 gap-1">
-                  {days.map((day, index) => (
-                    <div key={index} className="aspect-square">
-                      {day && (
-                        <button
-                          onClick={() => toggleDateBlock(day)}
-                          className={`w-full h-full p-1 text-sm rounded-lg border transition-colors ${
-                            isDateBlocked(day)
-                              ? "bg-red-100 border-red-300 text-red-800 dark:bg-red-900/50 dark:border-red-700 dark:text-red-300"
-                              : "bg-white border-gray-200 text-gray-900 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-700"
-                          }`}
-                        >
-                          {day.getDate()}
-                          {isDateBlocked(day) && <div className="text-xs mt-1">Blocked</div>}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-                  <p>• Click on a date to block/unblock the entire day</p>
-                  <p>• Use the time slot manager to block specific hours</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Blocked Dates Summary */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Blocked Dates</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {blockedDates.length === 0 ? (
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">No blocked dates</p>
-                  ) : (
-                    blockedDates.map((date) => (
-                      <div
-                        key={date}
-                        className="flex items-center justify-between p-2 bg-red-50 dark:bg-red-900/20 rounded"
-                      >
-                        <span className="text-sm">{new Date(date).toLocaleDateString()}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setBlockedDates(blockedDates.filter((d) => d !== date))}
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Time Slot Management */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Block Time Slots</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Select Date & Time to Block
-                    </label>
-                    <div className="mt-2 space-y-2">
-                      {timeSlots.map((time) => (
-                        <div key={time} className="flex items-center justify-between p-2 border rounded">
-                          <span className="text-sm">{time}</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              const today = new Date()
-                              toggleTimeSlotBlock(today, time)
-                            }}
-                          >
-                            <Plus className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Blocked Time Slots */}
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Blocked Time Slots</h4>
-                    <div className="space-y-2">
-                      {blockedTimeSlots.length === 0 ? (
-                        <p className="text-gray-500 dark:text-gray-400 text-sm">No blocked time slots</p>
-                      ) : (
-                        blockedTimeSlots.map((slot, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded"
-                          >
-                            <div className="text-sm">
-                              <div>{new Date(slot.date).toLocaleDateString()}</div>
-                              <div className="text-gray-500">{slot.time}</div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setBlockedTimeSlots(blockedTimeSlots.filter((_, i) => i !== index))}
-                            >
-                              <X className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Quick Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Button className="w-full" variant="outline">
-                  Block Next Weekend
-                </Button>
-                <Button className="w-full" variant="outline">
-                  Block Holiday Period
-                </Button>
-                <Button className="w-full bg-pink-500 hover:bg-pink-600">Save Changes</Button>
-              </CardContent>
-            </Card>
-          </div>
+            )
+          })}
         </div>
       </div>
+      <style jsx>{`
+        .react-calendar {
+          width: 400px;
+          max-width: 100%;
+          background-color: #fff;
+          color: #222;
+          border-radius: 8px;
+          font-family: Arial, sans-serif;
+          line-height: 1.125em;
+        }
+        .react-calendar__navigation {
+          display: flex;
+          height: 44px;
+          margin-bottom: 1em;
+        }
+        .react-calendar__navigation button {
+          min-width: 44px;
+          background: none;
+          padding: 0;
+          border: none;
+          outline: none;
+        }
+        .react-calendar__navigation button:disabled {
+          background-color: #f0f0f0;
+          cursor: default;
+        }
+        .react-calendar__navigation button:hover {
+          background-color: #e6e6e6;
+        }
+        .react-calendar__navigation__label {
+          font-weight: bold;
+        }
+        .react-calendar__month-view__weekdays {
+          text-align: center;
+          font-weight: bold;
+          font-size: 0.75em;
+        }
+        .react-calendar__month-view__weekdays__weekday {
+          padding: 0.5em;
+        }
+        .react-calendar__month-view__days__day {
+          padding: 0.5em;
+          border-radius: 4px;
+          background: none;
+          border: none;
+          outline: none;
+        }
+        .react-calendar__month-view__days__day--weekend {
+          color: #d10000;
+        }
+        .react-calendar__month-view__days__day--neighboringMonth {
+          color: #757575;
+        }
+        .react-calendar__month-view__days__day--today {
+          font-weight: bold;
+        }
+        .react-calendar__month-view__days__day:hover {
+          background-color: #e6e6e6;
+        }
+        .react-calendar__tile--active {
+          background: #006aff;
+          color: white;
+        }
+        .react-calendar__tile--active:hover {
+          background: #1e7fff;
+        }
+        .blocked {
+          background-color: red;
+          color: white;
+        }
+      `}</style>
     </div>
   )
 }
+
+export default EgusiCalendarPage

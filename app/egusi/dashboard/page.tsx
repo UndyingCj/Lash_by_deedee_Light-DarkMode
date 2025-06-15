@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Users, Clock, DollarSign, Settings, LogOut } from "lucide-react"
+import { Calendar, Users, Clock, DollarSign, Settings, LogOut, Plus } from "lucide-react"
 import Link from "next/link"
 import { AddBookingModal } from "@/components/admin/add-booking-modal"
 
@@ -25,7 +25,7 @@ interface Booking {
   amount: number
 }
 
-export default function AdminDashboard() {
+const DashboardPage = () => {
   const [stats, setStats] = useState<DashboardStats>({
     todayBookings: 0,
     weeklyBookings: 0,
@@ -95,26 +95,37 @@ export default function AdminDashboard() {
   }
 
   return (
-    <>
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b sticky top-0 z-40">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Admin Header - Completely separate from main site */}
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Admin Dashboard</h1>
-              <p className="text-gray-600 dark:text-gray-400">Lashed by Deedee Management</p>
-            </div>
             <div className="flex items-center space-x-4">
-              <Button onClick={() => setIsAddModalOpen(true)} className="bg-pink-500 hover:bg-pink-600">
-                <Calendar className="w-4 h-4 mr-2" />
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-pink-500 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">L</span>
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Admin Dashboard</h1>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Lashed by Deedee Management</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center space-x-3">
+              <Button
+                onClick={() => setIsAddModalOpen(true)}
+                className="bg-pink-500 hover:bg-pink-600 text-white"
+                size="sm"
+              >
+                <Plus className="w-4 h-4 mr-2" />
                 Add Booking
               </Button>
-              <Link href="/egusi/settings">
-                <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/egusi/settings">
                   <Settings className="w-4 h-4 mr-2" />
                   Settings
-                </Button>
-              </Link>
+                </Link>
+              </Button>
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
@@ -124,13 +135,14 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card>
+          <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-6">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                <div className="p-3 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
                   <Calendar className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div className="ml-4">
@@ -141,10 +153,10 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-6">
               <div className="flex items-center">
-                <div className="p-2 bg-green-100 dark:bg-green-900/50 rounded-lg">
+                <div className="p-3 bg-green-100 dark:bg-green-900/50 rounded-lg">
                   <Users className="w-6 h-6 text-green-600 dark:text-green-400" />
                 </div>
                 <div className="ml-4">
@@ -155,10 +167,10 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-6">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-100 dark:bg-purple-900/50 rounded-lg">
+                <div className="p-3 bg-purple-100 dark:bg-purple-900/50 rounded-lg">
                   <DollarSign className="w-6 h-6 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div className="ml-4">
@@ -171,10 +183,10 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-6">
               <div className="flex items-center">
-                <div className="p-2 bg-orange-100 dark:bg-orange-900/50 rounded-lg">
+                <div className="p-3 bg-orange-100 dark:bg-orange-900/50 rounded-lg">
                   <Clock className="w-6 h-6 text-orange-600 dark:text-orange-400" />
                 </div>
                 <div className="ml-4">
@@ -188,35 +200,41 @@ export default function AdminDashboard() {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Link href="/egusi/bookings">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
+            <Link href="/egusi/bookings">
               <CardContent className="p-6 text-center">
-                <Calendar className="w-12 h-12 mx-auto mb-4 text-pink-500" />
+                <div className="p-4 bg-pink-100 dark:bg-pink-900/50 rounded-full w-16 h-16 mx-auto mb-4 group-hover:bg-pink-200 dark:group-hover:bg-pink-900/70 transition-colors">
+                  <Calendar className="w-8 h-8 text-pink-500 mx-auto" />
+                </div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Manage Bookings</h3>
                 <p className="text-gray-600 dark:text-gray-400">View, edit, and manage all appointments</p>
               </CardContent>
-            </Card>
-          </Link>
+            </Link>
+          </Card>
 
-          <Link href="/egusi/calendar">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
+            <Link href="/egusi/calendar">
               <CardContent className="p-6 text-center">
-                <Clock className="w-12 h-12 mx-auto mb-4 text-pink-500" />
+                <div className="p-4 bg-pink-100 dark:bg-pink-900/50 rounded-full w-16 h-16 mx-auto mb-4 group-hover:bg-pink-200 dark:group-hover:bg-pink-900/70 transition-colors">
+                  <Clock className="w-8 h-8 text-pink-500 mx-auto" />
+                </div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Availability</h3>
                 <p className="text-gray-600 dark:text-gray-400">Set available dates and block time slots</p>
               </CardContent>
-            </Card>
-          </Link>
+            </Link>
+          </Card>
 
-          <Link href="/egusi/clients">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
+            <Link href="/egusi/clients">
               <CardContent className="p-6 text-center">
-                <Users className="w-12 h-12 mx-auto mb-4 text-pink-500" />
+                <div className="p-4 bg-pink-100 dark:bg-pink-900/50 rounded-full w-16 h-16 mx-auto mb-4 group-hover:bg-pink-200 dark:group-hover:bg-pink-900/70 transition-colors">
+                  <Users className="w-8 h-8 text-pink-500 mx-auto" />
+                </div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Client Management</h3>
                 <p className="text-gray-600 dark:text-gray-400">View client history and information</p>
               </CardContent>
-            </Card>
-          </Link>
+            </Link>
+          </Card>
         </div>
 
         {/* Recent Bookings */}
@@ -224,22 +242,24 @@ export default function AdminDashboard() {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle className="text-xl font-bold text-gray-900 dark:text-gray-100">Recent Bookings</CardTitle>
-              <Link href="/egusi/bookings">
-                <Button size="sm" className="bg-pink-500 hover:bg-pink-600">
-                  View All
-                </Button>
-              </Link>
+              <Button size="sm" className="bg-pink-500 hover:bg-pink-600" asChild>
+                <Link href="/egusi/bookings">View All</Link>
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {recentBookings.length === 0 ? (
-                <p className="text-gray-500 dark:text-gray-400 text-center py-8">No recent bookings</p>
+                <div className="text-center py-12">
+                  <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400 text-lg">No recent bookings</p>
+                  <p className="text-gray-400 dark:text-gray-500 text-sm">New bookings will appear here</p>
+                </div>
               ) : (
                 recentBookings.map((booking) => (
                   <div
                     key={booking.id}
-                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
                     <div className="flex-1">
                       <h4 className="font-semibold text-gray-900 dark:text-gray-100">{booking.client_name}</h4>
@@ -262,13 +282,16 @@ export default function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </main>
 
+      {/* Add Booking Modal */}
       <AddBookingModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onBookingAdded={fetchDashboardData}
       />
-    </>
+    </div>
   )
 }
+
+export default DashboardPage
