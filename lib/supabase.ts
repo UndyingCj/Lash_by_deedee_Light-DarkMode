@@ -17,7 +17,6 @@ if (!supabaseAnonKey) {
 }
 
 // Server-side client with service role key (admin operations)
-// Configure with proper auth settings to bypass RLS
 export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     autoRefreshToken: false,
@@ -25,6 +24,11 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   },
   db: {
     schema: "public",
+  },
+  global: {
+    headers: {
+      apikey: supabaseServiceKey,
+    },
   },
 })
 
@@ -69,8 +73,6 @@ export interface BlockedTimeSlot {
 // Booking operations
 export async function getBookings(filters?: { status?: string; date?: string }) {
   try {
-    console.log("Getting bookings with filters:", filters)
-
     let query = supabaseAdmin.from("bookings").select("*")
 
     if (filters?.status && filters.status !== "all") {
@@ -90,7 +92,6 @@ export async function getBookings(filters?: { status?: string; date?: string }) 
       throw new Error(`Database error: ${error.message}`)
     }
 
-    console.log("Successfully fetched bookings:", data?.length || 0)
     return data as Booking[]
   } catch (error) {
     console.error("Error in getBookings:", error)
@@ -100,47 +101,13 @@ export async function getBookings(filters?: { status?: string; date?: string }) 
 
 export async function createBooking(booking: Omit<Booking, "id" | "created_at" | "updated_at">) {
   try {
-    console.log("Creating booking with supabaseAdmin and data:", booking)
-    console.log("Supabase URL:", supabaseUrl.substring(0, 20) + "...")
-    console.log("Using service role key:", supabaseServiceKey.substring(0, 20) + "...")
+    console.log("Creating booking with data:", booking)
 
-    // Test connection first
-    const { data: testData, error: testError } = await supabaseAdmin
-      .from("bookings")
-      .select("count", { count: "exact", head: true })
-
-    if (testError) {
-      console.error("Connection test failed:", testError)
-      throw new Error(`Connection test failed: ${testError.message}`)
-    }
-
-    console.log("Connection test successful, current booking count:", testData)
-
-    // Insert the booking
+    // Use the service role client with RLS bypassed
     const { data, error } = await supabaseAdmin.from("bookings").insert([booking]).select().single()
 
     if (error) {
       console.error("Supabase error in createBooking:", error)
-      console.error("Error details:", {
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-      })
-
-      // Provide more specific error messages
-      if (error.message.includes("row-level security")) {
-        throw new Error("Database permission error. Please check RLS policies.")
-      } else if (error.message.includes("duplicate key")) {
-        throw new Error("A booking with this information already exists")
-      } else if (error.message.includes("foreign key")) {
-        throw new Error("Invalid reference data")
-      } else if (error.message.includes("not null")) {
-        throw new Error("Missing required information")
-      } else if (error.message.includes("invalid input")) {
-        throw new Error("Invalid data format")
-      }
-
       throw new Error(`Database error: ${error.message}`)
     }
 
