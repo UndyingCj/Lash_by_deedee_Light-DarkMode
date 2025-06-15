@@ -7,8 +7,7 @@ import "react-calendar/dist/Calendar.css"
 const EgusiCalendarPage = () => {
   const [date, setDate] = useState(new Date())
   const [blockedDates, setBlockedDates] = useState<string[]>([])
-  \
-  const [blockedTimeSlots, setBlockedTimeSlots: any] = useState({})
+  const [blockedTimeSlots, setBlockedTimeSlots] = useState<Record<string, string[]>>({})
   const [availableTimeSlots, setAvailableTimeSlots] = useState([
     "09:00",
     "10:00",
