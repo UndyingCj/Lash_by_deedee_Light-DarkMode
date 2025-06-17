@@ -17,22 +17,6 @@ if (!supabaseAnonKey) {
   throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable")
 }
 
-// Server-side client with service role key (admin operations)
-// export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-//   auth: {
-//     autoRefreshToken: false,
-//     persistSession: false,
-//   },
-//   db: {
-//     schema: "public",
-//   },
-//   global: {
-//     headers: {
-//       apikey: supabaseServiceKey,
-//     },
-//   },
-// })
-
 // Client-side Supabase client (public operations only)
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
@@ -157,48 +141,58 @@ export async function deleteBooking(id: number) {
   }
 }
 
-// Blocked dates operations
+// Enhanced blocked dates operations with better error handling
 export async function getBlockedDates() {
   try {
+    console.log("🔍 Fetching blocked dates from database...")
+
     const { data, error } = await supabaseAdmin.from("blocked_dates").select("*").order("blocked_date")
 
     if (error) {
-      console.error("Supabase error in getBlockedDates:", error)
+      console.error("❌ Supabase error in getBlockedDates:", error)
       throw new Error(`Database error: ${error.message}`)
     }
 
+    console.log("📊 Blocked dates fetched:", data?.length || 0, "records")
+    console.log("📋 Blocked dates data:", data)
+
     return data as BlockedDate[]
   } catch (error) {
-    console.error("Error in getBlockedDates:", error)
+    console.error("❌ Error in getBlockedDates:", error)
     throw error
   }
 }
 
 export async function addBlockedDate(date: string, reason?: string) {
   try {
+    console.log("🚫 Adding blocked date:", date, "with reason:", reason)
+
     const { data, error } = await supabaseAdmin
       .from("blocked_dates")
       .upsert([{ blocked_date: date, reason }], {
         onConflict: "blocked_date",
-        ignoreDuplicates: true,
+        ignoreDuplicates: false,
       })
       .select()
       .single()
 
     if (error) {
-      console.error("Supabase error in addBlockedDate:", error)
+      console.error("❌ Supabase error in addBlockedDate:", error)
       throw new Error(`Database error: ${error.message}`)
     }
 
+    console.log("✅ Blocked date added successfully:", data)
     return data as BlockedDate
   } catch (error) {
-    console.error("Error in addBlockedDate:", error)
+    console.error("❌ Error in addBlockedDate:", error)
     throw error
   }
 }
 
 export async function removeBlockedDate(date: string) {
   try {
+    console.log("✅ Removing blocked date:", date)
+
     const { data, error } = await supabaseAdmin
       .from("blocked_dates")
       .delete()
@@ -207,20 +201,23 @@ export async function removeBlockedDate(date: string) {
       .single()
 
     if (error) {
-      console.error("Supabase error in removeBlockedDate:", error)
+      console.error("❌ Supabase error in removeBlockedDate:", error)
       throw new Error(`Database error: ${error.message}`)
     }
 
+    console.log("✅ Blocked date removed successfully:", data)
     return data as BlockedDate
   } catch (error) {
-    console.error("Error in removeBlockedDate:", error)
+    console.error("❌ Error in removeBlockedDate:", error)
     throw error
   }
 }
 
-// Blocked time slots operations
+// Enhanced blocked time slots operations with better error handling
 export async function getBlockedTimeSlots() {
   try {
+    console.log("🔍 Fetching blocked time slots from database...")
+
     const { data, error } = await supabaseAdmin
       .from("blocked_time_slots")
       .select("*")
@@ -228,42 +225,50 @@ export async function getBlockedTimeSlots() {
       .order("blocked_time")
 
     if (error) {
-      console.error("Supabase error in getBlockedTimeSlots:", error)
+      console.error("❌ Supabase error in getBlockedTimeSlots:", error)
       throw new Error(`Database error: ${error.message}`)
     }
 
+    console.log("📊 Blocked time slots fetched:", data?.length || 0, "records")
+    console.log("📋 Blocked time slots data:", data)
+
     return data as BlockedTimeSlot[]
   } catch (error) {
-    console.error("Error in getBlockedTimeSlots:", error)
+    console.error("❌ Error in getBlockedTimeSlots:", error)
     throw error
   }
 }
 
 export async function addBlockedTimeSlot(date: string, time: string, reason?: string) {
   try {
+    console.log("🚫 Adding blocked time slot:", time, "on", date, "with reason:", reason)
+
     const { data, error } = await supabaseAdmin
       .from("blocked_time_slots")
       .upsert([{ blocked_date: date, blocked_time: time, reason }], {
         onConflict: "blocked_date,blocked_time",
-        ignoreDuplicates: true,
+        ignoreDuplicates: false,
       })
       .select()
       .single()
 
     if (error) {
-      console.error("Supabase error in addBlockedTimeSlot:", error)
+      console.error("❌ Supabase error in addBlockedTimeSlot:", error)
       throw new Error(`Database error: ${error.message}`)
     }
 
+    console.log("✅ Blocked time slot added successfully:", data)
     return data as BlockedTimeSlot
   } catch (error) {
-    console.error("Error in addBlockedTimeSlot:", error)
+    console.error("❌ Error in addBlockedTimeSlot:", error)
     throw error
   }
 }
 
 export async function removeBlockedTimeSlot(date: string, time: string) {
   try {
+    console.log("✅ Removing blocked time slot:", time, "on", date)
+
     const { data, error } = await supabaseAdmin
       .from("blocked_time_slots")
       .delete()
@@ -273,13 +278,14 @@ export async function removeBlockedTimeSlot(date: string, time: string) {
       .single()
 
     if (error) {
-      console.error("Supabase error in removeBlockedTimeSlot:", error)
+      console.error("❌ Supabase error in removeBlockedTimeSlot:", error)
       throw new Error(`Database error: ${error.message}`)
     }
 
+    console.log("✅ Blocked time slot removed successfully:", data)
     return data as BlockedTimeSlot
   } catch (error) {
-    console.error("Error in removeBlockedTimeSlot:", error)
+    console.error("❌ Error in removeBlockedTimeSlot:", error)
     throw error
   }
 }

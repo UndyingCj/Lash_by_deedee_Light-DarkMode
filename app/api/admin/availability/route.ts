@@ -10,32 +10,73 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const type = searchParams.get("type")
+    console.log("🔍 Availability API: Fetching data from database...")
 
-    if (type === "dates") {
-      const blockedDates = await getBlockedDates()
-      return NextResponse.json(blockedDates)
-    } else if (type === "slots") {
-      const blockedSlots = await getBlockedTimeSlots()
-      return NextResponse.json(blockedSlots)
-    } else {
-      // Return both dates and slots
-      const [blockedDates, blockedSlots] = await Promise.all([getBlockedDates(), getBlockedTimeSlots()])
-      return NextResponse.json({
-        success: true,
-        blockedDates,
-        blockedSlots,
-      })
+    // Force fresh data - no caching
+    const [blockedDates, blockedSlots] = await Promise.all([getBlockedDates(), getBlockedTimeSlots()])
+
+    console.log("📊 Raw blocked dates from DB:", blockedDates)
+    console.log("📊 Raw blocked slots from DB:", blockedSlots)
+
+    // CRITICAL FIX: Ensure dates are returned exactly as stored in database
+    // Do NOT modify or parse the dates - return them as-is
+    const processedBlockedDates = (blockedDates || []).map((item) => ({
+      ...item,
+      blocked_date: item.blocked_date, // Keep original format
+    }))
+
+    const processedBlockedSlots = (blockedSlots || []).map((item) => ({
+      ...item,
+      blocked_date: item.blocked_date, // Keep original format
+    }))
+
+    console.log("📤 Processed blocked dates:", processedBlockedDates)
+    console.log("📤 Processed blocked slots:", processedBlockedSlots)
+
+    // Ensure we return properly formatted data
+    const response = {
+      success: true,
+      blockedDates: processedBlockedDates,
+      blockedSlots: processedBlockedSlots,
+      timestamp: new Date().toISOString(),
+      debug: {
+        totalBlockedDates: processedBlockedDates.length,
+        totalBlockedSlots: processedBlockedSlots.length,
+        requestTime: new Date().toISOString(),
+        rawDates: blockedDates?.map((d) => d.blocked_date),
+      },
     }
+
+    console.log("📤 Final API response:", response)
+
+    return NextResponse.json(response, {
+      headers: {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      },
+    })
   } catch (error) {
-    console.error("Error fetching availability:", error)
+    console.error("❌ Error fetching availability:", error)
     return NextResponse.json(
       {
         success: false,
         error: "Failed to fetch availability data",
+        blockedDates: [],
+        blockedSlots: [],
+        debug: {
+          error: error instanceof Error ? error.message : "Unknown error",
+          timestamp: new Date().toISOString(),
+        },
       },
-      { status: 500 },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      },
     )
   }
 }
@@ -44,6 +85,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { type, date, time, reason, action } = body
+
+    console.log("🔄 Availability API: Processing update:", { type, date, time, action })
 
     // Validate required fields
     if (!type || !date || !action) {
@@ -58,14 +101,18 @@ export async function POST(request: NextRequest) {
 
     if (type === "date") {
       if (action === "block") {
+        console.log("🚫 Blocking date:", date)
         const result = await addBlockedDate(date, reason || "Blocked by admin")
+        console.log("✅ Date blocked successfully:", result)
         return NextResponse.json({
           success: true,
           message: "Date blocked successfully",
           data: result,
         })
       } else if (action === "unblock") {
+        console.log("✅ Unblocking date:", date)
         const result = await removeBlockedDate(date)
+        console.log("✅ Date unblocked successfully:", result)
         return NextResponse.json({
           success: true,
           message: "Date unblocked successfully",
@@ -92,14 +139,18 @@ export async function POST(request: NextRequest) {
       }
 
       if (action === "block") {
+        console.log("🚫 Blocking time slot:", time, "on", date)
         const result = await addBlockedTimeSlot(date, time, reason || "Blocked by admin")
+        console.log("✅ Time slot blocked successfully:", result)
         return NextResponse.json({
           success: true,
           message: "Time slot blocked successfully",
           data: result,
         })
       } else if (action === "unblock") {
+        console.log("✅ Unblocking time slot:", time, "on", date)
         const result = await removeBlockedTimeSlot(date, time)
+        console.log("✅ Time slot unblocked successfully:", result)
         return NextResponse.json({
           success: true,
           message: "Time slot unblocked successfully",
@@ -124,7 +175,7 @@ export async function POST(request: NextRequest) {
       )
     }
   } catch (error) {
-    console.error("Error updating availability:", error)
+    console.error("❌ Error updating availability:", error)
 
     // Handle specific database errors
     if (error instanceof Error) {
@@ -153,6 +204,10 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: "Failed to update availability. Please try again.",
+        debug: {
+          error: error instanceof Error ? error.message : "Unknown error",
+          timestamp: new Date().toISOString(),
+        },
       },
       { status: 500 },
     )

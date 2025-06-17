@@ -58,10 +58,12 @@ export default function BookingPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [isOnline, setIsOnline] = useState(true)
   const [updateCount, setUpdateCount] = useState(0)
+  const [dataHash, setDataHash] = useState<string>("")
 
   // Refs for cleanup
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const mountedRef = useRef(true)
+  const lastFetchRef = useRef<number>(0)
 
   const services = [
     { name: "Microblading", price: "40,000", duration: "2.5 hours" },
@@ -86,7 +88,41 @@ export default function BookingPage() {
 
   const timeSlots = ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"]
 
-  // Load availability data with real-time updates
+  // Fixed date normalization function to prevent timezone issues
+  const normalizeDateString = (dateString: string): string => {
+    try {
+      // If it's already in YYYY-MM-DD format, return as is
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+        return dateString
+      }
+
+      // Handle ISO strings by extracting just the date part
+      if (dateString.includes("T")) {
+        return dateString.split("T")[0]
+      }
+
+      // For any other format, parse carefully to avoid timezone shifts
+      const parts = dateString.split("-")
+      if (parts.length === 3) {
+        const year = parts[0].padStart(4, "0")
+        const month = parts[1].padStart(2, "0")
+        const day = parts[2].padStart(2, "0")
+        return `${year}-${month}-${day}`
+      }
+
+      return dateString
+    } catch (error) {
+      console.error("Error normalizing date:", dateString, error)
+      return dateString
+    }
+  }
+
+  // Create a hash of the data for comparison
+  const createDataHash = (dates: string[], slots: Record<string, string[]>): string => {
+    return btoa(JSON.stringify({ dates: dates.sort(), slots }))
+  }
+
+  // Load availability data with aggressive real-time updates
   const loadAvailability = useCallback(
     async (isPolling = false) => {
       try {
@@ -97,60 +133,84 @@ export default function BookingPage() {
         }
         setAvailabilityError(null)
 
-        const response = await fetch("/api/admin/availability", {
+        // Add timestamp to prevent caching
+        const timestamp = Date.now()
+        lastFetchRef.current = timestamp
+
+        const response = await fetch(`/api/admin/availability?t=${timestamp}&r=${Math.random()}`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
           },
         })
 
-        if (!mountedRef.current) return
+        if (!mountedRef.current || lastFetchRef.current !== timestamp) return
 
         if (response.ok) {
           const data = await response.json()
 
           if (data && typeof data === "object") {
-            // Handle blocked dates
+            // Handle blocked dates with proper date normalization
             const newBlockedDates: string[] = []
             if (Array.isArray(data.blockedDates)) {
-              data.blockedDates
-                .filter((item: BlockedDate) => item && typeof item === "object" && item.blocked_date)
-                .forEach((item: BlockedDate) => {
-                  newBlockedDates.push(item.blocked_date)
-                })
+              data.blockedDates.forEach((item: BlockedDate) => {
+                if (item && item.blocked_date) {
+                  const normalizedDate = normalizeDateString(item.blocked_date)
+                  newBlockedDates.push(normalizedDate)
+                  console.log("🔍 Blocked date from API:", item.blocked_date, "→ Normalized:", normalizedDate)
+                }
+              })
             }
 
-            // Handle blocked time slots
+            // Handle blocked time slots with proper date normalization
             const newBlockedTimeSlots: Record<string, string[]> = {}
             if (Array.isArray(data.blockedSlots)) {
-              data.blockedSlots
-                .filter(
-                  (slot: BlockedTimeSlot) => slot && typeof slot === "object" && slot.blocked_date && slot.blocked_time,
-                )
-                .forEach((slot: BlockedTimeSlot) => {
-                  if (!newBlockedTimeSlots[slot.blocked_date]) {
-                    newBlockedTimeSlots[slot.blocked_date] = []
+              data.blockedSlots.forEach((slot: BlockedTimeSlot) => {
+                if (slot && slot.blocked_date && slot.blocked_time) {
+                  const normalizedDate = normalizeDateString(slot.blocked_date)
+                  if (!newBlockedTimeSlots[normalizedDate]) {
+                    newBlockedTimeSlots[normalizedDate] = []
                   }
-                  newBlockedTimeSlots[slot.blocked_date].push(slot.blocked_time)
-                })
+                  newBlockedTimeSlots[normalizedDate].push(slot.blocked_time)
+                  console.log(
+                    "🔍 Blocked slot from API:",
+                    slot.blocked_date,
+                    slot.blocked_time,
+                    "→ Normalized:",
+                    normalizedDate,
+                  )
+                }
+              })
             }
 
-            // Check if data has changed
-            const datesChanged = JSON.stringify(newBlockedDates.sort()) !== JSON.stringify(blockedDates.sort())
-            const slotsChanged = JSON.stringify(newBlockedTimeSlots) !== JSON.stringify(blockedTimeSlots)
+            // Create hash for comparison
+            const newDataHash = createDataHash(newBlockedDates, newBlockedTimeSlots)
 
-            if (datesChanged || slotsChanged || !availabilityLoaded) {
+            // Force update if data has changed OR if this is the initial load
+            if (newDataHash !== dataHash || !availabilityLoaded) {
+              console.log("🔄 Availability data updated:", {
+                blockedDates: newBlockedDates,
+                blockedSlots: newBlockedTimeSlots,
+                timestamp: new Date().toISOString(),
+              })
+
               setBlockedDates(newBlockedDates)
               setBlockedTimeSlots(newBlockedTimeSlots)
+              setDataHash(newDataHash)
               setLastUpdated(new Date())
               setUpdateCount((prev) => prev + 1)
 
-              // Clear selected time if the selected date becomes blocked or time slot becomes unavailable
-              if (selectedDate && selectedTime) {
-                if (newBlockedDates.includes(selectedDate)) {
+              // Immediately clear invalid selections with proper date comparison
+              if (selectedDate) {
+                const normalizedSelectedDate = normalizeDateString(selectedDate)
+                if (newBlockedDates.includes(normalizedSelectedDate)) {
+                  console.log("🚫 Clearing selected date - now blocked:", selectedDate, "→", normalizedSelectedDate)
                   setSelectedTime("")
-                } else if (newBlockedTimeSlots[selectedDate]?.includes(selectedTime)) {
+                } else if (selectedTime && newBlockedTimeSlots[normalizedSelectedDate]?.includes(selectedTime)) {
+                  console.log("🚫 Clearing selected time - now blocked:", selectedTime)
                   setSelectedTime("")
                 }
               }
@@ -159,9 +219,9 @@ export default function BookingPage() {
 
           setIsOnline(true)
         } else {
-          console.warn("Failed to load availability data")
+          console.error("Failed to load availability data:", response.status)
           if (!availabilityLoaded) {
-            setAvailabilityError("Unable to load availability. All dates will be shown as available.")
+            setAvailabilityError("Unable to load availability. Please refresh the page.")
           }
           setIsOnline(false)
         }
@@ -169,7 +229,7 @@ export default function BookingPage() {
         console.error("Error loading availability:", error)
         if (mountedRef.current) {
           if (!availabilityLoaded) {
-            setAvailabilityError("Connection error. All dates will be shown as available.")
+            setAvailabilityError("Connection error. Please refresh the page.")
           }
           setIsOnline(false)
         }
@@ -181,32 +241,33 @@ export default function BookingPage() {
         }
       }
     },
-    [blockedDates, blockedTimeSlots, availabilityLoaded, selectedDate, selectedTime],
+    [dataHash, availabilityLoaded, selectedDate, selectedTime],
   )
 
-  // Initial load and setup polling
+  // Initial load and setup aggressive polling
   useEffect(() => {
     mountedRef.current = true
 
     // Initial load
     loadAvailability(false)
 
-    // Setup polling for real-time updates
+    // Setup very frequent polling for real-time updates
     const startPolling = () => {
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current)
       }
 
+      // Poll every 2 seconds for immediate updates
       pollingIntervalRef.current = setInterval(() => {
         if (mountedRef.current && !document.hidden) {
           loadAvailability(true)
         }
-      }, 5000) // Poll every 5 seconds
+      }, 2000)
     }
 
     startPolling()
 
-    // Handle visibility change to pause/resume polling
+    // Handle visibility change
     const handleVisibilityChange = () => {
       if (document.hidden) {
         if (pollingIntervalRef.current) {
@@ -217,7 +278,7 @@ export default function BookingPage() {
         startPolling()
         // Immediate refresh when page becomes visible
         if (mountedRef.current) {
-          loadAvailability(true)
+          setTimeout(() => loadAvailability(true), 100)
         }
       }
     }
@@ -226,7 +287,7 @@ export default function BookingPage() {
     const handleOnline = () => {
       setIsOnline(true)
       if (mountedRef.current) {
-        loadAvailability(true)
+        setTimeout(() => loadAvailability(true), 100)
       }
     }
 
@@ -234,9 +295,17 @@ export default function BookingPage() {
       setIsOnline(false)
     }
 
+    // Handle focus events for immediate updates
+    const handleFocus = () => {
+      if (mountedRef.current) {
+        setTimeout(() => loadAvailability(true), 100)
+      }
+    }
+
     document.addEventListener("visibilitychange", handleVisibilityChange)
     window.addEventListener("online", handleOnline)
     window.addEventListener("offline", handleOffline)
+    window.addEventListener("focus", handleFocus)
 
     return () => {
       mountedRef.current = false
@@ -246,18 +315,33 @@ export default function BookingPage() {
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       window.removeEventListener("online", handleOnline)
       window.removeEventListener("offline", handleOffline)
+      window.removeEventListener("focus", handleFocus)
     }
   }, [loadAvailability])
 
   // Manual refresh function
   const handleManualRefresh = useCallback(() => {
+    console.log("🔄 Manual refresh triggered")
     loadAvailability(true)
   }, [loadAvailability])
 
-  // Utility functions
+  // Utility functions with enhanced logging and proper date normalization
   const isDateBlocked = (date: string): boolean => {
     try {
-      return Array.isArray(blockedDates) && blockedDates.includes(date)
+      if (!date) return false
+
+      const normalizedDate = normalizeDateString(date)
+      const blocked =
+        Array.isArray(blockedDates) &&
+        blockedDates.some((blockedDate) => {
+          const normalizedBlockedDate = normalizeDateString(blockedDate)
+          return normalizedBlockedDate === normalizedDate
+        })
+
+      if (blocked) {
+        console.log("🚫 Date is blocked:", date, "→", normalizedDate)
+      }
+      return blocked
     } catch {
       return false
     }
@@ -265,10 +349,16 @@ export default function BookingPage() {
 
   const getAvailableTimeSlots = (date: string): string[] => {
     try {
-      if (!date || isDateBlocked(date)) return []
+      if (!date || isDateBlocked(date)) {
+        console.log("🚫 No slots available - date blocked or empty:", date)
+        return []
+      }
 
-      const blocked = blockedTimeSlots[date] || []
-      return timeSlots.filter((slot) => !blocked.includes(slot))
+      const normalizedDate = normalizeDateString(date)
+      const blocked = blockedTimeSlots[normalizedDate] || []
+      const available = timeSlots.filter((slot) => !blocked.includes(slot))
+      console.log("⏰ Available time slots for", date, "→", normalizedDate, ":", available)
+      return available
     } catch {
       return timeSlots
     }
@@ -278,8 +368,13 @@ export default function BookingPage() {
     try {
       if (!date || !time || isDateBlocked(date)) return false
 
-      const blocked = blockedTimeSlots[date] || []
-      return !blocked.includes(time)
+      const normalizedDate = normalizeDateString(date)
+      const blocked = blockedTimeSlots[normalizedDate] || []
+      const available = !blocked.includes(time)
+      if (!available) {
+        console.log("🚫 Time slot blocked:", time, "on", date, "→", normalizedDate)
+      }
+      return available
     } catch {
       return true
     }
@@ -305,11 +400,18 @@ export default function BookingPage() {
     }
   }
 
-  // Form handlers
+  // Form handlers with enhanced validation and proper date handling
   const handleDateChange = (value: string) => {
     try {
+      console.log("📅 Date changed to:", value)
       setSelectedDate(value)
       setSelectedTime("")
+
+      // Immediate validation with proper date normalization
+      if (value && isDateBlocked(value)) {
+        console.log("🚫 Selected date is blocked, clearing selection")
+        setTimeout(() => setSelectedDate(""), 100)
+      }
     } catch (error) {
       console.error("Error changing date:", error)
     }
@@ -317,6 +419,7 @@ export default function BookingPage() {
 
   const handleTimeChange = (value: string) => {
     try {
+      console.log("⏰ Time changed to:", value)
       if (selectedDate && !isDateBlocked(selectedDate)) {
         setSelectedTime(value)
       }
@@ -399,7 +502,7 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
     window.open(whatsappUrl, "_blank")
   }
 
-  // Render availability message
+  // Render availability message with enhanced feedback
   const renderAvailabilityMessage = () => {
     try {
       if (!selectedDate || !availabilityLoaded) return null
@@ -458,10 +561,8 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4">
             <RefreshCw className="w-6 h-6 text-pink-500" />
           </div>
-          <p className="text-gray-600 dark:text-gray-300">Loading availability information...</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-            Checking which dates and times are available...
-          </p>
+          <p className="text-gray-600 dark:text-gray-300">Loading real-time availability...</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Syncing with admin panel...</p>
         </div>
       </div>
     )
@@ -477,26 +578,29 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
           </p>
         </div>
 
-        {/* Real-time Status Bar */}
+        {/* Enhanced Real-time Status Bar with Debug Info */}
         <div className="mb-6 flex items-center justify-between p-3 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-200 dark:border-gray-700">
           <div className="flex items-center space-x-3">
             <div className="flex items-center space-x-2">
               {isOnline ? <Wifi className="w-4 h-4 text-green-500" /> : <WifiOff className="w-4 h-4 text-red-500" />}
               <span className="text-sm text-gray-600 dark:text-gray-300">
-                {isOnline ? "Live Updates Active" : "Connection Lost"}
+                {isOnline ? "Real-Time Sync Active" : "Connection Lost"}
               </span>
             </div>
             {isRefreshing && (
               <div className="flex items-center space-x-2">
                 <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
-                <span className="text-sm text-blue-600 dark:text-blue-400">Updating...</span>
+                <span className="text-sm text-blue-600 dark:text-blue-400">Syncing...</span>
               </div>
             )}
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              Updates: {updateCount} | Blocked: {blockedDates.length}
+            </div>
           </div>
           <div className="flex items-center space-x-3">
             {lastUpdated && (
               <span className="text-xs text-gray-500 dark:text-gray-400">
-                Updated: {lastUpdated.toLocaleTimeString()}
+                Last sync: {lastUpdated.toLocaleTimeString()}
               </span>
             )}
             <Button variant="ghost" size="sm" onClick={handleManualRefresh} disabled={isRefreshing}>
@@ -513,6 +617,16 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
               <span className="font-medium">Availability Notice</span>
             </div>
             <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-1">{availabilityError}</p>
+          </div>
+        )}
+
+        {/* Debug Info Panel */}
+        {process.env.NODE_ENV === "development" && (
+          <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <div className="text-sm text-blue-700 dark:text-blue-300">
+              <strong>Debug Info:</strong> Blocked dates: {JSON.stringify(blockedDates)} | Selected: {selectedDate} |
+              Normalized: {selectedDate ? normalizeDateString(selectedDate) : "none"}
+            </div>
           </div>
         )}
 
@@ -699,7 +813,7 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                 {selectedDate && (
                   <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
                     <Calendar className="w-4 h-4" />
-                    <span>{new Date(selectedDate).toLocaleDateString()}</span>
+                    <span>{new Date(selectedDate + "T00:00:00").toLocaleDateString()}</span>
                     {isDateBlocked(selectedDate) && (
                       <span className="text-red-500 text-sm font-medium">(Fully Booked)</span>
                     )}
