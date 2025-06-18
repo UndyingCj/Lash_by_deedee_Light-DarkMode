@@ -12,28 +12,21 @@ export async function GET(request: NextRequest) {
   try {
     console.log("🔍 Availability API: Fetching data from database...")
 
-    // Force fresh data - no caching
     const [blockedDates, blockedSlots] = await Promise.all([getBlockedDates(), getBlockedTimeSlots()])
 
     console.log("📊 Raw blocked dates from DB:", blockedDates)
-    console.log("📊 Raw blocked slots from DB:", blockedSlots)
 
-    // CRITICAL FIX: Ensure dates are returned exactly as stored in database
-    // Do NOT modify or parse the dates - return them as-is
+    // CRITICAL FIX: Return dates exactly as stored, no timezone conversion
     const processedBlockedDates = (blockedDates || []).map((item) => ({
       ...item,
-      blocked_date: item.blocked_date, // Keep original format
+      blocked_date: item.blocked_date, // Keep exact format from database
     }))
 
     const processedBlockedSlots = (blockedSlots || []).map((item) => ({
       ...item,
-      blocked_date: item.blocked_date, // Keep original format
+      blocked_date: item.blocked_date, // Keep exact format from database
     }))
 
-    console.log("📤 Processed blocked dates:", processedBlockedDates)
-    console.log("📤 Processed blocked slots:", processedBlockedSlots)
-
-    // Ensure we return properly formatted data
     const response = {
       success: true,
       blockedDates: processedBlockedDates,
@@ -42,8 +35,8 @@ export async function GET(request: NextRequest) {
       debug: {
         totalBlockedDates: processedBlockedDates.length,
         totalBlockedSlots: processedBlockedSlots.length,
-        requestTime: new Date().toISOString(),
         rawDates: blockedDates?.map((d) => d.blocked_date),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
     }
 
@@ -64,19 +57,8 @@ export async function GET(request: NextRequest) {
         error: "Failed to fetch availability data",
         blockedDates: [],
         blockedSlots: [],
-        debug: {
-          error: error instanceof Error ? error.message : "Unknown error",
-          timestamp: new Date().toISOString(),
-        },
       },
-      {
-        status: 500,
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-          Expires: "0",
-        },
-      },
+      { status: 500 },
     )
   }
 }

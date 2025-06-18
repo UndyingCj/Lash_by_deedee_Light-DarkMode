@@ -101,13 +101,22 @@ export default function BookingPage() {
         return dateString.split("T")[0]
       }
 
-      // For any other format, parse carefully to avoid timezone shifts
+      // CRITICAL FIX: Parse date in local timezone to prevent UTC conversion
       const parts = dateString.split("-")
       if (parts.length === 3) {
-        const year = parts[0].padStart(4, "0")
-        const month = parts[1].padStart(2, "0")
-        const day = parts[2].padStart(2, "0")
-        return `${year}-${month}-${day}`
+        const year = Number.parseInt(parts[0])
+        const month = Number.parseInt(parts[1]) - 1 // Month is 0-indexed
+        const day = Number.parseInt(parts[2])
+
+        // Create date in local timezone, not UTC
+        const localDate = new Date(year, month, day)
+
+        // Format back to YYYY-MM-DD
+        const yyyy = localDate.getFullYear()
+        const mm = String(localDate.getMonth() + 1).padStart(2, "0")
+        const dd = String(localDate.getDate()).padStart(2, "0")
+
+        return `${yyyy}-${mm}-${dd}`
       }
 
       return dateString
@@ -813,7 +822,14 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                 {selectedDate && (
                   <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
                     <Calendar className="w-4 h-4" />
-                    <span>{new Date(selectedDate + "T00:00:00").toLocaleDateString()}</span>
+                    <span>
+                      {new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </span>
                     {isDateBlocked(selectedDate) && (
                       <span className="text-red-500 text-sm font-medium">(Fully Booked)</span>
                     )}

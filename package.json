@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
     "debug-availability": "node scripts/debug-availability.js",
-    "fix-july-31": "node scripts/fix-july-31st.js"
+    "dev": "next dev",
+    "fix-july-31": "node scripts/fix-july-31st.js",
+    "lint": "next lint",
+    "start": "next start"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
