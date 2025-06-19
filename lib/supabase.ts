@@ -55,33 +55,6 @@ export interface BlockedTimeSlot {
   created_at: string
 }
 
-// UTC date normalization function
-const ensureDateFormatUTC = (dateInput: string | Date): string => {
-  try {
-    if (typeof dateInput === "string") {
-      // If already in YYYY-MM-DD format, return as-is
-      if (/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
-        return dateInput
-      }
-
-      // If it's an ISO string, extract just the date part
-      if (dateInput.includes("T")) {
-        return dateInput.split("T")[0]
-      }
-    }
-
-    // If it's a Date object, format it in UTC
-    if (dateInput instanceof Date) {
-      return dateInput.toISOString().split("T")[0]
-    }
-
-    return String(dateInput)
-  } catch (error) {
-    console.error("Error formatting date to UTC:", dateInput, error)
-    return String(dateInput)
-  }
-}
-
 // Booking operations
 export async function getBookings(filters?: { status?: string; date?: string }) {
   try {
@@ -92,8 +65,7 @@ export async function getBookings(filters?: { status?: string; date?: string }) 
     }
 
     if (filters?.date) {
-      const formattedDate = ensureDateFormatUTC(filters.date)
-      query = query.eq("booking_date", formattedDate)
+      query = query.eq("booking_date", filters.date)
     }
 
     query = query.order("booking_date", { ascending: false }).order("booking_time", { ascending: false })
@@ -116,13 +88,8 @@ export async function createBooking(booking: Omit<Booking, "id" | "created_at" |
   try {
     console.log("Creating booking with data:", booking)
 
-    // Ensure date is in correct format
-    const formattedBooking = {
-      ...booking,
-      booking_date: ensureDateFormatUTC(booking.booking_date),
-    }
-
-    const { data, error } = await supabaseAdmin.from("bookings").insert([formattedBooking]).select().single()
+    // Use the service role client with RLS bypassed
+    const { data, error } = await supabaseAdmin.from("bookings").insert([booking]).select().single()
 
     if (error) {
       console.error("Supabase error in createBooking:", error)
@@ -139,14 +106,9 @@ export async function createBooking(booking: Omit<Booking, "id" | "created_at" |
 
 export async function updateBooking(id: number, updates: Partial<Booking>) {
   try {
-    const formattedUpdates = { ...updates }
-    if (updates.booking_date) {
-      formattedUpdates.booking_date = ensureDateFormatUTC(updates.booking_date)
-    }
-
     const { data, error } = await supabaseAdmin
       .from("bookings")
-      .update({ ...formattedUpdates, updated_at: new Date().toISOString() })
+      .update({ ...updates, updated_at: new Date().toISOString() })
       .eq("id", id)
       .select()
       .single()
@@ -179,7 +141,7 @@ export async function deleteBooking(id: number) {
   }
 }
 
-// Enhanced blocked dates operations with timezone-safe handling
+// Enhanced blocked dates operations with better error handling
 export async function getBlockedDates() {
   try {
     console.log("🔍 Fetching blocked dates from database...")
@@ -191,16 +153,10 @@ export async function getBlockedDates() {
       throw new Error(`Database error: ${error.message}`)
     }
 
-    console.log("📊 Raw blocked dates from DB:", data)
+    console.log("📊 Blocked dates fetched:", data?.length || 0, "records")
+    console.log("📋 Blocked dates data:", data)
 
-    // Ensure all dates are in consistent format
-    const processedData = (data || []).map((item) => ({
-      ...item,
-      blocked_date: ensureDateFormatUTC(item.blocked_date),
-    }))
-
-    console.log("📋 Processed blocked dates:", processedData)
-    return processedData as BlockedDate[]
+    return data as BlockedDate[]
   } catch (error) {
     console.error("❌ Error in getBlockedDates:", error)
     throw error
@@ -209,12 +165,11 @@ export async function getBlockedDates() {
 
 export async function addBlockedDate(date: string, reason?: string) {
   try {
-    const formattedDate = ensureDateFormatUTC(date)
-    console.log("🚫 Adding blocked date:", date, "→ Formatted:", formattedDate, "with reason:", reason)
+    console.log("🚫 Adding blocked date:", date, "with reason:", reason)
 
     const { data, error } = await supabaseAdmin
       .from("blocked_dates")
-      .upsert([{ blocked_date: formattedDate, reason }], {
+      .upsert([{ blocked_date: date, reason }], {
         onConflict: "blocked_date",
         ignoreDuplicates: false,
       })
@@ -236,13 +191,12 @@ export async function addBlockedDate(date: string, reason?: string) {
 
 export async function removeBlockedDate(date: string) {
   try {
-    const formattedDate = ensureDateFormatUTC(date)
-    console.log("✅ Removing blocked date:", date, "→ Formatted:", formattedDate)
+    console.log("✅ Removing blocked date:", date)
 
     const { data, error } = await supabaseAdmin
       .from("blocked_dates")
       .delete()
-      .eq("blocked_date", formattedDate)
+      .eq("blocked_date", date)
       .select()
       .single()
 
@@ -259,7 +213,7 @@ export async function removeBlockedDate(date: string) {
   }
 }
 
-// Enhanced blocked time slots operations with timezone-safe handling
+// Enhanced blocked time slots operations with better error handling
 export async function getBlockedTimeSlots() {
   try {
     console.log("🔍 Fetching blocked time slots from database...")
@@ -275,16 +229,10 @@ export async function getBlockedTimeSlots() {
       throw new Error(`Database error: ${error.message}`)
     }
 
-    console.log("📊 Raw blocked time slots from DB:", data)
+    console.log("📊 Blocked time slots fetched:", data?.length || 0, "records")
+    console.log("📋 Blocked time slots data:", data)
 
-    // Ensure all dates are in consistent format
-    const processedData = (data || []).map((item) => ({
-      ...item,
-      blocked_date: ensureDateFormatUTC(item.blocked_date),
-    }))
-
-    console.log("📋 Processed blocked time slots:", processedData)
-    return processedData as BlockedTimeSlot[]
+    return data as BlockedTimeSlot[]
   } catch (error) {
     console.error("❌ Error in getBlockedTimeSlots:", error)
     throw error
@@ -293,12 +241,11 @@ export async function getBlockedTimeSlots() {
 
 export async function addBlockedTimeSlot(date: string, time: string, reason?: string) {
   try {
-    const formattedDate = ensureDateFormatUTC(date)
-    console.log("🚫 Adding blocked time slot:", time, "on", date, "→ Formatted:", formattedDate, "with reason:", reason)
+    console.log("🚫 Adding blocked time slot:", time, "on", date, "with reason:", reason)
 
     const { data, error } = await supabaseAdmin
       .from("blocked_time_slots")
-      .upsert([{ blocked_date: formattedDate, blocked_time: time, reason }], {
+      .upsert([{ blocked_date: date, blocked_time: time, reason }], {
         onConflict: "blocked_date,blocked_time",
         ignoreDuplicates: false,
       })
@@ -320,13 +267,12 @@ export async function addBlockedTimeSlot(date: string, time: string, reason?: st
 
 export async function removeBlockedTimeSlot(date: string, time: string) {
   try {
-    const formattedDate = ensureDateFormatUTC(date)
-    console.log("✅ Removing blocked time slot:", time, "on", date, "→ Formatted:", formattedDate)
+    console.log("✅ Removing blocked time slot:", time, "on", date)
 
     const { data, error } = await supabaseAdmin
       .from("blocked_time_slots")
       .delete()
-      .eq("blocked_date", formattedDate)
+      .eq("blocked_date", date)
       .eq("blocked_time", time)
       .select()
       .single()
@@ -347,14 +293,14 @@ export async function removeBlockedTimeSlot(date: string, time: string) {
 // Dashboard stats
 export async function getDashboardStats() {
   try {
-    const today = ensureDateFormatUTC(new Date())
+    const today = new Date().toISOString().split("T")[0]
     const weekStart = new Date()
     weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-    const weekStartStr = ensureDateFormatUTC(weekStart)
+    const weekStartStr = weekStart.toISOString().split("T")[0]
 
     const monthStart = new Date()
     monthStart.setDate(1)
-    const monthStartStr = ensureDateFormatUTC(monthStart)
+    const monthStartStr = monthStart.toISOString().split("T")[0]
 
     // Today's bookings
     const { count: todayBookings, error: todayError } = await supabaseAdmin

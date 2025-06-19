@@ -1,551 +1,565 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import {
-  RefreshCw,
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-  Clock,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  Plus,
-} from "lucide-react"
+import { CalendarIcon, Clock, Plus, Trash2, AlertCircle, CheckCircle, RefreshCw } from "lucide-react"
+import { AdminLayout } from "@/components/admin/admin-layout"
+import Calendar from "react-calendar"
+import "react-calendar/dist/Calendar.css"
 
 interface BlockedDate {
   id: number
   blocked_date: string
   reason?: string
-  created_at?: string
 }
 
-interface BlockedSlot {
+interface BlockedTimeSlot {
   id: number
   blocked_date: string
   blocked_time: string
   reason?: string
-  created_at?: string
 }
 
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-]
+const CalendarPage = () => {
+  const [date, setDate] = useState(new Date())
+  const [blockedDates, setBlockedDates] = useState<string[]>([])
+  const [blockedTimeSlots, setBlockedTimeSlots] = useState<Record<string, string[]>>({})
+  const [availableTimeSlots] = useState(["09:00 AM", "11:00 AM", "02:00 PM", "04:00 PM"])
+  const [loading, setLoading] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
-const DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+  const showMessage = (type: "success" | "error", text: string) => {
+    setMessage({ type, text })
+    setTimeout(() => setMessage(null), 5000)
+  }
 
-const TIME_SLOTS = [
-  "9:00 AM",
-  "10:00 AM",
-  "11:00 AM",
-  "12:00 PM",
-  "1:00 PM",
-  "2:00 PM",
-  "3:00 PM",
-  "4:00 PM",
-  "5:00 PM",
-]
+  // Load initial data
+  useEffect(() => {
+    loadAvailabilityData()
+  }, [])
 
-export default function CalendarPage() {
-  const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([])
-  const [blockedSlots, setBlockedSlots] = useState<BlockedSlot[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [currentDate, setCurrentDate] = useState(new Date())
-  const [selectedDate, setSelectedDate] = useState<string>("")
-  const [showTimeSlots, setShowTimeSlots] = useState(false)
-
-  // Load availability data
-  const loadAvailability = async () => {
+  const loadAvailabilityData = async () => {
     try {
-      setRefreshing(true)
+      setInitialLoading(true)
       const response = await fetch("/api/admin/availability")
+
       if (response.ok) {
-        const result = await response.json()
-        if (result.success && result.data) {
-          setBlockedDates(result.data.blockedDates || [])
-          setBlockedSlots(result.data.blockedSlots || [])
+        const data = await response.json()
+
+        // Handle blocked dates
+        if (data.blockedDates) {
+          const dates = data.blockedDates.map((item: BlockedDate) => item.blocked_date)
+          setBlockedDates(dates)
         }
+
+        // Handle blocked time slots
+        if (data.blockedSlots) {
+          const slotsMap: Record<string, string[]> = {}
+          data.blockedSlots.forEach((slot: BlockedTimeSlot) => {
+            if (!slotsMap[slot.blocked_date]) {
+              slotsMap[slot.blocked_date] = []
+            }
+            slotsMap[slot.blocked_date].push(slot.blocked_time)
+          })
+          setBlockedTimeSlots(slotsMap)
+        }
+      } else {
+        showMessage("error", "Failed to load availability data")
       }
     } catch (error) {
       console.error("Error loading availability:", error)
+      showMessage("error", "Failed to load availability data")
+    } finally {
+      setInitialLoading(false)
+    }
+  }
+
+  const handleDateClick = async (dateString: string) => {
+    const isBlocked = blockedDates.includes(dateString)
+    setLoading(true)
+
+    try {
+      const response = await fetch("/api/admin/availability", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          type: "date",
+          date: dateString,
+          action: isBlocked ? "unblock" : "block",
+          reason: isBlocked ? undefined : "Blocked by admin",
+        }),
+      })
+
+      const result = await response.json()
+
+      if (response.ok && result.success) {
+        if (isBlocked) {
+          setBlockedDates((prev) => prev.filter((d) => d !== dateString))
+          setBlockedTimeSlots((prev) => {
+            const updated = { ...prev }
+            delete updated[dateString]
+            return updated
+          })
+          showMessage("success", `Date ${new Date(dateString).toLocaleDateString()} has been unblocked`)
+        } else {
+          setBlockedDates((prev) => [...prev, dateString])
+          showMessage("success", `Date ${new Date(dateString).toLocaleDateString()} has been blocked`)
+        }
+      } else {
+        showMessage("error", result.error || "Failed to update date availability")
+      }
+    } catch (error) {
+      console.error("Error updating date:", error)
+      showMessage("error", "Network error. Please check your connection and try again.")
     } finally {
       setLoading(false)
-      setRefreshing(false)
     }
   }
 
-  useEffect(() => {
-    loadAvailability()
-  }, [])
+  const handleTimeSlotClick = async (dateString: string, time: string) => {
+    const isBlocked = blockedTimeSlots[dateString]?.includes(time)
+    setLoading(true)
 
-  // Block/unblock entire date
-  const toggleDateBlock = async (date: string) => {
     try {
-      const isBlocked = blockedDates.some((d) => d.blocked_date === date)
-
       const response = await fetch("/api/admin/availability", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
         body: JSON.stringify({
-          type: isBlocked ? "unblock_date" : "block_date",
-          date: date,
-          reason: isBlocked ? undefined : "Blocked by admin",
-        }),
-      })
-
-      if (response.ok) {
-        await loadAvailability()
-      }
-    } catch (error) {
-      console.error("Error toggling date block:", error)
-    }
-  }
-
-  // Block/unblock time slot
-  const toggleTimeSlot = async (date: string, time: string) => {
-    try {
-      const isBlocked = blockedSlots.some((s) => s.blocked_date === date && s.blocked_time === time)
-
-      const response = await fetch("/api/admin/availability", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: isBlocked ? "unblock_slot" : "block_slot",
-          date: date,
+          type: "slot",
+          date: dateString,
           time: time,
+          action: isBlocked ? "unblock" : "block",
           reason: isBlocked ? undefined : "Blocked by admin",
         }),
       })
 
-      if (response.ok) {
-        await loadAvailability()
+      const result = await response.json()
+
+      if (response.ok && result.success) {
+        if (isBlocked) {
+          setBlockedTimeSlots((prev) => ({
+            ...prev,
+            [dateString]: prev[dateString]?.filter((t) => t !== time) || [],
+          }))
+          showMessage("success", `Time slot ${time} has been unblocked`)
+        } else {
+          setBlockedTimeSlots((prev) => ({
+            ...prev,
+            [dateString]: [...(prev[dateString] || []), time],
+          }))
+          showMessage("success", `Time slot ${time} has been blocked`)
+        }
+      } else {
+        showMessage("error", result.error || "Failed to update time slot availability")
       }
     } catch (error) {
-      console.error("Error toggling time slot:", error)
+      console.error("Error updating time slot:", error)
+      showMessage("error", "Network error. Please check your connection and try again.")
+    } finally {
+      setLoading(false)
     }
   }
 
-  // Generate calendar days for current month
-  const getCalendarDays = () => {
-    const year = currentDate.getFullYear()
-    const month = currentDate.getMonth()
-
-    const firstDay = new Date(year, month, 1)
-    const startDate = new Date(firstDay)
-
-    // Adjust to start on Monday
-    const dayOfWeek = (firstDay.getDay() + 6) % 7
-    startDate.setDate(firstDay.getDate() - dayOfWeek)
-
-    const days = []
-    const currentDateObj = new Date(startDate)
-
-    // Generate 42 days (6 weeks)
-    for (let i = 0; i < 42; i++) {
-      const dateString = currentDateObj.toISOString().split("T")[0]
-      const isCurrentMonth = currentDateObj.getMonth() === month
-      const isBlocked = blockedDates.some((d) => d.blocked_date === dateString)
-      const blockedSlotsCount = blockedSlots.filter((s) => s.blocked_date === dateString).length
-      const isToday = dateString === new Date().toISOString().split("T")[0]
-
-      days.push({
-        date: new Date(currentDateObj),
-        dateString,
-        day: currentDateObj.getDate(),
-        isCurrentMonth,
-        isBlocked,
-        blockedSlotsCount,
-        isToday,
-        isPast: currentDateObj < new Date(new Date().setHours(0, 0, 0, 0)),
-      })
-
-      currentDateObj.setDate(currentDateObj.getDate() + 1)
+  const tileClassName = ({ date }: any) => {
+    const dateString = date.toISOString().split("T")[0]
+    if (blockedDates.includes(dateString)) {
+      return "blocked-date"
     }
-
-    return days
+    return null
   }
 
-  // Navigation functions
-  const goToPreviousMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))
+  const onChange = (date: any) => {
+    setDate(date)
   }
 
-  const goToNextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))
+  const formatDate = (date: Date) => {
+    return date.toISOString().split("T")[0]
   }
 
-  const goToPreviousYear = () => {
-    setCurrentDate(new Date(currentDate.getFullYear() - 1, currentDate.getMonth(), 1))
-  }
+  const selectedDateString = formatDate(date)
+  const selectedDateBlocked = blockedDates.includes(selectedDateString)
+  const selectedDateFormatted = date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  })
 
-  const goToNextYear = () => {
-    setCurrentDate(new Date(currentDate.getFullYear() + 1, currentDate.getMonth(), 1))
-  }
+  const totalBlockedDates = blockedDates.length
+  const totalBlockedSlots = Object.values(blockedTimeSlots).reduce((sum, slots) => sum + slots.length, 0)
 
-  const handleDateClick = (dateString: string, isCurrentMonth: boolean, isPast: boolean) => {
-    if (!isCurrentMonth || isPast) return
-
-    if (selectedDate === dateString) {
-      setSelectedDate("")
-      setShowTimeSlots(false)
-    } else {
-      setSelectedDate(dateString)
-      setShowTimeSlots(true)
-    }
-  }
-
-  if (loading) {
+  if (initialLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto"></div>
-          <p className="text-slate-400">Loading calendar...</p>
+      <AdminLayout title="Availability Calendar" subtitle="Manage your available dates and time slots">
+        <div className="flex items-center justify-center h-64">
+          <div className="flex items-center space-x-2">
+            <RefreshCw className="w-6 h-6 animate-spin text-pink-500" />
+            <span className="text-lg text-slate-600 dark:text-slate-400">Loading availability data...</span>
+          </div>
         </div>
-      </div>
+      </AdminLayout>
     )
   }
 
-  const calendarDays = getCalendarDays()
-  const selectedDateSlots = selectedDate ? blockedSlots.filter((s) => s.blocked_date === selectedDate) : []
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      <div className="p-6 space-y-8">
-        {/* Professional Header */}
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-gradient-to-r from-pink-500 to-rose-500 rounded-xl">
-                <Calendar className="w-6 h-6 text-white" />
-              </div>
+    <AdminLayout title="Availability Calendar" subtitle="Manage your available dates and time slots">
+      {/* Success/Error Message */}
+      {message && (
+        <div
+          className={`mb-6 p-4 rounded-lg flex items-center space-x-2 ${
+            message.type === "success"
+              ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
+              : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800"
+          }`}
+        >
+          {message.type === "success" ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          <span>{message.text}</span>
+          <Button variant="ghost" size="sm" onClick={() => setMessage(null)} className="ml-auto">
+            ×
+          </Button>
+        </div>
+      )}
+
+      {/* Action Bar */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center space-x-2">
+          <Button onClick={loadAvailabilityData} variant="outline" size="sm" disabled={loading}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            Refresh Data
+          </Button>
+        </div>
+        <div className="text-sm text-slate-600 dark:text-slate-400">
+          Last updated: {new Date().toLocaleTimeString()}
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Card className="border-0 shadow-lg bg-gradient-to-r from-red-500 to-red-600 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-                  Availability Calendar
-                </h1>
-                <p className="text-slate-400">Manage your schedule and blocked dates</p>
+                <p className="text-red-100">Blocked Dates</p>
+                <p className="text-3xl font-bold">{totalBlockedDates}</p>
               </div>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-3">
-            <Badge variant="outline" className="text-slate-300 border-slate-600">
-              {MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
-            </Badge>
-            <Button
-              onClick={loadAvailability}
-              disabled={refreshing}
-              className="bg-slate-800 hover:bg-slate-700 text-white border-slate-600 shadow-lg"
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-          </div>
-        </div>
-
-        {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="bg-gradient-to-br from-red-500 to-red-600 border-red-400 shadow-xl">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-red-100 text-sm font-medium uppercase tracking-wide">Blocked Dates</p>
-                  <p className="text-4xl font-bold text-white mt-2">{blockedDates.length}</p>
-                  <p className="text-red-200 text-xs mt-1">Full day blocks</p>
-                </div>
-                <div className="p-3 bg-red-400/20 rounded-xl">
-                  <XCircle className="w-8 h-8 text-red-100" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-orange-500 to-orange-600 border-orange-400 shadow-xl">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-orange-100 text-sm font-medium uppercase tracking-wide">Blocked Slots</p>
-                  <p className="text-4xl font-bold text-white mt-2">{blockedSlots.length}</p>
-                  <p className="text-orange-200 text-xs mt-1">Individual time slots</p>
-                </div>
-                <div className="p-3 bg-orange-400/20 rounded-xl">
-                  <Clock className="w-8 h-8 text-orange-100" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-emerald-500 to-emerald-600 border-emerald-400 shadow-xl">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-emerald-100 text-sm font-medium uppercase tracking-wide">Available Days</p>
-                  <p className="text-4xl font-bold text-white mt-2">
-                    {calendarDays.filter((d) => d.isCurrentMonth && !d.isPast && !d.isBlocked).length}
-                  </p>
-                  <p className="text-emerald-200 text-xs mt-1">This month</p>
-                </div>
-                <div className="p-3 bg-emerald-400/20 rounded-xl">
-                  <CheckCircle className="w-8 h-8 text-emerald-100" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Professional Calendar */}
-        <Card className="bg-slate-800/50 border-slate-700 shadow-2xl backdrop-blur-sm">
-          <CardContent className="p-8">
-            <div className="space-y-8">
-              {/* Calendar Header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-pink-500/20 rounded-lg">
-                    <Calendar className="w-5 h-5 text-pink-400" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold text-white">Calendar View</h2>
-                    <p className="text-slate-400 text-sm">Click dates to manage availability</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Badge variant="outline" className="text-slate-300 border-slate-600">
-                    <AlertCircle className="w-3 h-3 mr-1" />
-                    Interactive Mode
-                  </Badge>
-                </div>
-              </div>
-
-              {/* Month Navigation */}
-              <div className="flex items-center justify-between bg-slate-900/50 rounded-xl p-4">
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={goToPreviousYear}
-                    className="text-slate-400 hover:text-white hover:bg-slate-700"
-                  >
-                    <ChevronsLeft className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={goToPreviousMonth}
-                    className="text-slate-400 hover:text-white hover:bg-slate-700"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                <h3 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-                  {MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
-                </h3>
-
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={goToNextMonth}
-                    className="text-slate-400 hover:text-white hover:bg-slate-700"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={goToNextYear}
-                    className="text-slate-400 hover:text-white hover:bg-slate-700"
-                  >
-                    <ChevronsRight className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Calendar Grid */}
-              <div className="space-y-4">
-                {/* Day Headers */}
-                <div className="grid grid-cols-7 gap-2">
-                  {DAYS.map((day) => (
-                    <div key={day} className="text-center py-3 bg-slate-900/30 rounded-lg">
-                      <span className="text-sm font-semibold text-slate-300 uppercase tracking-wider">{day}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Calendar Days */}
-                <div className="grid grid-cols-7 gap-2">
-                  {calendarDays.map((day, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleDateClick(day.dateString, day.isCurrentMonth, day.isPast)}
-                      disabled={!day.isCurrentMonth || day.isPast}
-                      className={`
-                        relative aspect-square p-3 rounded-xl text-sm font-medium transition-all duration-300 group
-                        ${
-                          !day.isCurrentMonth
-                            ? "text-slate-600 cursor-not-allowed opacity-30"
-                            : day.isPast
-                              ? "text-slate-500 cursor-not-allowed opacity-50"
-                              : day.isToday
-                                ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg ring-2 ring-blue-400/50"
-                                : day.isBlocked
-                                  ? "bg-gradient-to-br from-red-500 to-red-600 text-white shadow-lg hover:shadow-xl"
-                                  : selectedDate === day.dateString
-                                    ? "bg-gradient-to-br from-pink-500 to-pink-600 text-white shadow-lg ring-2 ring-pink-400/50"
-                                    : "bg-slate-700/50 text-slate-300 hover:bg-slate-600 hover:text-white hover:shadow-lg"
-                        }
-                      `}
-                    >
-                      <div className="flex flex-col items-center justify-center h-full">
-                        <span className="text-lg font-bold">{day.day}</span>
-                        {day.blockedSlotsCount > 0 && !day.isBlocked && (
-                          <div className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center">
-                            <span className="text-xs font-bold text-white">{day.blockedSlotsCount}</span>
-                          </div>
-                        )}
-                        {day.isToday && <span className="text-xs opacity-75 mt-1">Today</span>}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Enhanced Legend */}
-              <div className="flex items-center justify-between pt-6 border-t border-slate-700">
-                <div className="flex items-center space-x-6">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-4 h-4 bg-gradient-to-r from-red-500 to-red-600 rounded-full shadow"></div>
-                    <span className="text-sm text-slate-300 font-medium">Blocked Dates</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-4 h-4 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full shadow"></div>
-                    <span className="text-sm text-slate-300 font-medium">Available</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-4 h-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full shadow"></div>
-                    <span className="text-sm text-slate-300 font-medium">Today</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-4 h-4 bg-orange-500 rounded-full shadow flex items-center justify-center">
-                      <span className="text-xs text-white font-bold">N</span>
-                    </div>
-                    <span className="text-sm text-slate-300 font-medium">Partial Blocks</span>
-                  </div>
-                </div>
-                <div className="text-sm text-slate-400 bg-slate-900/50 px-3 py-1 rounded-lg">
-                  {blockedDates.length} blocked dates • {blockedSlots.length} blocked slots
-                </div>
-              </div>
+              <CalendarIcon className="w-8 h-8 text-red-200" />
             </div>
           </CardContent>
         </Card>
 
-        {/* Time Slot Management Panel */}
-        {showTimeSlots && selectedDate && (
-          <Card className="bg-slate-800/50 border-slate-700 shadow-2xl backdrop-blur-sm">
-            <CardContent className="p-6">
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-pink-500/20 rounded-lg">
-                      <Clock className="w-5 h-5 text-pink-400" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold text-white">Time Slot Management</h3>
-                      <p className="text-slate-400">
-                        Managing slots for{" "}
-                        {new Date(selectedDate).toLocaleDateString("en-US", {
-                          weekday: "long",
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={() => toggleDateBlock(selectedDate)}
-                    className={`${
-                      blockedDates.some((d) => d.blocked_date === selectedDate)
-                        ? "bg-emerald-600 hover:bg-emerald-700"
-                        : "bg-red-600 hover:bg-red-700"
-                    } text-white shadow-lg`}
-                  >
-                    {blockedDates.some((d) => d.blocked_date === selectedDate) ? (
-                      <>
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        Unblock Entire Day
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="w-4 h-4 mr-2" />
-                        Block Entire Day
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  {TIME_SLOTS.map((time) => {
-                    const isBlocked = selectedDateSlots.some((s) => s.blocked_time === time)
-                    return (
-                      <Button
-                        key={time}
-                        onClick={() => toggleTimeSlot(selectedDate, time)}
-                        variant={isBlocked ? "destructive" : "outline"}
-                        className={`h-12 ${
-                          isBlocked
-                            ? "bg-red-500 hover:bg-red-600 text-white border-red-400"
-                            : "bg-slate-700 hover:bg-slate-600 text-slate-300 border-slate-600"
-                        } transition-all duration-200`}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <span className="font-medium">{time}</span>
-                          {isBlocked ? <XCircle className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                        </div>
-                      </Button>
-                    )
-                  })}
-                </div>
-
-                {selectedDateSlots.length > 0 && (
-                  <div className="bg-slate-900/50 rounded-lg p-4">
-                    <h4 className="text-sm font-medium text-slate-300 mb-3">Currently Blocked Slots:</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedDateSlots.map((slot) => (
-                        <Badge
-                          key={slot.id}
-                          variant="destructive"
-                          className="bg-red-500/20 text-red-300 border-red-500/30"
-                        >
-                          {slot.blocked_time}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
+        <Card className="border-0 shadow-lg bg-gradient-to-r from-orange-500 to-orange-600 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-orange-100">Blocked Time Slots</p>
+                <p className="text-3xl font-bold">{totalBlockedSlots}</p>
               </div>
-            </CardContent>
-          </Card>
-        )}
+              <Clock className="w-8 h-8 text-orange-200" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-lg bg-gradient-to-r from-green-500 to-green-600 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-green-100">Available Slots/Day</p>
+                <p className="text-3xl font-bold">{availableTimeSlots.length}</p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-green-200" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
-    </div>
+
+      <div className="grid lg:grid-cols-2 gap-8">
+        {/* Calendar Section */}
+        <Card className="border-0 shadow-lg bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <CalendarIcon className="w-5 h-5 text-pink-500" />
+              <span>Calendar View</span>
+            </CardTitle>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Click on dates to block/unblock them. Red dates are blocked.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="calendar-container">
+              <Calendar
+                onChange={onChange}
+                value={date}
+                tileClassName={tileClassName}
+                onClickDay={(value) => {
+                  const dateString = formatDate(value)
+                  if (!loading) {
+                    handleDateClick(dateString)
+                  }
+                }}
+                className="custom-calendar"
+                tileDisabled={({ date }) => loading}
+              />
+            </div>
+
+            <div className="mt-6 flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-4 bg-red-500 rounded"></div>
+                  <span className="text-sm text-slate-600 dark:text-slate-400">Blocked Dates</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-4 bg-green-500 rounded"></div>
+                  <span className="text-sm text-slate-600 dark:text-slate-400">Available Dates</span>
+                </div>
+              </div>
+              <Badge variant="outline" className="text-slate-600 dark:text-slate-400">
+                {totalBlockedDates} blocked dates
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Time Slots Section */}
+        <Card className="border-0 shadow-lg bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Clock className="w-5 h-5 text-blue-500" />
+                <span>Time Slots</span>
+              </div>
+              <Badge variant="outline" className={selectedDateBlocked ? "border-red-500 text-red-600" : ""}>
+                {selectedDateFormatted}
+              </Badge>
+            </CardTitle>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Click on time slots to block/unblock them for the selected date.
+            </p>
+          </CardHeader>
+          <CardContent>
+            {selectedDateBlocked ? (
+              <div className="text-center py-8">
+                <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">Date Blocked</h3>
+                <p className="text-slate-600 dark:text-slate-400 mb-4">
+                  This entire date is blocked. Unblock the date first to manage individual time slots.
+                </p>
+                <Button
+                  onClick={() => !loading && handleDateClick(selectedDateString)}
+                  variant="outline"
+                  className="border-red-500 text-red-600 hover:bg-red-50"
+                  disabled={loading}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  {loading ? "Unblocking..." : "Unblock Date"}
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {availableTimeSlots.map((time) => {
+                  const isBlocked = blockedTimeSlots[selectedDateString]?.includes(time)
+                  return (
+                    <Button
+                      key={time}
+                      onClick={() => !loading && handleTimeSlotClick(selectedDateString, time)}
+                      variant={isBlocked ? "destructive" : "outline"}
+                      className={`h-16 flex flex-col items-center justify-center transition-all ${
+                        isBlocked
+                          ? "bg-red-500 hover:bg-red-600 text-white"
+                          : "border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                      }`}
+                      disabled={loading}
+                    >
+                      <Clock className="w-5 h-5 mb-1" />
+                      <span className="text-sm font-medium">{time}</span>
+                      <span className="text-xs opacity-75">
+                        {loading ? "Updating..." : isBlocked ? "Blocked" : "Available"}
+                      </span>
+                    </Button>
+                  )
+                })}
+              </div>
+            )}
+
+            <div className="mt-6 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+              <h4 className="font-semibold text-slate-900 dark:text-slate-100 mb-2">Quick Actions</h4>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => !loading && handleDateClick(selectedDateString)}
+                  className={selectedDateBlocked ? "border-green-500 text-green-600" : "border-red-500 text-red-600"}
+                  disabled={loading}
+                >
+                  {selectedDateBlocked ? (
+                    <>
+                      <Plus className="w-4 h-4 mr-1" />
+                      {loading ? "Unblocking..." : "Unblock Date"}
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      {loading ? "Blocking..." : "Block Entire Date"}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <style jsx global>{`
+        .custom-calendar {
+          width: 100%;
+          max-width: 100%;
+          background-color: transparent;
+          border: none;
+          font-family: inherit;
+        }
+        
+        .custom-calendar .react-calendar__navigation {
+          display: flex;
+          height: 44px;
+          margin-bottom: 1em;
+        }
+        
+        .custom-calendar .react-calendar__navigation button {
+          min-width: 44px;
+          background: none;
+          padding: 0;
+          border: none;
+          outline: none;
+          font-size: 16px;
+          font-weight: 500;
+          color: rgb(71 85 105);
+        }
+        
+        .custom-calendar .react-calendar__navigation button:enabled:hover,
+        .custom-calendar .react-calendar__navigation button:enabled:focus {
+          background-color: rgb(248 250 252);
+          border-radius: 6px;
+        }
+        
+        .custom-calendar .react-calendar__navigation button:disabled {
+          background-color: transparent;
+          color: rgb(148 163 184);
+        }
+        
+        .custom-calendar .react-calendar__navigation__label {
+          font-weight: 600;
+          font-size: 18px;
+        }
+        
+        .custom-calendar .react-calendar__month-view__weekdays {
+          text-align: center;
+          font-weight: 600;
+          font-size: 14px;
+          color: rgb(100 116 139);
+        }
+        
+        .custom-calendar .react-calendar__month-view__weekdays__weekday {
+          padding: 0.75em 0.5em;
+        }
+        
+        .custom-calendar .react-calendar__tile {
+          max-width: 100%;
+          padding: 0.75em 0.5em;
+          background: none;
+          border: none;
+          outline: none;
+          font-size: 14px;
+          font-weight: 500;
+          color: rgb(71 85 105);
+          border-radius: 6px;
+          transition: all 0.2s;
+          cursor: pointer;
+        }
+        
+        .custom-calendar .react-calendar__tile:enabled:hover,
+        .custom-calendar .react-calendar__tile:enabled:focus {
+          background-color: rgb(248 250 252);
+          color: rgb(15 23 42);
+        }
+        
+        .custom-calendar .react-calendar__tile:disabled {
+          cursor: not-allowed;
+          opacity: 0.5;
+        }
+        
+        .custom-calendar .react-calendar__tile--now {
+          background: rgb(59 130 246);
+          color: white;
+          font-weight: 600;
+        }
+        
+        .custom-calendar .react-calendar__tile--now:enabled:hover,
+        .custom-calendar .react-calendar__tile--now:enabled:focus {
+          background: rgb(37 99 235);
+        }
+        
+        .custom-calendar .react-calendar__tile--active {
+          background: rgb(236 72 153);
+          color: white;
+          font-weight: 600;
+        }
+        
+        .custom-calendar .react-calendar__tile--active:enabled:hover,
+        .custom-calendar .react-calendar__tile--active:enabled:focus {
+          background: rgb(219 39 119);
+        }
+        
+        .custom-calendar .blocked-date {
+          background-color: rgb(239 68 68) !important;
+          color: white !important;
+          font-weight: 600;
+        }
+        
+        .custom-calendar .blocked-date:enabled:hover,
+        .custom-calendar .blocked-date:enabled:focus {
+          background-color: rgb(220 38 38) !important;
+        }
+        
+        .custom-calendar .react-calendar__month-view__days__day--weekend {
+          color: rgb(239 68 68);
+        }
+        
+        .custom-calendar .react-calendar__month-view__days__day--neighboringMonth {
+          color: rgb(148 163 184);
+        }
+        
+        .dark .custom-calendar .react-calendar__navigation button {
+          color: rgb(203 213 225);
+        }
+        
+        .dark .custom-calendar .react-calendar__navigation button:enabled:hover,
+        .dark .custom-calendar .react-calendar__navigation button:enabled:focus {
+          background-color: rgb(51 65 85);
+        }
+        
+        .dark .custom-calendar .react-calendar__tile {
+          color: rgb(203 213 225);
+        }
+        
+        .dark .custom-calendar .react-calendar__tile:enabled:hover,
+        .dark .custom-calendar .react-calendar__tile:enabled:focus {
+          background-color: rgb(51 65 85);
+          color: rgb(241 245 249);
+        }
+        
+        .dark .custom-calendar .react-calendar__month-view__weekdays {
+          color: rgb(148 163 184);
+        }
+      `}</style>
+    </AdminLayout>
   )
 }
+
+export default CalendarPage
