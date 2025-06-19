@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Calendar, Plus, X, Clock } from "lucide-react"
+import { RefreshCw, Calendar, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
 
 interface BlockedDate {
   id: number
@@ -18,17 +18,34 @@ interface BlockedSlot {
   reason?: string
 }
 
-const timeSlots = ["9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM", "5:00 PM"]
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+]
+
+const DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 
 export default function CalendarPage() {
   const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([])
   const [blockedSlots, setBlockedSlots] = useState<BlockedSlot[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedDate, setSelectedDate] = useState("")
+  const [refreshing, setRefreshing] = useState(false)
+  const [currentDate, setCurrentDate] = useState(new Date())
 
   // Load availability data
   const loadAvailability = async () => {
     try {
+      setRefreshing(true)
       const response = await fetch("/api/admin/availability")
       if (response.ok) {
         const data = await response.json()
@@ -39,6 +56,7 @@ export default function CalendarPage() {
       console.error("Error loading availability:", error)
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
@@ -56,241 +74,239 @@ export default function CalendarPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "date",
-          date: date, // Send as pure DATE string: "2025-06-20"
+          date: date,
           action: isBlocked ? "unblock" : "block",
           reason: isBlocked ? undefined : "Blocked by admin",
         }),
       })
 
       if (response.ok) {
-        console.log(`✅ Date ${date} ${isBlocked ? "unblocked" : "blocked"} successfully`)
-        await loadAvailability() // Reload to see changes
-      } else {
-        console.error("❌ Failed to toggle date block")
+        await loadAvailability()
       }
     } catch (error) {
       console.error("Error toggling date block:", error)
     }
   }
 
-  // Block/unblock specific time slot
-  const toggleTimeSlot = async (date: string, time: string) => {
-    try {
-      const isBlocked = blockedSlots.some((s) => s.blocked_date === date && s.blocked_time === time)
+  // Generate calendar days for current month
+  const getCalendarDays = () => {
+    const year = currentDate.getFullYear()
+    const month = currentDate.getMonth()
 
-      const response = await fetch("/api/admin/availability", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "slot",
-          date: date, // Send as pure DATE string: "2025-06-20"
-          time: time,
-          action: isBlocked ? "unblock" : "block",
-          reason: isBlocked ? undefined : "Blocked by admin",
-        }),
-      })
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const startDate = new Date(firstDay)
 
-      if (response.ok) {
-        console.log(`✅ Time slot ${time} on ${date} ${isBlocked ? "unblocked" : "blocked"} successfully`)
-        await loadAvailability() // Reload to see changes
-      } else {
-        console.error("❌ Failed to toggle time slot")
-      }
-    } catch (error) {
-      console.error("Error toggling time slot:", error)
-    }
-  }
+    // Adjust to start on Monday
+    const dayOfWeek = (firstDay.getDay() + 6) % 7
+    startDate.setDate(firstDay.getDate() - dayOfWeek)
 
-  // Generate next 30 days
-  const getNext30Days = () => {
     const days = []
-    const today = new Date()
+    const currentDateObj = new Date(startDate)
 
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(today)
-      date.setDate(today.getDate() + i)
-
-      // CRITICAL: Format as pure DATE string to avoid timezone issues
-      const dateString =
-        date.getFullYear() +
-        "-" +
-        String(date.getMonth() + 1).padStart(2, "0") +
-        "-" +
-        String(date.getDate()).padStart(2, "0")
+    // Generate 42 days (6 weeks)
+    for (let i = 0; i < 42; i++) {
+      const dateString = currentDateObj.toISOString().split("T")[0]
+      const isCurrentMonth = currentDateObj.getMonth() === month
+      const isBlocked = blockedDates.some((d) => d.blocked_date === dateString)
 
       days.push({
-        date: dateString,
-        display: date.toLocaleDateString("en-US", {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-        }),
-        isBlocked: blockedDates.some((d) => d.blocked_date === dateString),
+        date: new Date(currentDateObj),
+        dateString,
+        day: currentDateObj.getDate(),
+        isCurrentMonth,
+        isBlocked,
+        isPast: currentDateObj < new Date(new Date().setHours(0, 0, 0, 0)),
       })
+
+      currentDateObj.setDate(currentDateObj.getDate() + 1)
     }
 
     return days
   }
 
+  // Navigation functions
+  const goToPreviousMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))
+  }
+
+  const goToNextMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))
+  }
+
+  const goToPreviousYear = () => {
+    setCurrentDate(new Date(currentDate.getFullYear() - 1, currentDate.getMonth(), 1))
+  }
+
+  const goToNextYear = () => {
+    setCurrentDate(new Date(currentDate.getFullYear() + 1, currentDate.getMonth(), 1))
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
       </div>
     )
   }
 
+  const calendarDays = getCalendarDays()
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">Calendar Management</h1>
-        <div className="flex items-center space-x-2 text-sm text-gray-600">
-          <Calendar className="w-4 h-4" />
-          <span>Manage availability and blocked dates</span>
+    <div className="min-h-screen bg-slate-900 text-white">
+      <div className="p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Availability Calendar</h1>
+            <p className="text-slate-400 mt-1">Manage your available dates and time slots</p>
+          </div>
+          <Button
+            onClick={loadAvailability}
+            disabled={refreshing}
+            className="bg-slate-800 hover:bg-slate-700 text-white border-slate-700"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh Data
+          </Button>
         </div>
-      </div>
 
-      {/* Debug Info */}
-      <Card className="bg-blue-50 border-blue-200">
-        <CardHeader>
-          <CardTitle className="text-blue-800 text-sm">Debug Information</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-blue-700">
-          <p>Blocked dates: {blockedDates.length}</p>
-          <p>Blocked slots: {blockedSlots.length}</p>
-          <p>Sample blocked date: {blockedDates[0]?.blocked_date || "none"}</p>
-        </CardContent>
-      </Card>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="bg-red-500 border-red-500 text-white">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-red-100 text-sm font-medium">Blocked Dates</p>
+                  <p className="text-4xl font-bold mt-2">{blockedDates.length}</p>
+                </div>
+                <Calendar className="w-8 h-8 text-red-200" />
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Calendar Grid */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Calendar className="w-5 h-5" />
-            <span>Next 30 Days</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-7 gap-2">
-            {getNext30Days().map((day) => (
-              <div
-                key={day.date}
-                className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                  day.isBlocked
-                    ? "bg-red-100 border-red-300 text-red-800"
-                    : "bg-green-50 border-green-200 text-green-800 hover:bg-green-100"
-                }`}
-                onClick={() => toggleDateBlock(day.date)}
-              >
-                <div className="text-center">
-                  <div className="font-medium">{day.display}</div>
-                  <div className="text-xs mt-1">{day.isBlocked ? "Blocked" : "Available"}</div>
-                  <div className="text-xs text-gray-500 mt-1">{day.date}</div>
+          <Card className="bg-orange-500 border-orange-500 text-white">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-orange-100 text-sm font-medium">Blocked Time Slots</p>
+                  <p className="text-4xl font-bold mt-2">{blockedSlots.length}</p>
+                </div>
+                <Calendar className="w-8 h-8 text-orange-200" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Calendar Section */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardContent className="p-6">
+            <div className="space-y-6">
+              {/* Calendar Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Calendar className="w-5 h-5 text-pink-500" />
+                  <h2 className="text-xl font-semibold text-white">Calendar View</h2>
+                </div>
+                <p className="text-slate-400 text-sm">Click on dates to block/unblock them. Red dates are blocked.</p>
+              </div>
+
+              {/* Month Navigation */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={goToPreviousYear}
+                    className="text-slate-400 hover:text-white hover:bg-slate-700"
+                  >
+                    <ChevronsLeft className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={goToPreviousMonth}
+                    className="text-slate-400 hover:text-white hover:bg-slate-700"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <h3 className="text-xl font-semibold text-white">
+                  {MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
+                </h3>
+
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={goToNextMonth}
+                    className="text-slate-400 hover:text-white hover:bg-slate-700"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={goToNextYear}
+                    className="text-slate-400 hover:text-white hover:bg-slate-700"
+                  >
+                    <ChevronsRight className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Time Slot Management */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Clock className="w-5 h-5" />
-            <span>Time Slot Management</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Select Date to Manage Time Slots:</label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2"
-                min={new Date().toISOString().split("T")[0]}
-              />
-            </div>
-
-            {selectedDate && (
-              <div>
-                <h4 className="font-medium text-gray-900 mb-3">Time Slots for {selectedDate}:</h4>
-                <div className="grid grid-cols-3 gap-2">
-                  {timeSlots.map((time) => {
-                    const isBlocked = blockedSlots.some(
-                      (s) => s.blocked_date === selectedDate && s.blocked_time === time,
-                    )
-
-                    return (
-                      <Button
-                        key={time}
-                        variant={isBlocked ? "destructive" : "outline"}
-                        size="sm"
-                        onClick={() => toggleTimeSlot(selectedDate, time)}
-                        className="justify-between"
-                      >
-                        <span>{time}</span>
-                        {isBlocked ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                      </Button>
-                    )
-                  })}
+              {/* Calendar Grid */}
+              <div className="space-y-4">
+                {/* Day Headers */}
+                <div className="grid grid-cols-7 gap-2">
+                  {DAYS.map((day) => (
+                    <div key={day} className="text-center py-2">
+                      <span className="text-sm font-medium text-slate-400">{day}</span>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Currently Blocked Items */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Blocked Dates</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {blockedDates.length === 0 ? (
-                <p className="text-gray-500 text-sm">No blocked dates</p>
-              ) : (
-                blockedDates.map((date) => (
-                  <div key={date.id} className="flex items-center justify-between p-2 bg-red-50 rounded">
-                    <span className="font-medium">{date.blocked_date}</span>
-                    <Button size="sm" variant="ghost" onClick={() => toggleDateBlock(date.blocked_date)}>
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Blocked Time Slots</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {blockedSlots.length === 0 ? (
-                <p className="text-gray-500 text-sm">No blocked time slots</p>
-              ) : (
-                blockedSlots.map((slot) => (
-                  <div key={slot.id} className="flex items-center justify-between p-2 bg-red-50 rounded">
-                    <span className="font-medium">
-                      {slot.blocked_date} at {slot.blocked_time}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => toggleTimeSlot(slot.blocked_date, slot.blocked_time)}
+                {/* Calendar Days */}
+                <div className="grid grid-cols-7 gap-2">
+                  {calendarDays.map((day, index) => (
+                    <button
+                      key={index}
+                      onClick={() => day.isCurrentMonth && !day.isPast && toggleDateBlock(day.dateString)}
+                      disabled={!day.isCurrentMonth || day.isPast}
+                      className={`
+                        aspect-square p-2 rounded-lg text-sm font-medium transition-all duration-200
+                        ${
+                          !day.isCurrentMonth
+                            ? "text-slate-600 cursor-not-allowed"
+                            : day.isPast
+                              ? "text-slate-500 cursor-not-allowed"
+                              : day.isBlocked
+                                ? "bg-red-500 text-white hover:bg-red-600"
+                                : "text-slate-300 hover:bg-slate-700 hover:text-white"
+                        }
+                      `}
                     >
-                      <X className="w-4 h-4" />
-                    </Button>
+                      {day.day}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Legend */}
+              <div className="flex items-center justify-between pt-4 border-t border-slate-700">
+                <div className="flex items-center space-x-6">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-4 h-4 bg-red-500 rounded"></div>
+                    <span className="text-sm text-slate-400">Blocked Dates</span>
                   </div>
-                ))
-              )}
+                  <div className="flex items-center space-x-2">
+                    <div className="w-4 h-4 bg-green-500 rounded"></div>
+                    <span className="text-sm text-slate-400">Available Dates</span>
+                  </div>
+                </div>
+                <span className="text-sm text-slate-400">{blockedDates.length} blocked dates</span>
+              </div>
             </div>
           </CardContent>
         </Card>
