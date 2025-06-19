@@ -77,6 +77,14 @@ const CalendarPage = () => {
     }
   }
 
+  const formatDate = (date: Date) => {
+    // CRITICAL FIX: Use local date methods to prevent timezone conversion
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+
   const handleDateClick = async (dateString: string) => {
     const isBlocked = blockedDates.includes(dateString)
     setLoading(true)
@@ -90,7 +98,7 @@ const CalendarPage = () => {
         },
         body: JSON.stringify({
           type: "date",
-          date: dateString,
+          date: dateString, // Use the dateString directly, no conversion
           action: isBlocked ? "unblock" : "block",
           reason: isBlocked ? undefined : "Blocked by admin",
         }),
@@ -106,10 +114,13 @@ const CalendarPage = () => {
             delete updated[dateString]
             return updated
           })
-          showMessage("success", `Date ${new Date(dateString).toLocaleDateString()} has been unblocked`)
+          // FIXED: Use proper date parsing for display
+          const displayDate = new Date(dateString + "T12:00:00Z").toLocaleDateString()
+          showMessage("success", `Date ${displayDate} has been unblocked`)
         } else {
           setBlockedDates((prev) => [...prev, dateString])
-          showMessage("success", `Date ${new Date(dateString).toLocaleDateString()} has been blocked`)
+          const displayDate = new Date(dateString + "T12:00:00Z").toLocaleDateString()
+          showMessage("success", `Date ${displayDate} has been blocked`)
         }
       } else {
         showMessage("error", result.error || "Failed to update date availability")
@@ -179,10 +190,6 @@ const CalendarPage = () => {
 
   const onChange = (date: any) => {
     setDate(date)
-  }
-
-  const formatDate = (date: Date) => {
-    return date.toISOString().split("T")[0]
   }
 
   const selectedDateString = formatDate(date)
@@ -299,7 +306,12 @@ const CalendarPage = () => {
                 value={date}
                 tileClassName={tileClassName}
                 onClickDay={(value) => {
-                  const dateString = formatDate(value)
+                  // CRITICAL FIX: Use local date methods instead of toISOString()
+                  const year = value.getFullYear()
+                  const month = String(value.getMonth() + 1).padStart(2, "0")
+                  const day = String(value.getDate()).padStart(2, "0")
+                  const dateString = `${year}-${month}-${day}`
+
                   if (!loading) {
                     handleDateClick(dateString)
                   }

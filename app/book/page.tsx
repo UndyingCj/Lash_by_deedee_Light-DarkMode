@@ -101,24 +101,7 @@ export default function BookingPage() {
         return dateString.split("T")[0]
       }
 
-      // CRITICAL FIX: Parse date in local timezone to prevent UTC conversion
-      const parts = dateString.split("-")
-      if (parts.length === 3) {
-        const year = Number.parseInt(parts[0])
-        const month = Number.parseInt(parts[1]) - 1 // Month is 0-indexed
-        const day = Number.parseInt(parts[2])
-
-        // Create date in local timezone, not UTC
-        const localDate = new Date(year, month, day)
-
-        // Format back to YYYY-MM-DD
-        const yyyy = localDate.getFullYear()
-        const mm = String(localDate.getMonth() + 1).padStart(2, "0")
-        const dd = String(localDate.getDate()).padStart(2, "0")
-
-        return `${yyyy}-${mm}-${dd}`
-      }
-
+      // For date inputs, they already give YYYY-MM-DD format
       return dateString
     } catch (error) {
       console.error("Error normalizing date:", dateString, error)
@@ -413,10 +396,10 @@ export default function BookingPage() {
   const handleDateChange = (value: string) => {
     try {
       console.log("📅 Date changed to:", value)
-      setSelectedDate(value)
+      setSelectedDate(value) // Use the value directly from the input
       setSelectedTime("")
 
-      // Immediate validation with proper date normalization
+      // Immediate validation - no normalization needed since input gives YYYY-MM-DD
       if (value && isDateBlocked(value)) {
         console.log("🚫 Selected date is blocked, clearing selection")
         setTimeout(() => setSelectedDate(""), 100)
@@ -485,7 +468,7 @@ export default function BookingPage() {
 
 📅 Service: ${selectedService}
 💰 Price: ₦${service?.price} (Deposit: ₦${depositAmount.toLocaleString()})
-📅 Date: ${new Date(selectedDate + "T00:00:00").toLocaleDateString("en-US", {
+📅 Date: ${new Date(selectedDate + "T12:00:00Z").toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
       month: "long",
@@ -823,7 +806,7 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                   <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
                     <Calendar className="w-4 h-4" />
                     <span>
-                      {new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", {
+                      {new Date(selectedDate + "T12:00:00Z").toLocaleDateString("en-US", {
                         weekday: "long",
                         year: "numeric",
                         month: "long",
