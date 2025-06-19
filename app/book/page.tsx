@@ -16,8 +16,7 @@ import {
   XCircle,
   CheckCircle,
   RefreshCw,
-  Wifi,
-  WifiOff,
+  X,
 } from "lucide-react"
 
 interface BlockedDate {
@@ -33,9 +32,15 @@ interface BlockedTimeSlot {
   reason?: string
 }
 
+interface Service {
+  name: string
+  price: string
+  duration: string
+}
+
 export default function BookingPage() {
   // Form state
-  const [selectedService, setSelectedService] = useState("")
+  const [selectedServices, setSelectedServices] = useState<string[]>([])
   const [selectedDate, setSelectedDate] = useState("")
   const [selectedTime, setSelectedTime] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
@@ -65,7 +70,7 @@ export default function BookingPage() {
   const mountedRef = useRef(true)
   const lastFetchRef = useRef<number>(0)
 
-  const services = [
+  const services: Service[] = [
     { name: "Microblading", price: "40,000", duration: "2.5 hours" },
     { name: "Ombré Brows", price: "45,000", duration: "2.5 hours" },
     { name: "Combo Brows", price: "50,000", duration: "3 hours" },
@@ -372,13 +377,48 @@ export default function BookingPage() {
     }
   }
 
+  const getTotalPrice = (): number => {
+    try {
+      let totalPrice = 0
+      selectedServices.forEach((serviceName) => {
+        const service = services.find((s) => s.name === serviceName)
+        if (service) {
+          totalPrice += Number.parseInt(service.price.replace(/,/g, ""), 10)
+        }
+      })
+      return totalPrice
+    } catch {
+      return 0
+    }
+  }
+
+  const getTotalDuration = (): number => {
+    try {
+      let totalDuration = 0
+      selectedServices.forEach((serviceName) => {
+        const service = services.find((s) => s.name === serviceName)
+        if (service) {
+          const durationString = service.duration
+          const durationParts = durationString.split(" ")
+          const durationValue = Number.parseFloat(durationParts[0])
+          const durationUnit = durationParts[1]
+
+          if (durationUnit.toLowerCase().includes("hour")) {
+            totalDuration += durationValue * 60
+          } else if (durationUnit.toLowerCase().includes("min")) {
+            totalDuration += durationValue
+          }
+        }
+      })
+      return totalDuration
+    } catch {
+      return 0
+    }
+  }
+
   const getDepositAmount = (): number => {
     try {
-      const service = services.find((s) => s.name === selectedService)
-      if (!service) return 0
-
-      const price = Number.parseInt(service.price.replace(/,/g, ""), 10)
-      return Math.floor(price / 2)
+      return Math.floor(getTotalPrice() / 2)
     } catch {
       return 0
     }
@@ -396,13 +436,16 @@ export default function BookingPage() {
   const handleDateChange = (value: string) => {
     try {
       console.log("📅 Date changed to:", value)
-      setSelectedDate(value) // Use the value directly from the input
-      setSelectedTime("")
 
-      // Immediate validation - no normalization needed since input gives YYYY-MM-DD
+      // Always set the date first
+      setSelectedDate(value)
+      setSelectedTime("") // Clear time selection
+
+      // Check if date is blocked but don't clear the selection immediately
       if (value && isDateBlocked(value)) {
-        console.log("🚫 Selected date is blocked, clearing selection")
-        setTimeout(() => setSelectedDate(""), 100)
+        console.log("🚫 Selected date is blocked - showing warning but keeping selection")
+        // Don't clear the date - let the user see the "Fully Booked" message
+        // The validation will prevent booking, but we don't reload the page
       }
     } catch (error) {
       console.error("Error changing date:", error)
@@ -420,10 +463,24 @@ export default function BookingPage() {
     }
   }
 
+  const handleServiceAdd = (serviceName: string) => {
+    if (!selectedServices.includes(serviceName)) {
+      setSelectedServices((prev) => [...prev, serviceName])
+    }
+  }
+
+  const handleServiceRemove = (serviceName: string) => {
+    setSelectedServices((prev) => prev.filter((name) => name !== serviceName))
+  }
+
+  const getAvailableServices = () => {
+    return services.filter((service) => !selectedServices.includes(service.name))
+  }
+
   const validateForm = (): boolean => {
     try {
-      if (!selectedService) {
-        alert("Please select a service")
+      if (selectedServices.length === 0) {
+        alert("Please select at least one service")
         return false
       }
       if (!selectedDate) {
@@ -431,15 +488,15 @@ export default function BookingPage() {
         return false
       }
       if (isDateBlocked(selectedDate)) {
-        alert("This date is fully booked. Please select another date.")
+        alert("This date is fully booked. Please select another available date.")
         return false
       }
       if (!selectedTime) {
-        alert("Please select a time")
+        alert("Please select a time slot")
         return false
       }
       if (!isTimeSlotAvailable(selectedDate, selectedTime)) {
-        alert("This time slot is no longer available.")
+        alert("This time slot is no longer available. Please choose another time.")
         return false
       }
       if (!formData.name.trim()) {
@@ -450,6 +507,8 @@ export default function BookingPage() {
         alert("Please enter your phone number")
         return false
       }
+
+      console.log("✅ Form validation passed - proceeding with WhatsApp booking")
       return true
     } catch (error) {
       console.error("Validation error:", error)
@@ -461,37 +520,57 @@ export default function BookingPage() {
   const handleWhatsAppBooking = () => {
     if (!validateForm()) return
 
-    const service = services.find((s) => s.name === selectedService)
     const depositAmount = getDepositAmount()
+    const totalPrice = getTotalPrice()
+    const totalDurationHours = Math.ceil(getTotalDuration() / 60)
 
-    const message = `Hi! I'd like to book an appointment:
+    // Create detailed service breakdown
+    const serviceDetails = selectedServices
+      .map((serviceName) => {
+        const service = services.find((s) => s.name === serviceName)
+        return `• ${serviceName} - ₦${service?.price} (${service?.duration})`
+      })
+      .join("\n")
 
-📅 Service: ${selectedService}
-💰 Price: ₦${service?.price} (Deposit: ₦${depositAmount.toLocaleString()})
-📅 Date: ${new Date(selectedDate + "T12:00:00Z").toLocaleDateString("en-US", {
+    const message = `🌟 NEW BOOKING REQUEST 🌟
+
+👤 CLIENT DETAILS:
+Name: ${formData.name}
+Phone: ${formData.phone}${formData.email ? `\nEmail: ${formData.email}` : ""}
+
+💅 SERVICES REQUESTED:
+${serviceDetails}
+
+📅 APPOINTMENT DETAILS:
+Date: ${new Date(selectedDate + "T12:00:00Z").toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
       month: "long",
       day: "numeric",
     })}
-⏰ Time: ${selectedTime}
-👤 Name: ${formData.name}
-📱 Phone: ${formData.phone}${
-      formData.email
-        ? `
-📧 Email: ${formData.email}`
-        : ""
-    }${
-      formData.notes
-        ? `
-📝 Notes: ${formData.notes}`
-        : ""
-    }
+Time: ${selectedTime}
+Duration: ~${totalDurationHours} hour${totalDurationHours !== 1 ? "s" : ""}
 
-Please confirm my appointment and let me know how to pay the deposit. Thank you!`
+💰 PRICING:
+Total Service Cost: ₦${totalPrice.toLocaleString()}
+Required Deposit (50%): ₦${depositAmount.toLocaleString()}
+Balance Due: ₦${(totalPrice - depositAmount).toLocaleString()}${formData.notes ? `\n\n📝 SPECIAL NOTES:\n${formData.notes}` : ""}
 
+Please confirm this appointment and send payment instructions for the deposit. Thank you! 💕`
+
+    // Use the correct WhatsApp number format
     const whatsappUrl = `https://wa.me/2348165435528?text=${encodeURIComponent(message)}`
-    window.open(whatsappUrl, "_blank")
+
+    console.log("Opening WhatsApp with message:", message)
+    console.log("WhatsApp URL:", whatsappUrl)
+
+    // Open in new window/tab
+    const newWindow = window.open(whatsappUrl, "_blank")
+
+    // Fallback if popup blocked
+    if (!newWindow) {
+      window.location.href = whatsappUrl
+    }
   }
 
   // Render availability message with enhanced feedback
@@ -545,7 +624,6 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
     }
   }
 
-  // Show loading state
   if (loadingAvailability) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-pink-50 to-rose-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
@@ -553,8 +631,7 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4">
             <RefreshCw className="w-6 h-6 text-pink-500" />
           </div>
-          <p className="text-gray-600 dark:text-gray-300">Loading real-time availability...</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Syncing with admin panel...</p>
+          <p className="text-gray-600 dark:text-gray-300">Loading availability...</p>
         </div>
       </div>
     )
@@ -568,37 +645,6 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
           <p className="text-xl text-gray-600 dark:text-gray-300">
             Select a service, pick a date, and secure your spot with a 50% deposit.
           </p>
-        </div>
-
-        {/* Enhanced Real-time Status Bar with Debug Info */}
-        <div className="mb-6 flex items-center justify-between p-3 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-2">
-              {isOnline ? <Wifi className="w-4 h-4 text-green-500" /> : <WifiOff className="w-4 h-4 text-red-500" />}
-              <span className="text-sm text-gray-600 dark:text-gray-300">
-                {isOnline ? "Real-Time Sync Active" : "Connection Lost"}
-              </span>
-            </div>
-            {isRefreshing && (
-              <div className="flex items-center space-x-2">
-                <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
-                <span className="text-sm text-blue-600 dark:text-blue-400">Syncing...</span>
-              </div>
-            )}
-            <div className="text-xs text-gray-500 dark:text-gray-400">
-              Updates: {updateCount} | Blocked: {blockedDates.length}
-            </div>
-          </div>
-          <div className="flex items-center space-x-3">
-            {lastUpdated && (
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                Last sync: {lastUpdated.toLocaleTimeString()}
-              </span>
-            )}
-            <Button variant="ghost" size="sm" onClick={handleManualRefresh} disabled={isRefreshing}>
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
-            </Button>
-          </div>
         </div>
 
         {/* Availability Error Message */}
@@ -675,13 +721,46 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
               <CardContent className="space-y-6">
                 {/* Service Selection */}
                 <div>
-                  <Label className="text-base font-medium text-gray-900 dark:text-gray-100">Select Service *</Label>
-                  <Select value={selectedService} onValueChange={setSelectedService}>
+                  <Label className="text-base font-medium text-gray-900 dark:text-gray-100">Select Service(s) *</Label>
+
+                  {/* Selected Services Display */}
+                  {selectedServices.length > 0 && (
+                    <div className="mt-2 mb-3">
+                      <div className="flex flex-wrap gap-2">
+                        {selectedServices.map((serviceName) => {
+                          const service = services.find((s) => s.name === serviceName)
+                          return (
+                            <div
+                              key={serviceName}
+                              className="flex items-center space-x-2 bg-pink-100 dark:bg-pink-900/20 text-pink-800 dark:text-pink-200 px-3 py-1 rounded-full text-sm"
+                            >
+                              <span>
+                                {serviceName} - ₦{service?.price}
+                              </span>
+                              <button
+                                onClick={() => handleServiceRemove(serviceName)}
+                                className="hover:bg-pink-200 dark:hover:bg-pink-800 rounded-full p-1"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Service Dropdown */}
+                  <Select value="" onValueChange={handleServiceAdd}>
                     <SelectTrigger className="mt-2">
-                      <SelectValue placeholder="Choose your service" />
+                      <SelectValue
+                        placeholder={
+                          selectedServices.length === 0 ? "Choose your first service" : "Add another service (optional)"
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent>
-                      {services.map((service, index) => (
+                      {getAvailableServices().map((service, index) => (
                         <SelectItem key={index} value={service.name}>
                           {service.name} - ₦{service.price} ({service.duration})
                         </SelectItem>
@@ -790,14 +869,24 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                 <CardTitle className="text-xl text-gray-800 dark:text-gray-100">Booking Summary</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {selectedService && (
+                {selectedServices.length > 0 && (
                   <div className="p-4 bg-pink-50 dark:bg-pink-900/20 rounded-lg border dark:border-pink-800">
-                    <h4 className="font-semibold text-gray-800 dark:text-gray-100">{selectedService}</h4>
+                    <h4 className="font-semibold text-gray-800 dark:text-gray-100">Selected Services</h4>
+                    <ul className="list-disc pl-5 text-sm text-gray-600 dark:text-gray-300">
+                      {selectedServices.map((serviceName) => {
+                        const service = services.find((s) => s.name === serviceName)
+                        return (
+                          <li key={serviceName}>
+                            {serviceName} - ₦{service?.price}
+                          </li>
+                        )
+                      })}
+                    </ul>
                     <p className="text-sm text-gray-600 dark:text-gray-300">
-                      {services.find((s) => s.name === selectedService)?.duration}
+                      Total Duration: {getTotalDuration()} minutes
                     </p>
                     <p className="text-lg font-bold text-pink-500 dark:text-pink-400">
-                      ₦{services.find((s) => s.name === selectedService)?.price}
+                      Total Price: ₦{getTotalPrice().toLocaleString()}
                     </p>
                   </div>
                 )}
@@ -831,7 +920,7 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                     <CreditCard className="w-4 h-4" />
                     <span>50% deposit required (non-refundable)</span>
                   </div>
-                  {selectedService && (
+                  {selectedServices.length > 0 && (
                     <p className="text-lg font-bold text-gray-800 dark:text-gray-100">
                       Deposit: ₦{getDepositAmount().toLocaleString()}
                     </p>
@@ -843,7 +932,7 @@ Please confirm my appointment and let me know how to pay the deposit. Thank you!
                   <Button
                     className="w-full bg-pink-500 hover:bg-pink-600 text-white"
                     disabled={
-                      !selectedService ||
+                      selectedServices.length === 0 ||
                       !selectedDate ||
                       !selectedTime ||
                       !formData.name ||
