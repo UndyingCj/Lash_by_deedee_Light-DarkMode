@@ -55,6 +55,45 @@ export interface BlockedTimeSlot {
   created_at: string
 }
 
+// CRITICAL FIX: UTC-safe date formatting that prevents timezone shifts
+const formatDateForDatabase = (dateInput: string | Date): string => {
+  try {
+    if (typeof dateInput === "string") {
+      // If already in YYYY-MM-DD format, return as-is
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+        return dateInput
+      }
+
+      // If it's an ISO string, extract just the date part
+      if (dateInput.includes("T")) {
+        return dateInput.split("T")[0]
+      }
+
+      // Parse date components manually to avoid timezone conversion
+      const parts = dateInput.split("-")
+      if (parts.length === 3) {
+        const year = parts[0].padStart(4, "0")
+        const month = parts[1].padStart(2, "0")
+        const day = parts[2].padStart(2, "0")
+        return `${year}-${month}-${day}`
+      }
+    }
+
+    if (dateInput instanceof Date) {
+      // CRITICAL: Use UTC methods to prevent timezone conversion
+      const year = dateInput.getUTCFullYear()
+      const month = String(dateInput.getUTCMonth() + 1).padStart(2, "0")
+      const day = String(dateInput.getUTCDate()).padStart(2, "0")
+      return `${year}-${month}-${day}`
+    }
+
+    return String(dateInput)
+  } catch (error) {
+    console.error("Error formatting date for database:", dateInput, error)
+    return String(dateInput)
+  }
+}
+
 // Booking operations
 export async function getBookings(filters?: { status?: string; date?: string }) {
   try {
@@ -65,7 +104,8 @@ export async function getBookings(filters?: { status?: string; date?: string }) 
     }
 
     if (filters?.date) {
-      query = query.eq("booking_date", filters.date)
+      const formattedDate = formatDateForDatabase(filters.date)
+      query = query.eq("booking_date", formattedDate)
     }
 
     query = query.order("booking_date", { ascending: false }).order("booking_time", { ascending: false })
@@ -88,8 +128,13 @@ export async function createBooking(booking: Omit<Booking, "id" | "created_at" |
   try {
     console.log("Creating booking with data:", booking)
 
-    // Use the service role client with RLS bypassed
-    const { data, error } = await supabaseAdmin.from("bookings").insert([booking]).select().single()
+    // Ensure date is in correct format
+    const formattedBooking = {
+      ...booking,
+      booking_date: formatDateForDatabase(booking.booking_date),
+    }
+
+    const { data, error } = await supabaseAdmin.from("bookings").insert([formattedBooking]).select().single()
 
     if (error) {
       console.error("Supabase error in createBooking:", error)
@@ -106,9 +151,14 @@ export async function createBooking(booking: Omit<Booking, "id" | "created_at" |
 
 export async function updateBooking(id: number, updates: Partial<Booking>) {
   try {
+    const formattedUpdates = { ...updates }
+    if (updates.booking_date) {
+      formattedUpdates.booking_date = formatDateForDatabase(updates.booking_date)
+    }
+
     const { data, error } = await supabaseAdmin
       .from("bookings")
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update({ ...formattedUpdates, updated_at: new Date().toISOString() })
       .eq("id", id)
       .select()
       .single()
@@ -141,7 +191,7 @@ export async function deleteBooking(id: number) {
   }
 }
 
-// Enhanced blocked dates operations with better error handling
+// FIXED: Enhanced blocked dates operations with timezone-safe handling
 export async function getBlockedDates() {
   try {
     console.log("🔍 Fetching blocked dates from database...")
@@ -153,10 +203,16 @@ export async function getBlockedDates() {
       throw new Error(`Database error: ${error.message}`)
     }
 
-    console.log("📊 Blocked dates fetched:", data?.length || 0, "records")
-    console.log("📋 Blocked dates data:", data)
+    console.log("📊 Raw blocked dates from DB:", data)
 
-    return data as BlockedDate[]
+    // Process dates to ensure consistent format
+    const processedData = (data || []).map((item) => ({
+      ...item,
+      blocked_date: formatDateForDatabase(item.blocked_date),
+    }))
+
+    console.log("📋 Processed blocked dates:", processedData)
+    return processedData as BlockedDate[]
   } catch (error) {
     console.error("❌ Error in getBlockedDates:", error)
     throw error
@@ -165,11 +221,12 @@ export async function getBlockedDates() {
 
 export async function addBlockedDate(date: string, reason?: string) {
   try {
-    console.log("🚫 Adding blocked date:", date, "with reason:", reason)
+    const formattedDate = formatDateForDatabase(date)
+    console.log("🚫 Adding blocked date:", date, "→ Formatted:", formattedDate, "with reason:", reason)
 
     const { data, error } = await supabaseAdmin
       .from("blocked_dates")
-      .upsert([{ blocked_date: date, reason }], {
+      .upsert([{ blocked_date: formattedDate, reason }], {
         onConflict: "blocked_date",
         ignoreDuplicates: false,
       })
@@ -191,12 +248,13 @@ export async function addBlockedDate(date: string, reason?: string) {
 
 export async function removeBlockedDate(date: string) {
   try {
-    console.log("✅ Removing blocked date:", date)
+    const formattedDate = formatDateForDatabase(date)
+    console.log("✅ Removing blocked date:", date, "→ Formatted:", formattedDate)
 
     const { data, error } = await supabaseAdmin
       .from("blocked_dates")
       .delete()
-      .eq("blocked_date", date)
+      .eq("blocked_date", formattedDate)
       .select()
       .single()
 
@@ -213,7 +271,7 @@ export async function removeBlockedDate(date: string) {
   }
 }
 
-// Enhanced blocked time slots operations with better error handling
+// FIXED: Enhanced blocked time slots operations with timezone-safe handling
 export async function getBlockedTimeSlots() {
   try {
     console.log("🔍 Fetching blocked time slots from database...")
@@ -229,10 +287,16 @@ export async function getBlockedTimeSlots() {
       throw new Error(`Database error: ${error.message}`)
     }
 
-    console.log("📊 Blocked time slots fetched:", data?.length || 0, "records")
-    console.log("📋 Blocked time slots data:", data)
+    console.log("📊 Raw blocked time slots from DB:", data)
 
-    return data as BlockedTimeSlot[]
+    // Process dates to ensure consistent format
+    const processedData = (data || []).map((item) => ({
+      ...item,
+      blocked_date: formatDateForDatabase(item.blocked_date),
+    }))
+
+    console.log("📋 Processed blocked time slots:", processedData)
+    return processedData as BlockedTimeSlot[]
   } catch (error) {
     console.error("❌ Error in getBlockedTimeSlots:", error)
     throw error
@@ -241,11 +305,12 @@ export async function getBlockedTimeSlots() {
 
 export async function addBlockedTimeSlot(date: string, time: string, reason?: string) {
   try {
-    console.log("🚫 Adding blocked time slot:", time, "on", date, "with reason:", reason)
+    const formattedDate = formatDateForDatabase(date)
+    console.log("🚫 Adding blocked time slot:", time, "on", date, "→ Formatted:", formattedDate, "with reason:", reason)
 
     const { data, error } = await supabaseAdmin
       .from("blocked_time_slots")
-      .upsert([{ blocked_date: date, blocked_time: time, reason }], {
+      .upsert([{ blocked_date: formattedDate, blocked_time: time, reason }], {
         onConflict: "blocked_date,blocked_time",
         ignoreDuplicates: false,
       })
@@ -267,12 +332,13 @@ export async function addBlockedTimeSlot(date: string, time: string, reason?: st
 
 export async function removeBlockedTimeSlot(date: string, time: string) {
   try {
-    console.log("✅ Removing blocked time slot:", time, "on", date)
+    const formattedDate = formatDateForDatabase(date)
+    console.log("✅ Removing blocked time slot:", time, "on", date, "→ Formatted:", formattedDate)
 
     const { data, error } = await supabaseAdmin
       .from("blocked_time_slots")
       .delete()
-      .eq("blocked_date", date)
+      .eq("blocked_date", formattedDate)
       .eq("blocked_time", time)
       .select()
       .single()
@@ -293,14 +359,14 @@ export async function removeBlockedTimeSlot(date: string, time: string) {
 // Dashboard stats
 export async function getDashboardStats() {
   try {
-    const today = new Date().toISOString().split("T")[0]
+    const today = formatDateForDatabase(new Date())
     const weekStart = new Date()
     weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-    const weekStartStr = weekStart.toISOString().split("T")[0]
+    const weekStartStr = formatDateForDatabase(weekStart)
 
     const monthStart = new Date()
     monthStart.setDate(1)
-    const monthStartStr = monthStart.toISOString().split("T")[0]
+    const monthStartStr = formatDateForDatabase(monthStart)
 
     // Today's bookings
     const { count: todayBookings, error: todayError } = await supabaseAdmin
