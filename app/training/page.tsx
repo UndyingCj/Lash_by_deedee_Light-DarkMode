@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { LuGraduationCap, LuClock, LuUsers, LuAward, LuBookOpen, LuStar, LuCreditCard, LuPackage } from "react-icons/lu"
+import Link from "next/link"
 
 export default function TrainingPage() {
   const courses = [
@@ -317,9 +318,9 @@ export default function TrainingPage() {
                   ))}
                 </ul>
 
-                <a href="https://wa.me/message/X5M2NOA553NGK1" target="_blank" rel="noopener noreferrer">
+                <Link href={`/training/book?course=${encodeURIComponent(course.title)}`}>
                   <Button className="w-full bg-pink-500 hover:bg-pink-600 text-white">Enroll Now</Button>
-                </a>
+                </Link>
               </CardContent>
             </Card>
           ))}
@@ -346,7 +347,6 @@ export default function TrainingPage() {
                 <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
                   <li>• 2 Weeks Lash Course</li>
                   <li>• 2 Weeks Brow Course</li>
-                  <li>• 5 Days Upgrade Courses</li>
                 </ul>
               </div>
 
@@ -376,6 +376,7 @@ export default function TrainingPage() {
                 </p>
                 <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
                   <li>• Brow Lamination & Tint</li>
+                  <li>• 5 Days Upgrade Courses</li>
                 </ul>
               </div>
             </div>
@@ -472,11 +473,11 @@ export default function TrainingPage() {
               AM. Limited spots available for each course.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <a href="https://wa.me/message/X5M2NOA553NGK1" target="_blank" rel="noopener noreferrer">
+              <Link href="/training/book">
                 <Button size="lg" className="bg-pink-500 hover:bg-pink-600 text-white px-8 py-3">
-                  Contact for Details
+                  Browse All Courses
                 </Button>
-              </a>
+              </Link>
             </div>
           </CardContent>
         </Card>
