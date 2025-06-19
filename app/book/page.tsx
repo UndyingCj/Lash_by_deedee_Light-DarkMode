@@ -522,7 +522,7 @@ export default function BookingPage() {
 
     const depositAmount = getDepositAmount()
     const totalPrice = getTotalPrice()
-    const totalDurationHours = Math.ceil(getTotalDuration() / 60)
+    const totalDurationHours = Math.round((getTotalDuration() / 60) * 10) / 10
 
     // Create detailed service breakdown
     const serviceDetails = selectedServices
@@ -883,7 +883,7 @@ Please confirm this appointment and send payment instructions for the deposit. T
                       })}
                     </ul>
                     <p className="text-sm text-gray-600 dark:text-gray-300">
-                      Total Duration: {getTotalDuration()} minutes
+                      Total Duration: {Math.round((getTotalDuration() / 60) * 10) / 10} hours
                     </p>
                     <p className="text-lg font-bold text-pink-500 dark:text-pink-400">
                       Total Price: ₦{getTotalPrice().toLocaleString()}
