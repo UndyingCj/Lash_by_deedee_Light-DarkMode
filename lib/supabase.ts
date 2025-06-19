@@ -55,8 +55,8 @@ export interface BlockedTimeSlot {
   created_at: string
 }
 
-// CRITICAL FIX: Ensure dates are always in YYYY-MM-DD format without timezone conversion
-const ensureDateFormat = (dateInput: string | Date): string => {
+// UTC date normalization function
+const ensureDateFormatUTC = (dateInput: string | Date): string => {
   try {
     if (typeof dateInput === "string") {
       // If already in YYYY-MM-DD format, return as-is
@@ -70,17 +70,14 @@ const ensureDateFormat = (dateInput: string | Date): string => {
       }
     }
 
-    // If it's a Date object, format it carefully to avoid timezone issues
+    // If it's a Date object, format it in UTC
     if (dateInput instanceof Date) {
-      const year = dateInput.getFullYear()
-      const month = String(dateInput.getMonth() + 1).padStart(2, "0")
-      const day = String(dateInput.getDate()).padStart(2, "0")
-      return `${year}-${month}-${day}`
+      return dateInput.toISOString().split("T")[0]
     }
 
     return String(dateInput)
   } catch (error) {
-    console.error("Error formatting date:", dateInput, error)
+    console.error("Error formatting date to UTC:", dateInput, error)
     return String(dateInput)
   }
 }
@@ -95,7 +92,7 @@ export async function getBookings(filters?: { status?: string; date?: string }) 
     }
 
     if (filters?.date) {
-      const formattedDate = ensureDateFormat(filters.date)
+      const formattedDate = ensureDateFormatUTC(filters.date)
       query = query.eq("booking_date", formattedDate)
     }
 
@@ -122,7 +119,7 @@ export async function createBooking(booking: Omit<Booking, "id" | "created_at" |
     // Ensure date is in correct format
     const formattedBooking = {
       ...booking,
-      booking_date: ensureDateFormat(booking.booking_date),
+      booking_date: ensureDateFormatUTC(booking.booking_date),
     }
 
     const { data, error } = await supabaseAdmin.from("bookings").insert([formattedBooking]).select().single()
@@ -144,7 +141,7 @@ export async function updateBooking(id: number, updates: Partial<Booking>) {
   try {
     const formattedUpdates = { ...updates }
     if (updates.booking_date) {
-      formattedUpdates.booking_date = ensureDateFormat(updates.booking_date)
+      formattedUpdates.booking_date = ensureDateFormatUTC(updates.booking_date)
     }
 
     const { data, error } = await supabaseAdmin
@@ -199,7 +196,7 @@ export async function getBlockedDates() {
     // Ensure all dates are in consistent format
     const processedData = (data || []).map((item) => ({
       ...item,
-      blocked_date: ensureDateFormat(item.blocked_date),
+      blocked_date: ensureDateFormatUTC(item.blocked_date),
     }))
 
     console.log("📋 Processed blocked dates:", processedData)
@@ -212,7 +209,7 @@ export async function getBlockedDates() {
 
 export async function addBlockedDate(date: string, reason?: string) {
   try {
-    const formattedDate = ensureDateFormat(date)
+    const formattedDate = ensureDateFormatUTC(date)
     console.log("🚫 Adding blocked date:", date, "→ Formatted:", formattedDate, "with reason:", reason)
 
     const { data, error } = await supabaseAdmin
@@ -239,7 +236,7 @@ export async function addBlockedDate(date: string, reason?: string) {
 
 export async function removeBlockedDate(date: string) {
   try {
-    const formattedDate = ensureDateFormat(date)
+    const formattedDate = ensureDateFormatUTC(date)
     console.log("✅ Removing blocked date:", date, "→ Formatted:", formattedDate)
 
     const { data, error } = await supabaseAdmin
@@ -283,7 +280,7 @@ export async function getBlockedTimeSlots() {
     // Ensure all dates are in consistent format
     const processedData = (data || []).map((item) => ({
       ...item,
-      blocked_date: ensureDateFormat(item.blocked_date),
+      blocked_date: ensureDateFormatUTC(item.blocked_date),
     }))
 
     console.log("📋 Processed blocked time slots:", processedData)
@@ -296,7 +293,7 @@ export async function getBlockedTimeSlots() {
 
 export async function addBlockedTimeSlot(date: string, time: string, reason?: string) {
   try {
-    const formattedDate = ensureDateFormat(date)
+    const formattedDate = ensureDateFormatUTC(date)
     console.log("🚫 Adding blocked time slot:", time, "on", date, "→ Formatted:", formattedDate, "with reason:", reason)
 
     const { data, error } = await supabaseAdmin
@@ -323,7 +320,7 @@ export async function addBlockedTimeSlot(date: string, time: string, reason?: st
 
 export async function removeBlockedTimeSlot(date: string, time: string) {
   try {
-    const formattedDate = ensureDateFormat(date)
+    const formattedDate = ensureDateFormatUTC(date)
     console.log("✅ Removing blocked time slot:", time, "on", date, "→ Formatted:", formattedDate)
 
     const { data, error } = await supabaseAdmin
@@ -350,14 +347,14 @@ export async function removeBlockedTimeSlot(date: string, time: string) {
 // Dashboard stats
 export async function getDashboardStats() {
   try {
-    const today = ensureDateFormat(new Date())
+    const today = ensureDateFormatUTC(new Date())
     const weekStart = new Date()
     weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-    const weekStartStr = ensureDateFormat(weekStart)
+    const weekStartStr = ensureDateFormatUTC(weekStart)
 
     const monthStart = new Date()
     monthStart.setDate(1)
-    const monthStartStr = ensureDateFormat(monthStart)
+    const monthStartStr = ensureDateFormatUTC(monthStart)
 
     // Today's bookings
     const { count: todayBookings, error: todayError } = await supabaseAdmin
