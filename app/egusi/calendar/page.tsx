@@ -78,11 +78,16 @@ const CalendarPage = () => {
   }
 
   const formatDate = (date: Date) => {
-    // CRITICAL FIX: Use local date methods to prevent timezone conversion
+    // CRITICAL FIX: Use the exact date components without timezone conversion
     const year = date.getFullYear()
     const month = String(date.getMonth() + 1).padStart(2, "0")
     const day = String(date.getDate()).padStart(2, "0")
-    return `${year}-${month}-${day}`
+    const result = `${year}-${month}-${day}`
+
+    console.log("🔧 formatDate input:", date.toDateString())
+    console.log("🔧 formatDate output:", result)
+
+    return result
   }
 
   const handleDateClick = async (dateString: string) => {
@@ -181,7 +186,12 @@ const CalendarPage = () => {
   }
 
   const tileClassName = ({ date }: any) => {
-    const dateString = date.toISOString().split("T")[0]
+    const adjustedDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+    const year = adjustedDate.getUTCFullYear()
+    const month = String(adjustedDate.getUTCMonth() + 1).padStart(2, "0")
+    const day = String(adjustedDate.getUTCDate()).padStart(2, "0")
+    const dateString = `${year}-${month}-${day}`
+
     if (blockedDates.includes(dateString)) {
       return "blocked-date"
     }
@@ -306,11 +316,16 @@ const CalendarPage = () => {
                 value={date}
                 tileClassName={tileClassName}
                 onClickDay={(value) => {
-                  // CRITICAL FIX: Use local date methods instead of toISOString()
-                  const year = value.getFullYear()
-                  const month = String(value.getMonth() + 1).padStart(2, "0")
-                  const day = String(value.getDate()).padStart(2, "0")
+                  // CRITICAL FIX: Prevent timezone conversion by using local date components
+                  const clickedDate = new Date(value.getTime() - value.getTimezoneOffset() * 60000)
+                  const year = clickedDate.getUTCFullYear()
+                  const month = String(clickedDate.getUTCMonth() + 1).padStart(2, "0")
+                  const day = String(clickedDate.getUTCDate()).padStart(2, "0")
                   const dateString = `${year}-${month}-${day}`
+
+                  console.log("🎯 User clicked date:", value.toDateString())
+                  console.log("🔧 Timezone offset:", value.getTimezoneOffset())
+                  console.log("📅 Final date string:", dateString)
 
                   if (!loading) {
                     handleDateClick(dateString)
