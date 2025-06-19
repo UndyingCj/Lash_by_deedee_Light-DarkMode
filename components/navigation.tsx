@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Menu, X, Heart } from "lucide-react"
+import { LuMenu, LuX, LuHeart } from "react-icons/lu"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 export default function Navigation() {
@@ -37,7 +37,7 @@ export default function Navigation() {
           <div className="flex items-center justify-between">
             <div className="text-center flex-1">
               <Link href="/" className="inline-flex items-center space-x-2">
-                <Heart className="w-6 h-6 text-pink-500" />
+                <LuHeart className="w-6 h-6 text-pink-500" />
                 <h1 className="text-2xl md:text-3xl font-bold">Lashed by Deedee</h1>
               </Link>
               <p className="text-sm md:text-base text-gray-300 mt-1">Where Beauty Meets Precision</p>
@@ -78,7 +78,7 @@ export default function Navigation() {
               onClick={() => setIsOpen(!isOpen)}
               className="text-white hover:bg-pink-600 dark:hover:bg-pink-700"
             >
-              {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {isOpen ? <LuX className="w-5 h-5" /> : <LuMenu className="w-5 h-5" />}
             </Button>
           </div>
         </div>

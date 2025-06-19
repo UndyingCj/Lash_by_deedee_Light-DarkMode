@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { GraduationCap, Clock, Users, Award, BookOpen, Star, CreditCard, Package } from "lucide-react"
+import { LuGraduationCap, LuClock, LuUsers, LuAward, LuBookOpen, LuStar, LuCreditCard, LuPackage } from "react-icons/lu"
 
 export default function TrainingPage() {
   const courses = [
@@ -145,7 +145,7 @@ export default function TrainingPage() {
       level: "Intermediate",
       price: "50,000",
       students: "6 max",
-      materials: "Basic materials included",
+      materials: "Studio materials only",
       description: "Advanced lash course for those looking to upgrade their existing skills.",
       includes: [
         "Advanced volume techniques",
@@ -154,7 +154,6 @@ export default function TrainingPage() {
         "New trends",
         "Business tips",
         "Certificate of completion",
-        "Basic materials included",
       ],
     },
     {
@@ -163,7 +162,7 @@ export default function TrainingPage() {
       level: "Intermediate",
       price: "80,000",
       students: "8 max",
-      materials: "Basic materials included",
+      materials: "Studio materials only",
       description: "Advanced brow course for professionals looking to enhance their skills.",
       includes: [
         "Advanced techniques",
@@ -172,29 +171,28 @@ export default function TrainingPage() {
         "New trends",
         "Business development",
         "Certificate of completion",
-        "Basic materials included",
       ],
     },
   ]
 
   const benefits = [
     {
-      icon: <GraduationCap className="w-6 h-6" />,
+      icon: <LuGraduationCap className="w-6 h-6" />,
       title: "Expert Instruction",
       description: "Learn from a certified professional with 3+ years of experience",
     },
     {
-      icon: <Users className="w-6 h-6" />,
+      icon: <LuUsers className="w-6 h-6" />,
       title: "Small Class Sizes",
       description: "Maximum 8 students per class for personalized attention",
     },
     {
-      icon: <BookOpen className="w-6 h-6" />,
+      icon: <LuBookOpen className="w-6 h-6" />,
       title: "Hands-On Practice",
       description: "Practice on live models with guidance and feedback",
     },
     {
-      icon: <Award className="w-6 h-6" />,
+      icon: <LuAward className="w-6 h-6" />,
       title: "Certification",
       description: "Receive official certification upon course completion",
     },
@@ -207,7 +205,7 @@ export default function TrainingPage() {
         <div className="text-center mb-12">
           <div className="flex justify-center mb-6">
             <div className="p-4 bg-pink-100 dark:bg-pink-900/50 rounded-full">
-              <GraduationCap className="w-12 h-12 text-pink-500" />
+              <LuGraduationCap className="w-12 h-12 text-pink-500" />
             </div>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold text-pink-500 mb-6">Training Courses</h1>
@@ -219,7 +217,7 @@ export default function TrainingPage() {
         {/* Training Schedule Info */}
         <Card className="border-pink-200 dark:border-pink-700 bg-pink-50 dark:bg-gray-800 mb-12">
           <CardContent className="p-6 text-center">
-            <Clock className="w-12 h-12 mx-auto mb-4 text-pink-500" />
+            <LuClock className="w-12 h-12 mx-auto mb-4 text-pink-500" />
             <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">Training Schedule</h3>
             <div className="grid md:grid-cols-3 gap-6 text-left">
               <div className="bg-white dark:bg-gray-700 p-4 rounded-lg">
@@ -275,14 +273,14 @@ export default function TrainingPage() {
                         variant="secondary"
                         className="bg-pink-100 dark:bg-pink-900/50 text-pink-700 dark:text-pink-300"
                       >
-                        <Clock className="w-3 h-3 mr-1" />
+                        <LuClock className="w-3 h-3 mr-1" />
                         {course.duration}
                       </Badge>
                       <Badge
                         variant="secondary"
                         className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                       >
-                        <Users className="w-3 h-3 mr-1" />
+                        <LuUsers className="w-3 h-3 mr-1" />
                         {course.students}
                       </Badge>
                       <Badge
@@ -295,7 +293,7 @@ export default function TrainingPage() {
                               : "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300"
                         }`}
                       >
-                        <Package className="w-3 h-3 mr-1" />
+                        <LuPackage className="w-3 h-3 mr-1" />
                         {course.materials}
                       </Badge>
                     </div>
@@ -313,7 +311,7 @@ export default function TrainingPage() {
                 <ul className="space-y-2 mb-6">
                   {course.includes.map((item, itemIndex) => (
                     <li key={itemIndex} className="flex items-start space-x-2">
-                      <Star className="w-4 h-4 text-pink-500 mt-0.5 flex-shrink-0" />
+                      <LuStar className="w-4 h-4 text-pink-500 mt-0.5 flex-shrink-0" />
                       <span className="text-gray-600 dark:text-gray-300 text-sm">{item}</span>
                     </li>
                   ))}
@@ -331,7 +329,7 @@ export default function TrainingPage() {
         <Card className="border-pink-200 dark:border-pink-700 bg-pink-50 dark:bg-gray-800 mb-12">
           <CardHeader>
             <CardTitle className="text-2xl text-gray-800 dark:text-gray-100 text-center flex items-center justify-center space-x-2">
-              <Package className="w-8 h-8 text-pink-500" />
+              <LuPackage className="w-8 h-8 text-pink-500" />
               <span>Materials Policy</span>
             </CardTitle>
           </CardHeader>
@@ -339,7 +337,7 @@ export default function TrainingPage() {
             <div className="grid md:grid-cols-3 gap-6">
               <div className="bg-white dark:bg-gray-700 p-6 rounded-lg text-center">
                 <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center">
-                  <Package className="w-8 h-8 text-blue-500" />
+                  <LuPackage className="w-8 h-8 text-blue-500" />
                 </div>
                 <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-3">Basic Materials Included</h4>
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
@@ -354,7 +352,7 @@ export default function TrainingPage() {
 
               <div className="bg-white dark:bg-gray-700 p-6 rounded-lg text-center">
                 <div className="w-16 h-16 mx-auto mb-4 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center">
-                  <Package className="w-8 h-8 text-green-500" />
+                  <LuPackage className="w-8 h-8 text-green-500" />
                 </div>
                 <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-3">WITH Basic Materials</h4>
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
@@ -370,7 +368,7 @@ export default function TrainingPage() {
 
               <div className="bg-white dark:bg-gray-700 p-6 rounded-lg text-center">
                 <div className="w-16 h-16 mx-auto mb-4 bg-orange-100 dark:bg-orange-900/50 rounded-full flex items-center justify-center">
-                  <Package className="w-8 h-8 text-orange-500" />
+                  <LuPackage className="w-8 h-8 text-orange-500" />
                 </div>
                 <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-3">Studio Materials Only</h4>
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
@@ -384,8 +382,9 @@ export default function TrainingPage() {
 
             <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
               <p className="text-sm text-gray-700 dark:text-gray-300 text-center">
-                <strong>Note:</strong> Additional materials will be provided by the studio during all training sessions,
-                but these are not for take-home use unless specified in your course package.
+                <strong>Note:</strong> Depending on what training is selected, additional materials will be provided by
+                the studio during all training sessions, but these are not for take-home use unless specified in your
+                course package.
               </p>
             </div>
           </CardContent>
@@ -396,7 +395,7 @@ export default function TrainingPage() {
           <Card className="border-pink-200 dark:border-pink-700 dark:bg-gray-800">
             <CardHeader>
               <CardTitle className="text-xl text-gray-800 dark:text-gray-100 flex items-center space-x-2">
-                <CreditCard className="w-6 h-6 text-pink-500" />
+                <LuCreditCard className="w-6 h-6 text-pink-500" />
                 <span>Payment Options</span>
               </CardTitle>
             </CardHeader>
@@ -452,6 +451,10 @@ export default function TrainingPage() {
                   <div className="w-2 h-2 bg-pink-500 rounded-full mt-2 flex-shrink-0"></div>
                   <span className="text-gray-600 dark:text-gray-300">Alumni network access</span>
                 </li>
+                <li className="flex items-start space-x-3">
+                  <div className="w-2 h-2 bg-pink-500 rounded-full mt-2 flex-shrink-0"></div>
+                  <span className="text-gray-600 dark:text-gray-300">6 months mentorship</span>
+                </li>
               </ul>
             </CardContent>
           </Card>
@@ -460,7 +463,7 @@ export default function TrainingPage() {
         {/* CTA */}
         <Card className="border-pink-200 dark:border-pink-700 bg-pink-50 dark:bg-gray-800">
           <CardContent className="p-8 text-center">
-            <GraduationCap className="w-16 h-16 mx-auto mb-4 text-pink-500" />
+            <LuGraduationCap className="w-16 h-16 mx-auto mb-4 text-pink-500" />
             <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-4">
               Ready to Start Your Beauty Career?
             </h2>
