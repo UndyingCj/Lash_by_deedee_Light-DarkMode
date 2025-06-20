@@ -146,7 +146,7 @@ export default function TrainingPage() {
       level: "Intermediate",
       price: "50,000",
       students: "6 max",
-      materials: "Studio materials only",
+      materials: "Materials are not included",
       description: "Advanced lash course for those looking to upgrade their existing skills.",
       includes: [
         "Advanced volume techniques",
@@ -163,11 +163,10 @@ export default function TrainingPage() {
       level: "Intermediate",
       price: "80,000",
       students: "8 max",
-      materials: "Studio materials only",
+      materials: "Materials are not included",
       description: "Advanced brow course for professionals looking to enhance their skills.",
       includes: [
         "Advanced techniques",
-        "Correction methods",
         "Color matching",
         "New trends",
         "Business development",
@@ -289,9 +288,11 @@ export default function TrainingPage() {
                         className={`${
                           course.materials.includes("WITH")
                             ? "bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300"
-                            : course.materials.includes("Studio")
+                            : course.materials.includes("Studio materials only")
                               ? "bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300"
-                              : "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300"
+                              : course.materials.includes("not included")
+                                ? "bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300"
+                                : "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300"
                         }`}
                       >
                         <LuPackage className="w-3 h-3 mr-1" />
