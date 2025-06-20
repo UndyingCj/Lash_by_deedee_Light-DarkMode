@@ -24,15 +24,15 @@ export default function ContactPage() {
     {
       icon: <Mail className="w-6 h-6" />,
       title: "Email",
-      details: ["hello@lashedbydeedee.com"],
+      details: ["bookings@lashedbydeedee.com"],
       note: "For general inquiries and bookings",
-      link: "mailto:hello@lashedbydeedee.com",
+      link: "mailto:bookings@lashedbydeedee.com",
     },
     {
       icon: <Clock className="w-6 h-6" />,
       title: "Business Hours",
       details: ["Monday - Saturday: 9:00 AM - 6:00 PM", "Sunday: By appointment only"],
-      note: "Emergency touch-ups available",
+      note: "6 months mentorship",
     },
   ]
 
@@ -42,7 +42,7 @@ export default function ContactPage() {
       name: "Instagram",
       handle: "@lashedbydeedee",
       color: "bg-pink-500",
-      link: "https://instagram.com/lashedbydeedee",
+      link: "https://www.instagram.com/lashedbydeedee?igsh=MWR3NzV6amtpZHdpbg==",
     },
     {
       icon: <MessageCircle className="w-6 h-6" />,

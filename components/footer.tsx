@@ -32,7 +32,7 @@ export default function Footer() {
               >
                 <MessageCircle className="w-5 h-5" />
               </a>
-              <a href="mailto:hello@lashedbydeedee.com" className="text-pink-500 hover:text-pink-400">
+              <a href="mailto:bookings@lashedbydeedee.com" className="text-pink-500 hover:text-pink-400">
                 <Mail className="w-5 h-5" />
               </a>
             </div>
@@ -78,6 +78,11 @@ export default function Footer() {
                   className="hover:text-white"
                 >
                   WhatsApp: Contact Us
+                </a>
+              </li>
+              <li>
+                <a href="mailto:bookings@lashedbydeedee.com" className="hover:text-white">
+                  Email: bookings@lashedbydeedee.com
                 </a>
               </li>
               <li>

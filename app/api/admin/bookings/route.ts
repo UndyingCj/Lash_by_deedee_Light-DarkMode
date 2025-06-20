@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getBookings, createBooking, updateBooking, deleteBooking } from "@/lib/supabase"
 import { supabaseAdmin } from "@/lib/supabase-admin"
+import { sendBookingConfirmation, sendBookingNotificationToAdmin } from "@/lib/email"
 
 export async function GET(request: NextRequest) {
   try {
@@ -99,6 +100,41 @@ export async function POST(request: NextRequest) {
     })
 
     console.log("Created booking:", newBooking)
+
+    // Send email confirmations if email is provided
+    if (body.email && body.email.trim()) {
+      try {
+        const services = Array.isArray(body.service) ? body.service : [body.service]
+        const depositAmount = Math.floor(amount / 2)
+
+        // Send confirmation to customer
+        await sendBookingConfirmation({
+          customerName: body.clientName.trim(),
+          customerEmail: body.email.trim().toLowerCase(),
+          services: services,
+          date: body.date,
+          time: body.time,
+          totalAmount: amount,
+          depositAmount: depositAmount,
+        })
+
+        // Send notification to admin
+        await sendBookingNotificationToAdmin({
+          customerName: body.clientName.trim(),
+          customerEmail: body.email.trim().toLowerCase(),
+          services: services,
+          date: body.date,
+          time: body.time,
+          totalAmount: amount,
+          depositAmount: depositAmount,
+        })
+
+        console.log("Email confirmations sent successfully")
+      } catch (emailError) {
+        console.error("Email sending failed:", emailError)
+        // Don't fail the booking if email fails
+      }
+    }
 
     return NextResponse.json({
       success: true,
