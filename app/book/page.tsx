@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import PaystackPayment from "@/components/paystack-payment"
 import {
   Calendar,
   Clock,
@@ -50,6 +51,10 @@ export default function BookingPage() {
     email: "",
     notes: "",
   })
+
+  // Payment state
+  const [showPayment, setShowPayment] = useState(false)
+  const [bookingData, setBookingData] = useState<any>(null)
 
   // Availability state
   const [blockedDates, setBlockedDates] = useState<string[]>([])
@@ -507,14 +512,53 @@ export default function BookingPage() {
         alert("Please enter your phone number")
         return false
       }
+      if (!formData.email.trim()) {
+        alert("Please enter your email address")
+        return false
+      }
 
-      console.log("✅ Form validation passed - proceeding with WhatsApp booking")
+      console.log("✅ Form validation passed - proceeding with payment")
       return true
     } catch (error) {
       console.error("Validation error:", error)
       alert("Please check your booking details and try again.")
       return false
     }
+  }
+
+  const handleProceedToPayment = () => {
+    if (!validateForm()) return
+
+    const depositAmount = getDepositAmount()
+    const totalPrice = getTotalPrice()
+
+    // Prepare booking data for payment
+    const booking = {
+      customerName: formData.name,
+      customerEmail: formData.email,
+      customerPhone: formData.phone,
+      services: selectedServices,
+      date: selectedDate,
+      time: selectedTime,
+      totalAmount: totalPrice,
+      depositAmount: depositAmount,
+      notes: formData.notes,
+    }
+
+    setBookingData(booking)
+    setShowPayment(true)
+  }
+
+  const handlePaymentSuccess = (reference: string) => {
+    console.log("Payment successful:", reference)
+    setShowPayment(false)
+    // Redirect to success page or show success message
+    alert("Payment successful! You will receive a confirmation email shortly.")
+  }
+
+  const handlePaymentError = (error: string) => {
+    console.error("Payment failed:", error)
+    alert("Payment failed. Please try again.")
   }
 
   const handleWhatsAppBooking = () => {
@@ -655,16 +699,6 @@ Please confirm this appointment and send payment instructions for the deposit. T
               <span className="font-medium">Availability Notice</span>
             </div>
             <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-1">{availabilityError}</p>
-          </div>
-        )}
-
-        {/* Debug Info Panel */}
-        {process.env.NODE_ENV === "development" && (
-          <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-            <div className="text-sm text-blue-700 dark:text-blue-300">
-              <strong>Debug Info:</strong> Blocked dates: {JSON.stringify(blockedDates)} | Selected: {selectedDate} |
-              Normalized: {selectedDate ? normalizeDateString(selectedDate) : "none"}
-            </div>
           </div>
         )}
 
@@ -838,7 +872,7 @@ Please confirm this appointment and send payment instructions for the deposit. T
                 </div>
 
                 <div>
-                  <Label className="text-base font-medium text-gray-900 dark:text-gray-100">Email Address</Label>
+                  <Label className="text-base font-medium text-gray-900 dark:text-gray-100">Email Address *</Label>
                   <Input
                     type="email"
                     placeholder="your.email@example.com"
@@ -927,10 +961,31 @@ Please confirm this appointment and send payment instructions for the deposit. T
                   )}
                 </div>
 
-                {/* Booking Button */}
+                {/* Payment Buttons */}
                 <div className="space-y-3">
                   <Button
-                    className="w-full bg-pink-500 hover:bg-pink-600 text-white"
+                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    disabled={
+                      selectedServices.length === 0 ||
+                      !selectedDate ||
+                      !selectedTime ||
+                      !formData.name ||
+                      !formData.phone ||
+                      !formData.email ||
+                      isProcessing ||
+                      isDateBlocked(selectedDate) ||
+                      !isTimeSlotAvailable(selectedDate, selectedTime)
+                    }
+                    onClick={handleProceedToPayment}
+                  >
+                    {isProcessing ? "Processing..." : "Pay Deposit Online"}
+                  </Button>
+
+                  <div className="text-center text-sm text-gray-500 dark:text-gray-400">or</div>
+
+                  <Button
+                    variant="outline"
+                    className="w-full border-pink-300 dark:border-pink-700 text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-900/20"
                     disabled={
                       selectedServices.length === 0 ||
                       !selectedDate ||
@@ -943,13 +998,13 @@ Please confirm this appointment and send payment instructions for the deposit. T
                     }
                     onClick={handleWhatsAppBooking}
                   >
-                    {isProcessing ? "Processing..." : "Book via WhatsApp"}
+                    Book via WhatsApp
                   </Button>
                 </div>
 
                 <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                  <p>Contact us via WhatsApp to confirm your appointment</p>
-                  <p>and arrange payment details</p>
+                  <p>Secure online payment with Paystack</p>
+                  <p>or contact us via WhatsApp</p>
                 </div>
               </CardContent>
             </Card>
@@ -977,6 +1032,16 @@ Please confirm this appointment and send payment instructions for the deposit. T
             </Card>
           </div>
         </div>
+
+        {/* Payment Modal */}
+        {showPayment && bookingData && (
+          <PaystackPayment
+            bookingData={bookingData}
+            onSuccess={handlePaymentSuccess}
+            onError={handlePaymentError}
+            onClose={() => setShowPayment(false)}
+          />
+        )}
       </div>
     </div>
   )
