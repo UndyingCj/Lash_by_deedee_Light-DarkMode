@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
+import { createBooking } from "@/lib/supabase"
 import { sendBookingConfirmation, sendBookingNotificationToAdmin } from "@/lib/email"
 
 export async function POST(req: Request) {
@@ -11,23 +11,29 @@ export async function POST(req: Request) {
       return new NextResponse("Missing fields", { status: 400 })
     }
 
-    const booking = await prisma.booking.create({
-      data: {
-        firstName,
-        lastName,
-        email,
-        phone,
-        date,
-        time,
-        services: {
-          connect: selectedServices.map((service: { id: string }) => ({
-            id: service.id,
-          })),
-        },
-        totalPrice,
-        notes,
-      },
+    // Convert selectedServices array of objects to array of IDs
+    const serviceIds = selectedServices.map((service: { id: string }) => service.id)
+
+    const { data: booking, error } = await createBooking({
+      firstName,
+      lastName,
+      email,
+      phone,
+      date,
+      time,
+      service_ids: serviceIds, // Use service_ids here
+      totalPrice,
+      notes,
     })
+
+    if (error) {
+      console.error("Supabase error creating booking:", error)
+      return new NextResponse("Failed to create booking", { status: 500 })
+    }
+
+    if (!booking) {
+      return new NextResponse("Failed to create booking, no data returned", { status: 500 })
+    }
 
     // Send confirmation emails
     try {
