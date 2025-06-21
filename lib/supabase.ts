@@ -215,6 +215,11 @@ export async function getBlockedDates() {
     return processedData as BlockedDate[]
   } catch (error) {
     console.error("❌ Error in getBlockedDates:", error)
+    // Graceful fallback – don’t crash the API / page
+    if (error instanceof TypeError) {
+      console.warn("Returning empty blocked-dates array due to transient network issue")
+      return [] as BlockedDate[]
+    }
     throw error
   }
 }
@@ -299,6 +304,11 @@ export async function getBlockedTimeSlots() {
     return processedData as BlockedTimeSlot[]
   } catch (error) {
     console.error("❌ Error in getBlockedTimeSlots:", error)
+    // Graceful fallback – don’t crash the API / page
+    if (error instanceof TypeError) {
+      console.warn("Returning empty blocked-slots array due to transient network issue")
+      return [] as BlockedTimeSlot[]
+    }
     throw error
   }
 }
