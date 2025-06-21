@@ -1,0 +1,119 @@
+import { type NextRequest, NextResponse } from "next/server"
+import { verifyPayment } from "@/lib/paystack"
+import { createBooking } from "@/lib/supabase"
+import { sendBookingConfirmationEmail } from "@/lib/email"
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { reference } = body
+
+    if (!reference) {
+      return NextResponse.json({ status: false, message: "Payment reference is required" }, { status: 400 })
+    }
+
+    console.log("Verifying payment with reference:", reference)
+
+    const verificationResponse = await verifyPayment(reference)
+
+    if (!verificationResponse.status) {
+      console.error("Payment verification failed:", verificationResponse.message)
+      return NextResponse.json(
+        { status: false, message: verificationResponse.message || "Payment verification failed" },
+        { status: 400 },
+      )
+    }
+
+    const paymentData = verificationResponse.data
+
+    if (!paymentData) {
+      return NextResponse.json({ status: false, message: "No payment data found" }, { status: 400 })
+    }
+
+    console.log("Payment verification successful:", {
+      reference: paymentData.reference,
+      status: paymentData.status,
+      amount: paymentData.amount,
+    })
+
+    // Check if payment was successful
+    if (paymentData.status !== "success") {
+      return NextResponse.json(
+        { status: false, message: `Payment ${paymentData.status}. ${paymentData.gateway_response}` },
+        { status: 400 },
+      )
+    }
+
+    // Extract booking data from metadata
+    const metadata = paymentData.metadata
+    if (!metadata) {
+      return NextResponse.json({ status: false, message: "No booking metadata found in payment" }, { status: 400 })
+    }
+
+    try {
+      // Create booking in database
+      const booking = await createBooking({
+        client_name: metadata.customerName,
+        phone: metadata.customerPhone,
+        email: paymentData.customer.email,
+        service: metadata.services.join(", "),
+        booking_date: metadata.bookingDate,
+        booking_time: metadata.bookingTime,
+        status: "confirmed", // Automatically confirm paid bookings
+        amount: metadata.totalAmount,
+        notes:
+          metadata.notes ||
+          `Deposit paid: ₦${(paymentData.amount / 100).toLocaleString()}. Payment reference: ${paymentData.reference}`,
+      })
+
+      console.log("Booking created successfully:", booking.id)
+
+      // Send confirmation email
+      try {
+        await sendBookingConfirmationEmail({
+          customerName: metadata.customerName,
+          customerEmail: paymentData.customer.email,
+          services: metadata.services,
+          date: metadata.bookingDate,
+          time: metadata.bookingTime,
+          totalAmount: metadata.totalAmount,
+          depositAmount: metadata.depositAmount,
+          paymentReference: paymentData.reference,
+        })
+        console.log("Confirmation email sent successfully")
+      } catch (emailError) {
+        console.error("Failed to send confirmation email:", emailError)
+        // Don't fail the entire process if email fails
+      }
+
+      return NextResponse.json({
+        status: true,
+        message: "Payment verified and booking confirmed",
+        data: {
+          payment: {
+            reference: paymentData.reference,
+            amount: paymentData.amount,
+            status: paymentData.status,
+            paid_at: paymentData.paid_at,
+          },
+          booking: {
+            id: booking.id,
+            status: booking.status,
+          },
+        },
+      })
+    } catch (bookingError) {
+      console.error("Failed to create booking:", bookingError)
+      return NextResponse.json(
+        { status: false, message: "Payment successful but failed to create booking. Please contact support." },
+        { status: 500 },
+      )
+    }
+  } catch (error) {
+    console.error("Payment verification error:", error)
+    return NextResponse.json(
+      { status: false, message: "Internal server error during payment verification" },
+      { status: 500 },
+    )
+  }
+}

@@ -7,6 +7,7 @@ interface BookingConfirmationEmailProps {
   time: string
   totalAmount: number
   depositAmount: number
+  paymentReference?: string
 }
 
 export function BookingConfirmationEmail({
@@ -16,6 +17,7 @@ export function BookingConfirmationEmail({
   time,
   totalAmount,
   depositAmount,
+  paymentReference,
 }: BookingConfirmationEmailProps) {
   const formattedDate = new Date(date).toLocaleDateString("en-US", {
     weekday: "long",
@@ -69,6 +71,11 @@ export function BookingConfirmationEmail({
               <Text style={detailItem}>
                 <strong>Deposit Required:</strong> ₦{depositAmount.toLocaleString()}
               </Text>
+              {paymentReference && (
+                <Text style={detailItem}>
+                  <strong>Payment Reference:</strong> {paymentReference}
+                </Text>
+              )}
             </Section>
 
             <Section style={importantInfo}>
