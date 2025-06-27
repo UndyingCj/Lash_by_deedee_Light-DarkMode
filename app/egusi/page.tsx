@@ -17,7 +17,7 @@ interface AdminUser {
 export default function AdminLoginPage() {
   const [step, setStep] = useState<"login" | "2fa" | "forgot-password">("login")
   const [credentials, setCredentials] = useState({
-    username: "",
+    email: "",
     password: "",
   })
   const [twoFactorCode, setTwoFactorCode] = useState("")
@@ -108,10 +108,12 @@ export default function AdminLoginPage() {
       })
 
       const data = await response.json()
-      setMessage(data.message)
 
       if (data.success) {
+        setMessage(data.message)
         setTimeout(() => setStep("login"), 3000)
+      } else {
+        setError(data.message || "Failed to send reset email")
       }
     } catch (err) {
       setError("Failed to send reset email. Please try again.")
@@ -123,15 +125,16 @@ export default function AdminLoginPage() {
   const renderLoginForm = () => (
     <form onSubmit={handleLogin} className="space-y-4">
       <div>
-        <Label htmlFor="username" className="text-gray-700 dark:text-gray-300">
-          Username
+        <Label htmlFor="email" className="text-gray-700 dark:text-gray-300">
+          Email Address
         </Label>
         <Input
-          id="username"
-          type="text"
-          value={credentials.username}
-          onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
+          id="email"
+          type="email"
+          value={credentials.email}
+          onChange={(e) => setCredentials({ ...credentials, email: e.target.value })}
           className="mt-1"
+          placeholder="lashedbydeedeee@gmail.com"
           required
         />
       </div>
@@ -173,7 +176,10 @@ export default function AdminLoginPage() {
       <div className="text-center">
         <button
           type="button"
-          onClick={() => setStep("forgot-password")}
+          onClick={() => {
+            setStep("forgot-password")
+            setForgotEmail(credentials.email)
+          }}
           className="text-sm text-pink-500 hover:text-pink-600"
         >
           Forgot your password?
@@ -250,6 +256,7 @@ export default function AdminLoginPage() {
           value={forgotEmail}
           onChange={(e) => setForgotEmail(e.target.value)}
           className="mt-1"
+          placeholder="lashedbydeedeee@gmail.com"
           required
         />
       </div>

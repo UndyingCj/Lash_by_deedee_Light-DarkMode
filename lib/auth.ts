@@ -49,20 +49,30 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash)
 }
 
-// Authenticate admin user
-export async function authenticateAdmin(username: string, password: string): Promise<LoginResult> {
+// Authenticate admin user (using email as username)
+export async function authenticateAdmin(email: string, password: string): Promise<LoginResult> {
   try {
-    // Get user from database
+    console.log("Authenticating user with email:", email)
+
+    // Get user from database using email
     const { data: user, error } = await supabase
       .from("admin_users")
       .select("*")
-      .eq("username", username)
+      .eq("email", email)
       .eq("is_active", true)
       .single()
 
-    if (error || !user) {
+    if (error) {
+      console.error("Database error:", error)
       return { success: false, message: "Invalid credentials" }
     }
+
+    if (!user) {
+      console.log("User not found")
+      return { success: false, message: "Invalid credentials" }
+    }
+
+    console.log("User found:", user.email)
 
     // Check if account is locked
     if (user.locked_until && new Date(user.locked_until) > new Date()) {
@@ -73,9 +83,10 @@ export async function authenticateAdmin(username: string, password: string): Pro
     const isValidPassword = await verifyPassword(password, user.password_hash)
 
     if (!isValidPassword) {
+      console.log("Invalid password")
       // Increment failed attempts
       const failedAttempts = user.failed_login_attempts + 1
-      const lockUntil = failedAttempts >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : null // Lock for 15 minutes after 5 failed attempts
+      const lockUntil = failedAttempts >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : null
 
       await supabase
         .from("admin_users")
@@ -88,6 +99,8 @@ export async function authenticateAdmin(username: string, password: string): Pro
       return { success: false, message: "Invalid credentials" }
     }
 
+    console.log("Password verified successfully")
+
     // Reset failed attempts on successful password verification
     await supabase
       .from("admin_users")
@@ -99,18 +112,30 @@ export async function authenticateAdmin(username: string, password: string): Pro
 
     // Check if 2FA is enabled
     if (user.two_factor_enabled) {
+      console.log("2FA enabled, generating code")
       // Generate and send 2FA code
       const code = generateTwoFactorCode()
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
 
-      await supabase.from("two_factor_codes").insert({
+      const { error: codeError } = await supabase.from("two_factor_codes").insert({
         user_id: user.id,
         code,
         expires_at: expiresAt.toISOString(),
       })
 
+      if (codeError) {
+        console.error("Error saving 2FA code:", codeError)
+        return { success: false, message: "Authentication failed" }
+      }
+
       // Send 2FA code via email
-      await sendTwoFactorCode(user.email, code)
+      try {
+        await sendTwoFactorCode(user.email, code)
+        console.log("2FA code sent successfully")
+      } catch (emailError) {
+        console.error("Error sending 2FA code:", emailError)
+        return { success: false, message: "Failed to send verification code" }
+      }
 
       return {
         success: true,
@@ -133,11 +158,16 @@ export async function authenticateAdmin(username: string, password: string): Pro
     const sessionToken = generateSessionToken()
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
-    await supabase.from("admin_sessions").insert({
+    const { error: sessionError } = await supabase.from("admin_sessions").insert({
       user_id: user.id,
       session_token: sessionToken,
       expires_at: expiresAt.toISOString(),
     })
+
+    if (sessionError) {
+      console.error("Error creating session:", sessionError)
+      return { success: false, message: "Authentication failed" }
+    }
 
     // Update last login
     await supabase.from("admin_users").update({ last_login: new Date().toISOString() }).eq("id", user.id)
@@ -165,6 +195,8 @@ export async function authenticateAdmin(username: string, password: string): Pro
 // Verify 2FA code
 export async function verifyTwoFactorCode(userId: string, code: string): Promise<TwoFactorResult> {
   try {
+    console.log("Verifying 2FA code for user:", userId)
+
     // Get valid code
     const { data: twoFactorCode, error } = await supabase
       .from("two_factor_codes")
@@ -176,6 +208,7 @@ export async function verifyTwoFactorCode(userId: string, code: string): Promise
       .single()
 
     if (error || !twoFactorCode) {
+      console.log("Invalid or expired 2FA code")
       return { success: false, message: "Invalid or expired code" }
     }
 
@@ -195,6 +228,7 @@ export async function verifyTwoFactorCode(userId: string, code: string): Promise
     // Update last login
     await supabase.from("admin_users").update({ last_login: new Date().toISOString() }).eq("id", userId)
 
+    console.log("2FA verification successful")
     return { success: true, sessionToken }
   } catch (error) {
     console.error("2FA verification error:", error)
@@ -240,6 +274,8 @@ export async function validateSession(sessionToken: string): Promise<AdminUser |
 // Generate password reset token
 export async function generatePasswordResetToken(email: string): Promise<{ success: boolean; message: string }> {
   try {
+    console.log("Generating password reset token for:", email)
+
     // Get user by email
     const { data: user, error } = await supabase
       .from("admin_users")
@@ -248,23 +284,45 @@ export async function generatePasswordResetToken(email: string): Promise<{ succe
       .eq("is_active", true)
       .single()
 
-    if (error || !user) {
-      // Don't reveal if email exists or not
+    if (error) {
+      console.error("Database error when finding user:", error)
+      // Don't reveal if email exists or not for security
       return { success: true, message: "If the email exists, a reset link has been sent." }
     }
+
+    if (!user) {
+      console.log("User not found for email:", email)
+      // Don't reveal if email exists or not for security
+      return { success: true, message: "If the email exists, a reset link has been sent." }
+    }
+
+    console.log("User found, generating reset token")
 
     // Generate reset token
     const token = crypto.randomBytes(32).toString("hex")
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
 
-    await supabase.from("password_reset_tokens").insert({
+    const { error: tokenError } = await supabase.from("password_reset_tokens").insert({
       user_id: user.id,
       token,
       expires_at: expiresAt.toISOString(),
     })
 
+    if (tokenError) {
+      console.error("Error saving reset token:", tokenError)
+      return { success: false, message: "Failed to generate reset token" }
+    }
+
+    console.log("Reset token saved, sending email")
+
     // Send reset email
-    await sendPasswordResetEmail(user.email, token)
+    try {
+      await sendPasswordResetEmail(user.email, token)
+      console.log("Reset email sent successfully")
+    } catch (emailError) {
+      console.error("Error sending reset email:", emailError)
+      return { success: false, message: "Failed to send reset email" }
+    }
 
     return { success: true, message: "If the email exists, a reset link has been sent." }
   } catch (error) {
@@ -279,6 +337,8 @@ export async function resetPasswordWithToken(
   newPassword: string,
 ): Promise<{ success: boolean; message: string }> {
   try {
+    console.log("Resetting password with token")
+
     // Validate token
     const { data: resetToken, error } = await supabase
       .from("password_reset_tokens")
@@ -289,6 +349,7 @@ export async function resetPasswordWithToken(
       .single()
 
     if (error || !resetToken) {
+      console.log("Invalid or expired reset token")
       return { success: false, message: "Invalid or expired reset token" }
     }
 
@@ -296,7 +357,7 @@ export async function resetPasswordWithToken(
     const passwordHash = await hashPassword(newPassword)
 
     // Update password
-    await supabase
+    const { error: updateError } = await supabase
       .from("admin_users")
       .update({
         password_hash: passwordHash,
@@ -304,12 +365,18 @@ export async function resetPasswordWithToken(
       })
       .eq("id", resetToken.user_id)
 
+    if (updateError) {
+      console.error("Error updating password:", updateError)
+      return { success: false, message: "Failed to reset password" }
+    }
+
     // Mark token as used
     await supabase.from("password_reset_tokens").update({ used: true }).eq("id", resetToken.id)
 
     // Invalidate all sessions for this user
     await supabase.from("admin_sessions").delete().eq("user_id", resetToken.user_id)
 
+    console.log("Password reset successfully")
     return { success: true, message: "Password reset successfully" }
   } catch (error) {
     console.error("Password reset error:", error)
@@ -320,14 +387,18 @@ export async function resetPasswordWithToken(
 // Send 2FA code via email
 async function sendTwoFactorCode(email: string, code: string): Promise<void> {
   try {
-    const response = await fetch("/api/auth/send-2fa-code", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, code }),
-    })
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/auth/send-2fa-code`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code }),
+      },
+    )
 
     if (!response.ok) {
-      throw new Error("Failed to send 2FA code")
+      const errorText = await response.text()
+      throw new Error(`Failed to send 2FA code: ${errorText}`)
     }
   } catch (error) {
     console.error("Error sending 2FA code:", error)
@@ -338,14 +409,18 @@ async function sendTwoFactorCode(email: string, code: string): Promise<void> {
 // Send password reset email
 async function sendPasswordResetEmail(email: string, token: string): Promise<void> {
   try {
-    const response = await fetch("/api/auth/send-reset-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, token }),
-    })
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/auth/send-reset-email`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, token }),
+      },
+    )
 
     if (!response.ok) {
-      throw new Error("Failed to send reset email")
+      const errorText = await response.text()
+      throw new Error(`Failed to send reset email: ${errorText}`)
     }
   } catch (error) {
     console.error("Error sending reset email:", error)

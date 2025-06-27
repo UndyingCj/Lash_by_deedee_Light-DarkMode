@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
     // Set session cookie
     const response = NextResponse.json({
       success: true,
+      message: "2FA verification successful",
     })
 
     response.cookies.set("admin-session", result.sessionToken!, {
