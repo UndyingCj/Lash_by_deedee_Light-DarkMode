@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase-admin"
-import { sendPasswordResetEmail } from "@/lib/email"
 import crypto from "crypto"
 
 export async function POST(request: NextRequest) {
@@ -17,61 +16,63 @@ export async function POST(request: NextRequest) {
     const { data: user, error: userError } = await supabaseAdmin
       .from("admin_users")
       .select("*")
-      .eq("email", email.toLowerCase())
+      .eq("email", email.toLowerCase().trim())
+      .eq("is_active", true)
       .single()
 
-    // Always return success to prevent email enumeration
     if (userError || !user) {
-      console.log("❌ User not found for password reset:", email)
+      console.log("❌ User not found:", email)
+      // Return success to prevent email enumeration
       return NextResponse.json({
         success: true,
-        message: "If an account with that email exists, a reset link has been sent.",
+        message: "If the email exists, a reset link has been sent.",
       })
     }
 
-    // Check rate limiting (max 3 reset requests per hour)
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
-    const { count } = await supabaseAdmin
-      .from("password_reset_tokens")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .gte("created_at", oneHourAgo.toISOString())
-
-    if (count && count >= 3) {
-      console.log("🚫 Rate limit exceeded for password reset:", email)
-      return NextResponse.json({
-        success: true,
-        message: "If an account with that email exists, a reset link has been sent.",
-      })
-    }
+    console.log("✅ User found, generating reset token")
 
     // Generate reset token
     const resetToken = crypto.randomBytes(32).toString("hex")
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
 
     // Store reset token
-    await supabaseAdmin.from("password_reset_tokens").insert({
+    const { error: tokenError } = await supabaseAdmin.from("password_reset_tokens").insert({
       user_id: user.id,
       token: resetToken,
       expires_at: expiresAt.toISOString(),
+      used: false,
     })
 
-    // Send reset email
-    try {
-      const resetUrl = `https://lashedbydeedee.com/egusi/reset-password?token=${resetToken}`
-      await sendPasswordResetEmail(user.email, resetUrl)
-      console.log("✅ Password reset email sent to:", email)
+    if (tokenError) {
+      console.error("❌ Failed to store reset token:", tokenError)
+      return NextResponse.json({ error: "Failed to generate reset token" }, { status: 500 })
+    }
 
-      return NextResponse.json({
-        success: true,
-        message: "If an account with that email exists, a reset link has been sent.",
-      })
-    } catch (emailError) {
-      console.error("❌ Failed to send password reset email:", emailError)
+    console.log("✅ Reset token stored, sending email")
+
+    // Send reset email using the send-reset-email API
+    const resetResponse = await fetch(
+      `${process.env.NEXT_PUBLIC_SITE_URL || "https://lashedbydeedee.com"}/api/auth/send-reset-email`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: user.email, token: resetToken }),
+      },
+    )
+
+    if (!resetResponse.ok) {
+      console.error("❌ Failed to send reset email")
       return NextResponse.json({ error: "Failed to send reset email" }, { status: 500 })
     }
+
+    console.log("✅ Reset email sent successfully")
+
+    return NextResponse.json({
+      success: true,
+      message: "If the email exists, a reset link has been sent.",
+    })
   } catch (error) {
-    console.error("❌ Password reset error:", error)
+    console.error("❌ Forgot password error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

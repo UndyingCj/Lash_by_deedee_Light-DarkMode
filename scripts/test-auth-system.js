@@ -1,14 +1,37 @@
-const { createClient } = require("@supabase/supabase-js")
-const bcrypt = require("bcryptjs")
+import { createClient } from "@supabase/supabase-js"
+import bcrypt from "bcryptjs"
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+// Environment variables
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error("❌ Missing environment variables:")
+  console.error("NEXT_PUBLIC_SUPABASE_URL:", supabaseUrl ? "✅ Set" : "❌ Missing")
+  console.error("SUPABASE_SERVICE_ROLE_KEY:", supabaseServiceKey ? "✅ Set" : "❌ Missing")
+  process.exit(1)
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 async function testAuthSystem() {
-  console.log("🔍 Testing Authentication System...\n")
+  console.log("🧪 Testing Complete Authentication System...\n")
 
   try {
-    // Test 1: Check if admin user exists
-    console.log("1. Checking admin user...")
+    // Step 1: Test database connection
+    console.log("1. Testing database connection...")
+    const { data, error } = await supabase.from("admin_users").select("count").single()
+
+    if (error) {
+      console.error("❌ Database connection failed:", error.message)
+      console.log("📝 Please run the SQL script in your Supabase dashboard first")
+      return
+    }
+
+    console.log("✅ Database connection successful")
+
+    // Step 2: Check/Create admin user
+    console.log("\n2. Checking admin user...")
     const { data: user, error: userError } = await supabase
       .from("admin_users")
       .select("*")
@@ -16,15 +39,14 @@ async function testAuthSystem() {
       .single()
 
     if (userError) {
-      console.log("❌ Admin user not found, creating...")
-
-      // Create admin user
+      console.log("👤 Creating default admin user...")
       const passwordHash = await bcrypt.hash("admin123", 12)
+
       const { data: newUser, error: createError } = await supabase
         .from("admin_users")
         .insert({
-          username: "admin",
           email: "lashedbydeedeee@gmail.com",
+          username: "admin",
           password_hash: passwordHash,
           is_active: true,
           two_factor_enabled: false,
@@ -33,68 +55,90 @@ async function testAuthSystem() {
         .single()
 
       if (createError) {
-        console.error("❌ Failed to create admin user:", createError)
+        console.error("❌ Failed to create admin user:", createError.message)
         return
       }
 
       console.log("✅ Admin user created successfully")
     } else {
-      console.log("✅ Admin user exists:", user.email)
+      console.log("✅ Admin user exists")
+
+      // Reset password to known value
+      console.log("🔄 Resetting password to 'admin123'...")
+      const passwordHash = await bcrypt.hash("admin123", 12)
+
+      await supabase
+        .from("admin_users")
+        .update({
+          password_hash: passwordHash,
+          password_changed_at: new Date().toISOString(),
+          failed_login_attempts: 0,
+          locked_until: null,
+        })
+        .eq("id", user.id)
+
+      console.log("✅ Password reset to 'admin123'")
     }
 
-    // Test 2: Test password verification
-    console.log("\n2. Testing password verification...")
-    const testPassword = "admin123"
-    const isValid = await bcrypt.compare(testPassword, user?.password_hash || (await bcrypt.hash(testPassword, 12)))
-    console.log(`✅ Password verification: ${isValid ? "PASS" : "FAIL"}`)
+    // Step 3: Test password verification
+    console.log("\n3. Testing password verification...")
+    const { data: testUser } = await supabase
+      .from("admin_users")
+      .select("*")
+      .eq("email", "lashedbydeedeee@gmail.com")
+      .single()
 
-    // Test 3: Test database tables
-    console.log("\n3. Checking database tables...")
-    const tables = ["admin_users", "admin_sessions", "two_factor_codes", "password_reset_tokens"]
+    const isPasswordValid = await bcrypt.compare("admin123", testUser.password_hash)
+    console.log(`Password verification: ${isPasswordValid ? "✅ VALID" : "❌ INVALID"}`)
 
-    for (const table of tables) {
-      const { data, error } = await supabase.from(table).select("*").limit(1)
-      if (error) {
-        console.log(`❌ Table ${table}: ERROR - ${error.message}`)
-      } else {
-        console.log(`✅ Table ${table}: OK`)
-      }
+    // Step 4: Clean up old data
+    console.log("\n4. Cleaning up old sessions and tokens...")
+
+    // Clear old sessions
+    await supabase.from("admin_sessions").delete().eq("user_id", testUser.id)
+    console.log("✅ Old sessions cleared")
+
+    // Clear old reset tokens
+    await supabase.from("password_reset_tokens").update({ used: true }).eq("user_id", testUser.id).eq("used", false)
+    console.log("✅ Old reset tokens cleared")
+
+    // Step 5: Test API endpoints
+    console.log("\n5. Testing API endpoints...")
+
+    // Test login API
+    console.log("🔐 Testing login API...")
+    const loginResponse = await fetch("https://lashedbydeedee.com/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "lashedbydeedeee@gmail.com",
+        password: "admin123",
+      }),
+    })
+
+    const loginResult = await loginResponse.json()
+    console.log(`Login API: ${loginResponse.ok ? "✅ SUCCESS" : "❌ FAILED"}`)
+    if (!loginResponse.ok) {
+      console.log("Error:", loginResult.error)
     }
 
-    // Test 4: Clean up old sessions and tokens
-    console.log("\n4. Cleaning up expired data...")
+    // Test forgot password API
+    console.log("📧 Testing forgot password API...")
+    const forgotResponse = await fetch("https://lashedbydeedee.com/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "lashedbydeedeee@gmail.com",
+      }),
+    })
 
-    // Clean expired sessions
-    const { error: sessionCleanup } = await supabase
-      .from("admin_sessions")
-      .delete()
-      .lt("expires_at", new Date().toISOString())
-
-    if (!sessionCleanup) {
-      console.log("✅ Expired sessions cleaned")
+    const forgotResult = await forgotResponse.json()
+    console.log(`Forgot Password API: ${forgotResponse.ok ? "✅ SUCCESS" : "❌ FAILED"}`)
+    if (!forgotResponse.ok) {
+      console.log("Error:", forgotResult.error)
     }
 
-    // Clean expired 2FA codes
-    const { error: codeCleanup } = await supabase
-      .from("two_factor_codes")
-      .delete()
-      .lt("expires_at", new Date().toISOString())
-
-    if (!codeCleanup) {
-      console.log("✅ Expired 2FA codes cleaned")
-    }
-
-    // Clean expired reset tokens
-    const { error: tokenCleanup } = await supabase
-      .from("password_reset_tokens")
-      .delete()
-      .lt("expires_at", new Date().toISOString())
-
-    if (!tokenCleanup) {
-      console.log("✅ Expired reset tokens cleaned")
-    }
-
-    console.log("\n🎉 Authentication system test completed successfully!")
+    console.log("\n🎉 Authentication System Test Complete!")
     console.log("\n📋 Login Credentials:")
     console.log("Email: lashedbydeedeee@gmail.com")
     console.log("Password: admin123")

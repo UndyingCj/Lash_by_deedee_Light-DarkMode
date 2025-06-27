@@ -1,45 +1,36 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase-admin"
+import crypto from "crypto"
 
 export async function POST(request: NextRequest) {
   try {
     const { userId, code } = await request.json()
 
-    console.log("🔐 2FA verification attempt for user:", userId)
+    console.log("🔐 Verifying 2FA code for user:", userId)
 
     if (!userId || !code) {
       return NextResponse.json({ error: "User ID and code are required" }, { status: 400 })
     }
 
-    // Get the most recent unused 2FA code for this user
+    // Get valid 2FA code
     const { data: twoFactorCode, error: codeError } = await supabaseAdmin
       .from("two_factor_codes")
       .select("*")
       .eq("user_id", userId)
+      .eq("code", code)
       .eq("used", false)
       .gt("expires_at", new Date().toISOString())
-      .order("created_at", { ascending: false })
-      .limit(1)
       .single()
 
     if (codeError || !twoFactorCode) {
-      console.log("❌ No valid 2FA code found for user:", userId)
+      console.log("❌ Invalid or expired 2FA code")
       return NextResponse.json({ error: "Invalid or expired verification code" }, { status: 401 })
-    }
-
-    // Verify the code
-    if (twoFactorCode.code !== code) {
-      console.log("❌ Invalid 2FA code for user:", userId)
-      return NextResponse.json({ error: "Invalid verification code" }, { status: 401 })
     }
 
     // Mark code as used
     await supabaseAdmin
       .from("two_factor_codes")
-      .update({
-        used: true,
-        used_at: new Date().toISOString(),
-      })
+      .update({ used: true, used_at: new Date().toISOString() })
       .eq("id", twoFactorCode.id)
 
     // Get user details
@@ -50,7 +41,6 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (userError || !user) {
-      console.log("❌ User not found:", userId)
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
@@ -59,12 +49,15 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
     await supabaseAdmin.from("admin_sessions").insert({
-      user_id: user.id,
+      user_id: userId,
       session_token: sessionToken,
       expires_at: expiresAt.toISOString(),
     })
 
-    console.log("✅ 2FA verification successful for:", user.email)
+    // Update last login
+    await supabaseAdmin.from("admin_users").update({ last_login: new Date().toISOString() }).eq("id", userId)
+
+    console.log("✅ 2FA verification successful")
 
     // Set session cookie
     const response = NextResponse.json({
