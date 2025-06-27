@@ -11,36 +11,27 @@ export async function POST(req: Request) {
       return new NextResponse("Missing fields", { status: 400 })
     }
 
-    // Convert selectedServices array of objects to array of IDs
-    const serviceIds = selectedServices.map((service: { id: string }) => service.id)
+    // Convert selectedServices array of objects to array of service names
+    const serviceNames = selectedServices.map((service: { name: string }) => service.name)
 
-    const { data: booking, error } = await createBooking({
-      firstName,
-      lastName,
-      email,
+    const booking = await createBooking({
+      client_name: `${firstName} ${lastName}`,
       phone,
-      date,
-      time,
-      service_ids: serviceIds, // Use service_ids here
-      totalPrice,
-      notes,
+      email,
+      service: serviceNames.join(", "),
+      booking_date: date,
+      booking_time: time,
+      status: "confirmed",
+      amount: totalPrice,
+      notes: notes || "",
     })
-
-    if (error) {
-      console.error("Supabase error creating booking:", error)
-      return new NextResponse("Failed to create booking", { status: 500 })
-    }
-
-    if (!booking) {
-      return new NextResponse("Failed to create booking, no data returned", { status: 500 })
-    }
 
     // Send confirmation emails
     try {
       const emailBookingDetails = {
         customerName: `${firstName} ${lastName}`,
         customerEmail: email,
-        services: selectedServices.map((s) => s.name),
+        services: serviceNames,
         date: date,
         time: time,
         totalAmount: totalPrice,
@@ -48,14 +39,17 @@ export async function POST(req: Request) {
       }
 
       // Send customer confirmation
-      const customerEmailResult = await sendBookingConfirmation(emailBookingDetails)
+      const customerEmailResult = await sendBookingConfirmation(email, {
+        ...emailBookingDetails,
+        paymentReference: `BOOK-${Date.now()}`,
+      })
 
       // Send admin notification
       const adminEmailResult = await sendBookingNotificationToAdmin(emailBookingDetails)
 
       console.log("📧 Email results:", {
-        customer: customerEmailResult.success ? "✅ Sent" : "❌ Failed",
-        admin: adminEmailResult.success ? "✅ Sent" : "❌ Failed",
+        customer: customerEmailResult ? "✅ Sent" : "❌ Failed",
+        admin: adminEmailResult ? "✅ Sent" : "❌ Failed",
       })
     } catch (emailError) {
       console.error("📧 Email sending failed:", emailError)

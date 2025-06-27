@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
-import { LuBell, LuInfo, LuAlertTriangle, LuCheckCircle, LuAlertCircle } from "react-icons/lu"
+import { Bell, Info, AlertTriangle, CheckCircle, AlertCircle } from "lucide-react"
 import type { Notification } from "@/lib/settings"
 
 export function NotificationBell() {
@@ -55,13 +55,13 @@ export function NotificationBell() {
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case "success":
-        return <LuCheckCircle className="w-4 h-4 text-green-500" />
+        return <CheckCircle className="w-4 h-4 text-green-500" />
       case "warning":
-        return <LuAlertTriangle className="w-4 h-4 text-yellow-500" />
+        return <AlertTriangle className="w-4 h-4 text-yellow-500" />
       case "error":
-        return <LuAlertCircle className="w-4 h-4 text-red-500" />
+        return <AlertCircle className="w-4 h-4 text-red-500" />
       default:
-        return <LuInfo className="w-4 h-4 text-blue-500" />
+        return <Info className="w-4 h-4 text-blue-500" />
     }
   }
 
@@ -87,8 +87,8 @@ export function NotificationBell() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="relative">
-          <LuBell className="w-4 h-4" />
+        <Button variant="outline" size="sm" className="relative bg-transparent">
+          <Bell className="w-4 h-4" />
           {unreadCount > 0 && (
             <Badge
               variant="destructive"

@@ -1,59 +1,49 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase-admin"
 import { sendTwoFactorCode } from "@/lib/email"
+import bcrypt from "bcryptjs"
 
 export async function POST(request: NextRequest) {
   try {
     const { email } = await request.json()
 
     if (!email) {
-      return NextResponse.json({ success: false, message: "Email is required" }, { status: 400 })
+      return NextResponse.json({ success: false, error: "Email is required" }, { status: 400 })
     }
 
-    console.log("📧 Sending 2FA code to:", email)
+    // Generate a 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString()
 
-    // Get user from database
-    const { data: user, error: userError } = await supabaseAdmin
-      .from("admin_users")
-      .select("*")
-      .eq("email", email.toLowerCase())
-      .single()
+    // Hash the code before storing
+    const hashedCode = await bcrypt.hash(code, 10)
 
-    if (userError || !user) {
-      console.log("❌ User not found:", email)
-      return NextResponse.json({ success: false, message: "User not found" }, { status: 404 })
-    }
+    // Set expiration time (10 minutes from now)
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
 
-    // Generate new 2FA code
-    const twoFactorCode = Math.floor(100000 + Math.random() * 900000).toString()
-    const codeExpiry = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
-
-    await supabaseAdmin
-      .from("admin_users")
+    // Store the hashed code in database
+    const { error: updateError } = await supabaseAdmin
+      .from("admin_auth")
       .update({
-        two_factor_code: twoFactorCode,
-        two_factor_expires: codeExpiry.toISOString(),
+        two_factor_code: hashedCode,
+        two_factor_expires: expiresAt,
       })
-      .eq("id", user.id)
+      .eq("email", email)
 
-    // Send 2FA code via email
-    try {
-      await sendTwoFactorCode(user.email, twoFactorCode)
-      console.log("✅ 2FA code sent to:", user.email)
-    } catch (emailError) {
-      console.error("❌ Failed to send 2FA code:", emailError)
-      return NextResponse.json(
-        { success: false, message: "Failed to send verification code. Please try again." },
-        { status: 500 },
-      )
+    if (updateError) {
+      console.error("Error storing 2FA code:", updateError)
+      return NextResponse.json({ success: false, error: "Failed to generate verification code" }, { status: 500 })
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Verification code sent to your email",
-    })
+    // Send the code via email
+    try {
+      await sendTwoFactorCode(email, code)
+      return NextResponse.json({ success: true, message: "Verification code sent successfully" })
+    } catch (emailError) {
+      console.error("Error sending 2FA email:", emailError)
+      return NextResponse.json({ success: false, error: "Failed to send verification code" }, { status: 500 })
+    }
   } catch (error) {
-    console.error("❌ Send 2FA code error:", error)
-    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 })
+    console.error("Send 2FA code error:", error)
+    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
   }
 }

@@ -1,65 +1,56 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase-admin"
-import { generateSecureToken } from "@/lib/auth"
 import { sendPasswordResetEmail } from "@/lib/email"
+import crypto from "crypto"
 
 export async function POST(request: NextRequest) {
   try {
     const { email } = await request.json()
 
     if (!email) {
-      return NextResponse.json({ success: false, message: "Email is required" }, { status: 400 })
+      return NextResponse.json({ success: false, error: "Email is required" }, { status: 400 })
     }
 
-    console.log("📧 Sending reset email to:", email)
-
-    // Get user from database
-    const { data: user, error: userError } = await supabaseAdmin
-      .from("admin_users")
-      .select("*")
-      .eq("email", email.toLowerCase())
+    // Check if admin exists
+    const { data: adminData, error: adminError } = await supabaseAdmin
+      .from("admin_auth")
+      .select("id, email, name")
+      .eq("email", email)
       .single()
 
-    if (userError || !user) {
-      console.log("❌ User not found:", email)
-      // Don't reveal if user exists or not for security
-      return NextResponse.json({
-        success: true,
-        message: "Reset email sent if account exists",
-      })
+    if (adminError || !adminData) {
+      return NextResponse.json({ success: true, message: "If an account exists, a reset link has been sent" })
     }
 
-    // Generate new reset token
-    const resetToken = generateSecureToken()
-    const resetExpiry = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString("hex")
+    const resetExpires = new Date(Date.now() + 60 * 60 * 1000).toISOString()
 
-    await supabaseAdmin
-      .from("admin_users")
+    // Store reset token
+    const { error: updateError } = await supabaseAdmin
+      .from("admin_auth")
       .update({
         reset_token: resetToken,
-        reset_expires: resetExpiry.toISOString(),
+        reset_expires: resetExpires,
       })
-      .eq("id", user.id)
+      .eq("email", email)
+
+    if (updateError) {
+      console.error("Error storing reset token:", updateError)
+      return NextResponse.json({ success: false, error: "Failed to generate reset link" }, { status: 500 })
+    }
 
     // Send reset email
     try {
       const resetUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/egusi/reset-password?token=${resetToken}`
-      await sendPasswordResetEmail(user.email, resetUrl, user.name)
-      console.log("✅ Reset email sent to:", user.email)
+      await sendPasswordResetEmail(email, resetUrl, adminData.name || "Admin")
+      return NextResponse.json({ success: true, message: "Password reset link sent successfully" })
     } catch (emailError) {
-      console.error("❌ Failed to send reset email:", emailError)
-      return NextResponse.json(
-        { success: false, message: "Failed to send reset email. Please try again." },
-        { status: 500 },
-      )
+      console.error("Error sending reset email:", emailError)
+      return NextResponse.json({ success: false, error: "Failed to send reset email" }, { status: 500 })
     }
-
-    return NextResponse.json({
-      success: true,
-      message: "Reset email sent successfully",
-    })
   } catch (error) {
-    console.error("❌ Send reset email error:", error)
-    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 })
+    console.error("Send reset email error:", error)
+    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
   }
 }

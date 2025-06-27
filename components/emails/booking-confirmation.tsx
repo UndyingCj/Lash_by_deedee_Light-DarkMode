@@ -1,4 +1,4 @@
-import { Html, Head, Body, Container, Text, Section, Hr } from "@react-email/components"
+import { Html, Head, Body, Container, Text, Section } from "@react-email/components"
 
 interface BookingConfirmationProps {
   customerName: string
@@ -19,238 +19,73 @@ export default function BookingConfirmationEmail({
   depositAmount,
   paymentReference,
 }: BookingConfirmationProps) {
-  const formattedDate = new Date(date + "T12:00:00Z").toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  })
-
-  const remainingBalance = totalAmount - depositAmount
-
   return (
     <Html>
       <Head />
-      <Body style={main}>
-        <Container style={container}>
-          <Section style={header}>
-            <Text style={title}>Lashed by Deedee</Text>
+      <Body style={{ fontFamily: "Arial, sans-serif", backgroundColor: "#f9fafb" }}>
+        <Container style={{ maxWidth: "600px", margin: "0 auto", padding: "20px" }}>
+          <Section style={{ textAlign: "center", marginBottom: "30px" }}>
+            <Text style={{ color: "#ec4899", fontSize: "24px", fontWeight: "bold", margin: "0" }}>
+              Lashed by Deedee
+            </Text>
+            <Text style={{ color: "#666", margin: "5px 0" }}>Beauty & Lash Studio</Text>
           </Section>
 
-          <Section style={content}>
-            <Text style={heading}>Booking Confirmed! 🎉</Text>
-            <Text style={text}>Hi {customerName},</Text>
-            <Text style={text}>
-              Thank you for booking with Lashed by Deedee! Your appointment has been confirmed and your deposit has been
-              received.
+          <Section style={{ backgroundColor: "white", padding: "30px", borderRadius: "8px" }}>
+            <Text style={{ color: "#1f2937", fontSize: "20px", fontWeight: "bold", marginBottom: "20px" }}>
+              Booking Confirmed! ✨
+            </Text>
+            <Text style={{ color: "#4b5563", marginBottom: "30px" }}>
+              Hi {customerName}, your booking has been confirmed. Here are the details:
             </Text>
 
-            <Section style={detailsContainer}>
-              <Text style={detailsHeading}>Appointment Details</Text>
+            <Section style={{ backgroundColor: "#f9fafb", padding: "20px", borderRadius: "6px", margin: "20px 0" }}>
+              <Text style={{ color: "#6b7280", fontWeight: "bold", margin: "8px 0" }}>Service(s):</Text>
+              <Text style={{ color: "#1f2937", margin: "8px 0" }}>{services.join(", ")}</Text>
 
-              <Section style={detailRow}>
-                <Text style={detailLabel}>Services:</Text>
-                <Text style={detailValue}>{services.join(", ")}</Text>
-              </Section>
+              <Text style={{ color: "#6b7280", fontWeight: "bold", margin: "8px 0" }}>Date:</Text>
+              <Text style={{ color: "#1f2937", margin: "8px 0" }}>{date}</Text>
 
-              <Section style={detailRow}>
-                <Text style={detailLabel}>Date:</Text>
-                <Text style={detailValue}>{formattedDate}</Text>
-              </Section>
+              <Text style={{ color: "#6b7280", fontWeight: "bold", margin: "8px 0" }}>Time:</Text>
+              <Text style={{ color: "#1f2937", margin: "8px 0" }}>{time}</Text>
 
-              <Section style={detailRow}>
-                <Text style={detailLabel}>Time:</Text>
-                <Text style={detailValue}>{time}</Text>
-              </Section>
+              <Text style={{ color: "#6b7280", fontWeight: "bold", margin: "8px 0" }}>Amount Paid:</Text>
+              <Text style={{ color: "#1f2937", margin: "8px 0" }}>₦{depositAmount.toLocaleString()}</Text>
 
-              <Hr style={detailHr} />
-
-              <Section style={detailRow}>
-                <Text style={detailLabel}>Total Service Cost:</Text>
-                <Text style={detailValue}>₦{totalAmount.toLocaleString()}</Text>
-              </Section>
-
-              <Section style={detailRow}>
-                <Text style={detailLabel}>Deposit Paid:</Text>
-                <Text style={detailValue}>₦{depositAmount.toLocaleString()}</Text>
-              </Section>
-
-              <Section style={detailRow}>
-                <Text style={detailLabel}>Remaining Balance:</Text>
-                <Text style={[detailValue, remainingAmount]}>₦{remainingBalance.toLocaleString()}</Text>
-              </Section>
-
-              <Section style={detailRow}>
-                <Text style={detailLabel}>Payment Reference:</Text>
-                <Text style={[detailValue, referenceText]}>{paymentReference}</Text>
-              </Section>
+              <Text style={{ color: "#6b7280", fontWeight: "bold", margin: "8px 0" }}>Payment Reference:</Text>
+              <Text style={{ color: "#1f2937", fontFamily: "monospace", margin: "8px 0" }}>{paymentReference}</Text>
             </Section>
 
-            <Text style={text}>
-              <strong>Important Reminders:</strong>
-            </Text>
-            <Text style={listItem}>• Please arrive 10 minutes before your appointment time</Text>
-            <Text style={listItem}>
-              • The remaining balance of ₦{remainingBalance.toLocaleString()} is due at your appointment
-            </Text>
-            <Text style={listItem}>• If you need to reschedule, please contact us at least 24 hours in advance</Text>
-            <Text style={listItem}>• Bring a valid ID and your payment reference number</Text>
+            <Section
+              style={{
+                backgroundColor: "#fef3c7",
+                padding: "15px",
+                borderRadius: "6px",
+                margin: "20px 0",
+              }}
+            >
+              <Text style={{ color: "#92400e", margin: "0", fontSize: "14px" }}>
+                <strong>Important:</strong> Please arrive 10 minutes before your appointment time. If you need to
+                reschedule, please contact us at least 24 hours in advance.
+              </Text>
+            </Section>
 
-            <Text style={text}>We're excited to see you and help you achieve your beauty goals!</Text>
-
-            <Section style={contactInfo}>
-              <Text style={contactHeading}>Contact Information</Text>
-              <Text style={contactText}>📍 Port Harcourt, Nigeria</Text>
-              <Text style={contactText}>📧 lashedbydeedeee@gmail.com</Text>
-              <Text style={contactText}>📱 WhatsApp: +234 XXX XXX XXXX</Text>
+            <Section style={{ textAlign: "center", margin: "30px 0" }}>
+              <Text style={{ color: "#4b5563", marginBottom: "15px" }}>Questions? Contact us:</Text>
+              <Text style={{ color: "#ec4899", fontWeight: "bold", margin: "5px 0" }}>
+                📧 lashedbydeedeee@gmail.com
+              </Text>
+              <Text style={{ color: "#ec4899", fontWeight: "bold", margin: "5px 0" }}>
+                📱 WhatsApp: +234 XXX XXX XXXX
+              </Text>
             </Section>
           </Section>
 
-          <Hr style={hr} />
-
-          <Section style={footer}>
-            <Text style={footerText}>© 2024 Lashed by Deedee. All rights reserved.</Text>
-            <Text style={footerText}>Where Beauty Meets Precision</Text>
+          <Section style={{ textAlign: "center", marginTop: "30px" }}>
+            <Text style={{ color: "#9ca3af", fontSize: "12px" }}>Thank you for choosing Lashed by Deedee! ✨</Text>
           </Section>
         </Container>
       </Body>
     </Html>
   )
-}
-
-const main = {
-  backgroundColor: "#f6f9fc",
-  fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Ubuntu,sans-serif',
-}
-
-const container = {
-  backgroundColor: "#ffffff",
-  margin: "0 auto",
-  padding: "20px 0 48px",
-  marginBottom: "64px",
-}
-
-const header = {
-  padding: "32px 24px",
-  backgroundColor: "#ec4899",
-}
-
-const title = {
-  color: "#ffffff",
-  fontSize: "24px",
-  fontWeight: "bold",
-  textAlign: "center" as const,
-  margin: "0",
-}
-
-const content = {
-  padding: "24px",
-}
-
-const heading = {
-  fontSize: "24px",
-  fontWeight: "bold",
-  color: "#1f2937",
-  margin: "0 0 16px",
-}
-
-const text = {
-  fontSize: "16px",
-  color: "#374151",
-  lineHeight: "24px",
-  margin: "0 0 16px",
-}
-
-const detailsContainer = {
-  backgroundColor: "#f9fafb",
-  borderRadius: "8px",
-  padding: "24px",
-  margin: "24px 0",
-}
-
-const detailsHeading = {
-  fontSize: "18px",
-  fontWeight: "bold",
-  color: "#1f2937",
-  margin: "0 0 16px",
-}
-
-const detailRow = {
-  display: "flex",
-  justifyContent: "space-between",
-  margin: "8px 0",
-}
-
-const detailLabel = {
-  fontSize: "14px",
-  color: "#6b7280",
-  margin: "0",
-  width: "50%",
-}
-
-const detailValue = {
-  fontSize: "14px",
-  color: "#1f2937",
-  fontWeight: "500",
-  margin: "0",
-  textAlign: "right" as const,
-  width: "50%",
-}
-
-const remainingAmount = {
-  color: "#dc2626",
-  fontWeight: "bold",
-}
-
-const referenceText = {
-  fontFamily: "monospace",
-  fontSize: "12px",
-}
-
-const detailHr = {
-  borderColor: "#e5e7eb",
-  margin: "12px 0",
-}
-
-const listItem = {
-  fontSize: "14px",
-  color: "#374151",
-  margin: "4px 0",
-  paddingLeft: "8px",
-}
-
-const contactInfo = {
-  backgroundColor: "#fef3f2",
-  borderRadius: "8px",
-  padding: "16px",
-  margin: "24px 0",
-}
-
-const contactHeading = {
-  fontSize: "16px",
-  fontWeight: "bold",
-  color: "#1f2937",
-  margin: "0 0 8px",
-}
-
-const contactText = {
-  fontSize: "14px",
-  color: "#374151",
-  margin: "4px 0",
-}
-
-const hr = {
-  borderColor: "#e5e7eb",
-  margin: "20px 0",
-}
-
-const footer = {
-  padding: "0 24px",
-}
-
-const footerText = {
-  fontSize: "12px",
-  color: "#6b7280",
-  textAlign: "center" as const,
-  margin: "4px 0",
 }
