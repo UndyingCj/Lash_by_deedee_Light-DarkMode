@@ -10,18 +10,39 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { User, Bell, Shield, Clock, Save, AlertCircle, CheckCircle, Loader2 } from "lucide-react"
 import { AdminLayout } from "@/components/admin/admin-layout"
-import type { BusinessSettings } from "@/lib/settings"
+
+interface BusinessSettings {
+  businessName: string
+  businessEmail: string
+  businessPhone: string
+  businessAddress: string
+  businessDescription: string
+  bookingBuffer: number
+  maxAdvanceBooking: number
+  cancellationPolicy: number
+  autoConfirmBookings: boolean
+  emailNotifications: boolean
+  smsNotifications: boolean
+  bookingReminders: boolean
+  marketingEmails: boolean
+  twoFactorAuth: boolean
+  sessionTimeout: number
+  passwordExpiry: number
+  theme: string
+  primaryColor: string
+  timezone: string
+}
 
 const SettingsPage = () => {
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [settings, setSettings] = useState<BusinessSettings>({
-    businessName: "",
-    businessEmail: "",
-    businessPhone: "",
-    businessAddress: "",
-    businessDescription: "",
+    businessName: "Lashed by Deedee",
+    businessEmail: "lashedbydeedeee@gmail.com",
+    businessPhone: "+234 XXX XXX XXXX",
+    businessAddress: "Lagos, Nigeria",
+    businessDescription: "Professional lash and brow services",
     bookingBuffer: 15,
     maxAdvanceBooking: 30,
     cancellationPolicy: 24,
@@ -30,7 +51,7 @@ const SettingsPage = () => {
     smsNotifications: false,
     bookingReminders: true,
     marketingEmails: false,
-    twoFactorAuth: false,
+    twoFactorAuth: true,
     sessionTimeout: 60,
     passwordExpiry: 90,
     theme: "light",
@@ -48,13 +69,13 @@ const SettingsPage = () => {
       const response = await fetch("/api/admin/settings")
       if (response.ok) {
         const data = await response.json()
-        setSettings(data)
+        setSettings((prevSettings) => ({ ...prevSettings, ...data }))
       } else {
-        showMessage("error", "Failed to load settings")
+        console.log("Using default settings")
       }
     } catch (error) {
       console.error("Error fetching settings:", error)
-      showMessage("error", "Failed to load settings")
+      console.log("Using default settings")
     } finally {
       setInitialLoading(false)
     }
@@ -75,16 +96,20 @@ const SettingsPage = () => {
         showMessage("success", "Settings saved successfully!")
 
         // Create notification for settings update
-        await fetch("/api/admin/notifications", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: "Settings Updated",
-            message: "Business settings have been updated successfully",
-            type: "success",
-            expiresInHours: 24,
-          }),
-        })
+        try {
+          await fetch("/api/admin/notifications", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: "Settings Updated",
+              message: "Business settings have been updated successfully",
+              type: "success",
+              expiresInHours: 24,
+            }),
+          })
+        } catch (notificationError) {
+          console.error("Failed to create notification:", notificationError)
+        }
       } else {
         const errorData = await response.json()
         showMessage("error", errorData.error || "Failed to save settings")
