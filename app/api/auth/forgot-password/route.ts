@@ -9,10 +9,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 })
     }
 
+    console.log("Password reset requested for email:", email)
+
     const result = await generatePasswordResetToken(email)
 
+    if (!result.success) {
+      console.log("Password reset failed:", result.message)
+      return NextResponse.json({ error: result.message }, { status: 400 })
+    }
+
+    console.log("Password reset token generated successfully")
+
     return NextResponse.json({
-      success: result.success,
+      success: true,
       message: result.message,
     })
   } catch (error) {

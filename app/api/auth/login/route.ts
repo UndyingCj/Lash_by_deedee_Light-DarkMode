@@ -9,26 +9,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
     }
 
+    console.log("Login attempt for email:", email)
+
     const result = await authenticateAdmin(email, password)
 
     if (!result.success) {
+      console.log("Login failed:", result.message)
       return NextResponse.json({ error: result.message }, { status: 401 })
     }
 
+    if (result.requiresTwoFactor) {
+      console.log("2FA required for user:", email)
+      return NextResponse.json({
+        success: true,
+        requiresTwoFactor: true,
+        userId: result.user?.id,
+        message: result.message,
+      })
+    }
+
+    console.log("Login successful for user:", email)
+
+    // Set session cookie
     const response = NextResponse.json({
       success: true,
-      requiresTwoFactor: result.requiresTwoFactor,
       user: result.user,
-      message: result.message,
+      message: "Login successful",
     })
 
-    // Set session cookie if login is complete (no 2FA required)
     if (result.sessionToken) {
       response.cookies.set("admin_session", result.sessionToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 24 * 60 * 60, // 24 hours
+        path: "/",
       })
     }
 

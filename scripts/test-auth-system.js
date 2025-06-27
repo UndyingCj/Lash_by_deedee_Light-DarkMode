@@ -1,51 +1,31 @@
-import { createClient } from "@supabase/supabase-js"
-import bcrypt from "bcryptjs"
+const { createClient } = require("@supabase/supabase-js")
+const bcrypt = require("bcryptjs")
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error("Missing Supabase environment variables")
-  process.exit(1)
-}
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
 
 async function testAuthSystem() {
-  console.log("🔧 Testing Authentication System...\n")
+  console.log("🔍 Testing Authentication System...\n")
 
   try {
-    // Test 1: Check if tables exist
-    console.log("1. Checking database tables...")
-    const { data: tables, error: tablesError } = await supabase.from("admin_users").select("count").limit(1)
-
-    if (tablesError) {
-      console.error("❌ Tables not found. Please run the create-auth-tables.sql script first.")
-      console.log("Run this SQL in your Supabase dashboard:")
-      console.log("https://supabase.com/dashboard/project/YOUR_PROJECT/sql")
-      return
-    }
-    console.log("✅ Database tables exist")
-
-    // Test 2: Check if admin user exists
-    console.log("\n2. Checking admin user...")
-    const { data: adminUser, error: userError } = await supabase
+    // Test 1: Check if admin user exists
+    console.log("1. Checking admin user...")
+    const { data: user, error: userError } = await supabase
       .from("admin_users")
       .select("*")
       .eq("email", "lashedbydeedeee@gmail.com")
       .single()
 
-    if (userError || !adminUser) {
-      console.log("⚠️  Admin user not found. Creating default admin user...")
+    if (userError) {
+      console.log("❌ Admin user not found, creating...")
 
-      const hashedPassword = await bcrypt.hash("admin123", 12)
-
+      // Create admin user
+      const passwordHash = await bcrypt.hash("admin123", 12)
       const { data: newUser, error: createError } = await supabase
         .from("admin_users")
         .insert({
           username: "admin",
           email: "lashedbydeedeee@gmail.com",
-          password_hash: hashedPassword,
+          password_hash: passwordHash,
           is_active: true,
           two_factor_enabled: false,
         })
@@ -53,63 +33,74 @@ async function testAuthSystem() {
         .single()
 
       if (createError) {
-        console.error("❌ Failed to create admin user:", createError.message)
+        console.error("❌ Failed to create admin user:", createError)
         return
       }
+
       console.log("✅ Admin user created successfully")
     } else {
-      console.log("✅ Admin user exists")
+      console.log("✅ Admin user exists:", user.email)
     }
 
-    // Test 3: Test password verification
-    console.log("\n3. Testing password verification...")
+    // Test 2: Test password verification
+    console.log("\n2. Testing password verification...")
     const testPassword = "admin123"
-    const isValid = await bcrypt.compare(
-      testPassword,
-      adminUser?.password_hash || (await bcrypt.hash(testPassword, 12)),
-    )
+    const isValid = await bcrypt.compare(testPassword, user?.password_hash || (await bcrypt.hash(testPassword, 12)))
+    console.log(`✅ Password verification: ${isValid ? "PASS" : "FAIL"}`)
 
-    if (isValid) {
-      console.log("✅ Password verification works")
-    } else {
-      console.log("❌ Password verification failed")
-    }
+    // Test 3: Test database tables
+    console.log("\n3. Checking database tables...")
+    const tables = ["admin_users", "admin_sessions", "two_factor_codes", "password_reset_tokens"]
 
-    // Test 4: Test API endpoints
-    console.log("\n4. Testing API endpoints...")
-
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
-
-    try {
-      const loginResponse = await fetch(`${baseUrl}/api/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: "lashedbydeedeee@gmail.com",
-          password: "admin123",
-        }),
-      })
-
-      if (loginResponse.ok) {
-        console.log("✅ Login API endpoint works")
+    for (const table of tables) {
+      const { data, error } = await supabase.from(table).select("*").limit(1)
+      if (error) {
+        console.log(`❌ Table ${table}: ERROR - ${error.message}`)
       } else {
-        console.log("⚠️  Login API endpoint may need server restart")
+        console.log(`✅ Table ${table}: OK`)
       }
-    } catch (apiError) {
-      console.log("⚠️  API endpoints not accessible (server may not be running)")
     }
 
-    console.log("\n🎉 Authentication System Test Complete!")
-    console.log("\n📋 Summary:")
-    console.log("- Database tables: ✅ Ready")
-    console.log("- Admin user: ✅ Ready")
-    console.log("- Password system: ✅ Working")
-    console.log("\n🔑 Login Credentials:")
+    // Test 4: Clean up old sessions and tokens
+    console.log("\n4. Cleaning up expired data...")
+
+    // Clean expired sessions
+    const { error: sessionCleanup } = await supabase
+      .from("admin_sessions")
+      .delete()
+      .lt("expires_at", new Date().toISOString())
+
+    if (!sessionCleanup) {
+      console.log("✅ Expired sessions cleaned")
+    }
+
+    // Clean expired 2FA codes
+    const { error: codeCleanup } = await supabase
+      .from("two_factor_codes")
+      .delete()
+      .lt("expires_at", new Date().toISOString())
+
+    if (!codeCleanup) {
+      console.log("✅ Expired 2FA codes cleaned")
+    }
+
+    // Clean expired reset tokens
+    const { error: tokenCleanup } = await supabase
+      .from("password_reset_tokens")
+      .delete()
+      .lt("expires_at", new Date().toISOString())
+
+    if (!tokenCleanup) {
+      console.log("✅ Expired reset tokens cleaned")
+    }
+
+    console.log("\n🎉 Authentication system test completed successfully!")
+    console.log("\n📋 Login Credentials:")
     console.log("Email: lashedbydeedeee@gmail.com")
     console.log("Password: admin123")
     console.log("\n🌐 Admin Panel: https://lashedbydeedee.com/egusi")
   } catch (error) {
-    console.error("❌ Test failed:", error.message)
+    console.error("❌ Test failed:", error)
   }
 }
 

@@ -9,11 +9,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User ID and code are required" }, { status: 400 })
     }
 
+    console.log("2FA verification attempt for user:", userId)
+
     const result = await verifyTwoFactorCode(userId, code)
 
     if (!result.success) {
+      console.log("2FA verification failed:", result.message)
       return NextResponse.json({ error: result.message }, { status: 401 })
     }
+
+    console.log("2FA verification successful for user:", userId)
 
     // Set session cookie
     const response = NextResponse.json({
@@ -21,12 +26,15 @@ export async function POST(request: NextRequest) {
       message: "2FA verification successful",
     })
 
-    response.cookies.set("admin_session", result.sessionToken!, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 24 * 60 * 60, // 24 hours
-    })
+    if (result.sessionToken) {
+      response.cookies.set("admin_session", result.sessionToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 24 * 60 * 60, // 24 hours
+        path: "/",
+      })
+    }
 
     return response
   } catch (error) {

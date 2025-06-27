@@ -9,14 +9,15 @@ export async function POST(request: NextRequest) {
       await logout(sessionToken)
     }
 
-    const response = NextResponse.json({ success: true })
+    const response = NextResponse.json({ success: true, message: "Logged out successfully" })
 
-    // Clear the session cookie
+    // Clear session cookie
     response.cookies.set("admin_session", "", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 0, // Expire immediately
+      maxAge: 0,
+      path: "/",
     })
 
     return response
