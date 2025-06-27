@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabaseAdmin } from "@/lib/supabase-admin"
 import bcrypt from "bcryptjs"
+import { supabaseAdmin } from "@/lib/supabase-admin"
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,61 +17,54 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log("🔐 Password reset attempt with token:", token.substring(0, 8) + "...")
+    console.log("🔐 Password reset attempt with token:", token.substring(0, 10) + "...")
 
-    // Find valid reset token
-    const { data: resetToken, error: tokenError } = await supabaseAdmin
-      .from("password_reset_tokens")
+    // Get user by reset token
+    const { data: user, error: userError } = await supabaseAdmin
+      .from("admin_users")
       .select("*")
-      .eq("token", token)
-      .eq("used", false)
-      .gt("expires_at", new Date().toISOString())
+      .eq("reset_token", token)
       .single()
 
-    if (tokenError || !resetToken) {
-      console.log("❌ Invalid or expired reset token")
-      return NextResponse.json({ success: false, message: "Invalid or expired reset token" }, { status: 400 })
+    if (userError || !user) {
+      console.log("❌ Invalid reset token")
+      return NextResponse.json({ success: false, message: "Invalid or expired reset token" }, { status: 401 })
+    }
+
+    // Check if token is expired
+    if (!user.reset_expires || new Date(user.reset_expires) < new Date()) {
+      console.log("❌ Expired reset token for:", user.email)
+      return NextResponse.json({ success: false, message: "Reset token has expired" }, { status: 401 })
     }
 
     // Hash new password
     const passwordHash = await bcrypt.hash(password, 12)
 
-    // Update user password
-    const { error: updateError } = await supabaseAdmin
+    // Update password and clear reset token
+    await supabaseAdmin
       .from("admin_users")
       .update({
         password_hash: passwordHash,
+        reset_token: null,
+        reset_expires: null,
         password_changed_at: new Date().toISOString(),
         failed_attempts: 0,
         locked_until: null,
+        updated_at: new Date().toISOString(),
       })
-      .eq("id", resetToken.user_id)
+      .eq("id", user.id)
 
-    if (updateError) {
-      console.error("❌ Error updating password:", updateError)
-      return NextResponse.json({ success: false, message: "Failed to update password" }, { status: 500 })
-    }
+    // Invalidate all existing sessions
+    await supabaseAdmin.from("admin_sessions").delete().eq("user_id", user.id)
 
-    // Mark token as used
-    await supabaseAdmin
-      .from("password_reset_tokens")
-      .update({
-        used: true,
-        used_at: new Date().toISOString(),
-      })
-      .eq("id", resetToken.id)
-
-    // Invalidate all existing sessions for this user
-    await supabaseAdmin.from("admin_sessions").delete().eq("user_id", resetToken.user_id)
-
-    console.log("✅ Password reset successful for user:", resetToken.user_id)
+    console.log("✅ Password reset successful for:", user.email)
 
     return NextResponse.json({
       success: true,
-      message: "Password reset successful",
+      message: "Password reset successful. You can now log in with your new password.",
     })
   } catch (error) {
-    console.error("❌ Password reset error:", error)
+    console.error("❌ Reset password error:", error)
     return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 })
   }
 }

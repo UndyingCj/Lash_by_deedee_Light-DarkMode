@@ -8,8 +8,7 @@ export async function POST(request: NextRequest) {
     if (sessionToken) {
       // Delete session from database
       await supabaseAdmin.from("admin_sessions").delete().eq("session_token", sessionToken)
-
-      console.log("✅ Session logged out successfully")
+      console.log("✅ Session deleted from database")
     }
 
     const response = NextResponse.json({

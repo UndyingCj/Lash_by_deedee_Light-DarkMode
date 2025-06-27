@@ -1,26 +1,65 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { supabaseAdmin } from "@/lib/supabase-admin"
+import { generateSecureToken } from "@/lib/auth"
 import { sendPasswordResetEmail } from "@/lib/email"
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, token } = await request.json()
+    const { email } = await request.json()
 
-    if (!email || !token) {
-      return NextResponse.json({ success: false, message: "Email and token are required" }, { status: 400 })
+    if (!email) {
+      return NextResponse.json({ success: false, message: "Email is required" }, { status: 400 })
     }
 
-    console.log("📧 Sending password reset email to:", email)
+    console.log("📧 Sending reset email to:", email)
 
-    await sendPasswordResetEmail(email, token)
+    // Get user from database
+    const { data: user, error: userError } = await supabaseAdmin
+      .from("admin_users")
+      .select("*")
+      .eq("email", email.toLowerCase())
+      .single()
 
-    console.log("✅ Password reset email sent successfully to:", email)
+    if (userError || !user) {
+      console.log("❌ User not found:", email)
+      // Don't reveal if user exists or not for security
+      return NextResponse.json({
+        success: true,
+        message: "Reset email sent if account exists",
+      })
+    }
+
+    // Generate new reset token
+    const resetToken = generateSecureToken()
+    const resetExpiry = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
+
+    await supabaseAdmin
+      .from("admin_users")
+      .update({
+        reset_token: resetToken,
+        reset_expires: resetExpiry.toISOString(),
+      })
+      .eq("id", user.id)
+
+    // Send reset email
+    try {
+      const resetUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/egusi/reset-password?token=${resetToken}`
+      await sendPasswordResetEmail(user.email, resetUrl, user.name)
+      console.log("✅ Reset email sent to:", user.email)
+    } catch (emailError) {
+      console.error("❌ Failed to send reset email:", emailError)
+      return NextResponse.json(
+        { success: false, message: "Failed to send reset email. Please try again." },
+        { status: 500 },
+      )
+    }
 
     return NextResponse.json({
       success: true,
-      message: "Password reset email sent successfully",
+      message: "Reset email sent successfully",
     })
   } catch (error) {
-    console.error("❌ Error sending password reset email:", error)
-    return NextResponse.json({ success: false, message: "Failed to send password reset email" }, { status: 500 })
+    console.error("❌ Send reset email error:", error)
+    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 })
   }
 }

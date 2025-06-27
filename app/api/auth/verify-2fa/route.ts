@@ -1,45 +1,41 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase-admin"
-import crypto from "crypto"
+import { generateSecureToken } from "@/lib/auth"
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, code } = await request.json()
+    const { email, code } = await request.json()
 
-    if (!userId || !code) {
-      return NextResponse.json({ success: false, message: "User ID and code are required" }, { status: 400 })
+    if (!email || !code) {
+      return NextResponse.json({ success: false, message: "Email and verification code are required" }, { status: 400 })
     }
 
-    console.log("🔐 Verifying 2FA code for user:", userId)
+    console.log("🔐 2FA verification attempt for:", email)
 
-    // Get the user and check 2FA code
+    // Get user from database
     const { data: user, error: userError } = await supabaseAdmin
       .from("admin_users")
       .select("*")
-      .eq("id", userId)
+      .eq("email", email.toLowerCase())
       .single()
 
     if (userError || !user) {
-      console.log("❌ User not found:", userId)
-      return NextResponse.json({ success: false, message: "Invalid verification code" }, { status: 401 })
+      console.log("❌ User not found:", email)
+      return NextResponse.json({ success: false, message: "Invalid verification attempt" }, { status: 401 })
     }
 
     // Check if 2FA code is valid and not expired
     if (!user.two_factor_code || user.two_factor_code !== code) {
-      console.log("❌ Invalid 2FA code")
+      console.log("❌ Invalid 2FA code for:", email)
       return NextResponse.json({ success: false, message: "Invalid verification code" }, { status: 401 })
     }
 
     if (!user.two_factor_expires || new Date(user.two_factor_expires) < new Date()) {
-      console.log("❌ 2FA code expired")
+      console.log("❌ Expired 2FA code for:", email)
       return NextResponse.json({ success: false, message: "Verification code has expired" }, { status: 401 })
     }
 
-    // Clear 2FA code and create session
-    const sessionToken = crypto.randomUUID()
-    const sessionExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
-
-    // Update user and create session
+    // Clear 2FA code after successful verification
     await supabaseAdmin
       .from("admin_users")
       .update({
@@ -49,6 +45,10 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", user.id)
 
+    // Create session
+    const sessionToken = generateSecureToken()
+    const sessionExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+
     await supabaseAdmin.from("admin_sessions").insert({
       user_id: user.id,
       session_token: sessionToken,
@@ -57,11 +57,11 @@ export async function POST(request: NextRequest) {
       user_agent: request.headers.get("user-agent") || "unknown",
     })
 
-    console.log("✅ 2FA verification successful for:", user.email)
+    console.log("✅ 2FA verification successful for:", email)
 
     const response = NextResponse.json({
       success: true,
-      message: "Verification successful",
+      message: "Login successful",
       user: {
         id: user.id,
         email: user.email,

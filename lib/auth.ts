@@ -55,6 +55,16 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash)
 }
 
+// Generate reset token
+export function generateResetToken(): string {
+  return crypto.randomBytes(32).toString("hex")
+}
+
+// Generate 2FA code
+export function generate2FACode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString()
+}
+
 // Authenticate admin user (using email as username)
 export async function authenticateAdmin(email: string, password: string): Promise<LoginResult> {
   try {
@@ -120,7 +130,7 @@ export async function authenticateAdmin(email: string, password: string): Promis
     if (user.two_factor_enabled) {
       console.log("2FA enabled, generating code")
       // Generate and send 2FA code
-      const code = generateTwoFactorCode()
+      const code = generate2FACode()
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
 
       const { error: codeError } = await supabase.from("two_factor_codes").insert({
@@ -341,7 +351,7 @@ export async function generatePasswordResetToken(email: string): Promise<{ succe
     console.log("User found, generating reset token")
 
     // Generate reset token
-    const token = crypto.randomBytes(32).toString("hex")
+    const token = generateResetToken()
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
 
     const { error: tokenError } = await supabase.from("password_reset_tokens").insert({
