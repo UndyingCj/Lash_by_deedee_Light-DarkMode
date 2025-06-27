@@ -12,24 +12,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 })
     }
 
-    // Get user from database
+    // Check if user exists
     const { data: user, error: userError } = await supabaseAdmin
       .from("admin_users")
       .select("*")
-      .eq("email", email.toLowerCase().trim())
+      .eq("email", email.toLowerCase())
       .eq("is_active", true)
       .single()
 
     if (userError || !user) {
       console.log("❌ User not found:", email)
-      // Return success to prevent email enumeration
+      // Don't reveal if email exists for security
       return NextResponse.json({
         success: true,
         message: "If the email exists, a reset link has been sent.",
       })
     }
-
-    console.log("✅ User found, generating reset token")
 
     // Generate reset token
     const resetToken = crypto.randomBytes(32).toString("hex")
@@ -40,7 +38,6 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       token: resetToken,
       expires_at: expiresAt.toISOString(),
-      used: false,
     })
 
     if (tokenError) {
@@ -48,24 +45,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to generate reset token" }, { status: 500 })
     }
 
-    console.log("✅ Reset token stored, sending email")
-
-    // Send reset email using the send-reset-email API
-    const resetResponse = await fetch(
-      `${process.env.NEXT_PUBLIC_SITE_URL || "https://lashedbydeedee.com"}/api/auth/send-reset-email`,
-      {
+    // Send reset email
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/auth/send-reset-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: user.email, token: resetToken }),
-      },
-    )
+        body: JSON.stringify({
+          email: user.email,
+          token: resetToken,
+        }),
+      })
 
-    if (!resetResponse.ok) {
-      console.error("❌ Failed to send reset email")
+      if (!response.ok) {
+        throw new Error("Failed to send reset email")
+      }
+
+      console.log("✅ Reset email sent successfully")
+    } catch (emailError) {
+      console.error("❌ Failed to send reset email:", emailError)
       return NextResponse.json({ error: "Failed to send reset email" }, { status: 500 })
     }
-
-    console.log("✅ Reset email sent successfully")
 
     return NextResponse.json({
       success: true,

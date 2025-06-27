@@ -13,85 +13,75 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email and token are required" }, { status: 400 })
     }
 
-    // Use production URL
     const resetUrl = `https://lashedbydeedee.com/egusi/reset-password?token=${token}`
 
     const { data, error } = await resend.emails.send({
       from: "Lashed by Deedee <noreply@lashedbydeedee.com>",
       to: [email],
-      subject: "Reset Your Admin Password - Lashed by Deedee",
+      subject: "Reset Your Admin Password",
       html: `
         <!DOCTYPE html>
         <html>
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Password Reset - Lashed by Deedee</title>
-          </head>
-          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8f9fa;">
-            <div style="background: linear-gradient(135deg, #ec4899 0%, #be185d 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-              <h1 style="color: white; margin: 0; font-size: 28px;">🔒 Password Reset</h1>
-              <p style="color: white; margin: 10px 0 0 0; opacity: 0.9;">Lashed by Deedee Admin Panel</p>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Password Reset</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #ec4899 0%, #be185d 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 28px;">🔑 Password Reset Request</h1>
+          </div>
+          
+          <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e9ecef;">
+            <p style="font-size: 16px; margin-bottom: 20px;">Hello,</p>
+            
+            <p style="font-size: 16px; margin-bottom: 25px;">
+              You requested to reset your password for the Lashed by Deedee admin panel. Click the button below to create a new password:
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${resetUrl}" style="background: #ec4899; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">
+                Reset Password
+              </a>
             </div>
             
-            <div style="background: white; padding: 40px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-              <h2 style="color: #1f2937; margin-bottom: 20px;">Reset Your Password</h2>
-              
-              <p style="margin-bottom: 30px; color: #6b7280;">
-                You requested a password reset for your admin account. Click the button below to create a new password:
-              </p>
-              
-              <div style="text-align: center; margin: 40px 0;">
-                <a href="${resetUrl}" style="background: linear-gradient(135deg, #ec4899 0%, #be185d 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 16px; box-shadow: 0 2px 4px rgba(236, 72, 153, 0.3);">
-                  Reset Password Now
-                </a>
-              </div>
-              
-              <div style="background: #f1f3f4; padding: 20px; border-radius: 8px; margin: 30px 0;">
-                <p style="margin: 0 0 10px 0; font-weight: bold; color: #333;">Or copy and paste this link:</p>
-                <p style="margin: 0; word-break: break-all; font-family: monospace; font-size: 14px; color: #ec4899;">${resetUrl}</p>
-              </div>
-              
-              <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 20px; margin: 30px 0;">
-                <p style="margin: 0 0 15px 0; font-weight: bold; color: #856404;">⚠️ Important Security Information:</p>
-                <ul style="color: #856404; margin: 0; padding-left: 20px;">
-                  <li>This link expires in 1 hour for your security</li>
-                  <li>If you didn't request this reset, please ignore this email</li>
-                  <li>Your current password remains active until you create a new one</li>
-                  <li>Only use this link from a secure device</li>
-                </ul>
-              </div>
-              
-              <hr style="border: none; border-top: 1px solid #eee; margin: 40px 0;">
-              
-              <div style="text-align: center;">
-                <p style="color: #666; font-size: 14px; margin: 0;">
-                  This is an automated security message from<br>
-                  <strong>Lashed by Deedee Admin System</strong><br>
-                  Please do not reply to this email.
-                </p>
-              </div>
+            <p style="font-size: 14px; color: #666; margin-bottom: 20px;">
+              If the button doesn't work, copy and paste this link into your browser:
+            </p>
+            
+            <div style="background: #e9ecef; padding: 15px; border-radius: 5px; word-break: break-all; font-family: monospace; font-size: 12px; margin-bottom: 20px;">
+              ${resetUrl}
             </div>
             
-            <div style="text-align: center; margin-top: 20px;">
-              <p style="color: #999; font-size: 12px;">
-                © 2024 Lashed by Deedee. All rights reserved.
-              </p>
+            <p style="font-size: 14px; color: #666; margin-bottom: 20px;">
+              This link will expire in 1 hour for security reasons.
+            </p>
+            
+            <p style="font-size: 14px; color: #666; margin-bottom: 20px;">
+              If you didn't request this password reset, please ignore this email or contact support if you have concerns.
+            </p>
+            
+            <hr style="border: none; border-top: 1px solid #e9ecef; margin: 25px 0;">
+            
+            <div style="text-align: center; color: #666; font-size: 12px;">
+              <p>Lashed by Deedee Admin Panel</p>
+              <p>This is an automated message, please do not reply.</p>
             </div>
-          </body>
+          </div>
+        </body>
         </html>
       `,
     })
 
     if (error) {
-      console.error("❌ Resend error:", error)
-      return NextResponse.json({ error: "Failed to send email" }, { status: 500 })
+      console.error("❌ Failed to send reset email:", error)
+      return NextResponse.json({ error: "Failed to send reset email" }, { status: 500 })
     }
 
-    console.log("✅ Password reset email sent successfully:", data?.id)
-    return NextResponse.json({ success: true, message: "Reset email sent", messageId: data?.id })
+    console.log("✅ Reset email sent successfully")
+    return NextResponse.json({ success: true, message: "Reset email sent" })
   } catch (error) {
-    console.error("❌ Send reset email API error:", error)
+    console.error("❌ Send reset email error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

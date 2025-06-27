@@ -1,18 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase-admin"
-import crypto from "crypto"
 
 export async function POST(request: NextRequest) {
   try {
     const { userId, code } = await request.json()
 
-    console.log("🔐 Verifying 2FA code for user:", userId)
+    console.log("🔐 2FA verification attempt for user:", userId)
 
     if (!userId || !code) {
       return NextResponse.json({ error: "User ID and code are required" }, { status: 400 })
     }
 
-    // Get valid 2FA code
+    // Find valid 2FA code
     const { data: twoFactorCode, error: codeError } = await supabaseAdmin
       .from("two_factor_codes")
       .select("*")
@@ -24,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     if (codeError || !twoFactorCode) {
       console.log("❌ Invalid or expired 2FA code")
-      return NextResponse.json({ error: "Invalid or expired verification code" }, { status: 401 })
+      return NextResponse.json({ error: "Invalid or expired verification code" }, { status: 400 })
     }
 
     // Mark code as used
@@ -32,17 +31,6 @@ export async function POST(request: NextRequest) {
       .from("two_factor_codes")
       .update({ used: true, used_at: new Date().toISOString() })
       .eq("id", twoFactorCode.id)
-
-    // Get user details
-    const { data: user, error: userError } = await supabaseAdmin
-      .from("admin_users")
-      .select("*")
-      .eq("id", userId)
-      .single()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
 
     // Create session
     const sessionToken = crypto.randomUUID()
@@ -62,11 +50,7 @@ export async function POST(request: NextRequest) {
     // Set session cookie
     const response = NextResponse.json({
       success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-      },
+      message: "Verification successful",
     })
 
     response.cookies.set("admin_session", sessionToken, {
