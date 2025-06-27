@@ -15,8 +15,12 @@ export async function POST(request: NextRequest) {
 
     const result = await resetPasswordWithToken(token, password)
 
+    if (!result.success) {
+      return NextResponse.json({ error: result.message }, { status: 400 })
+    }
+
     return NextResponse.json({
-      success: result.success,
+      success: true,
       message: result.message,
     })
   } catch (error) {

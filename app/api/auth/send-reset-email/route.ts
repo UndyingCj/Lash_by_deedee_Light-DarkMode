@@ -18,42 +18,48 @@ export async function POST(request: NextRequest) {
       to: [email],
       subject: "Reset Your Admin Password",
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <h1 style="color: #ec4899; margin: 0;">Lashed by Deedee</h1>
-            <p style="color: #666; margin: 5px 0;">Admin Panel Password Reset</p>
-          </div>
-          
-          <div style="background: #f8f9fa; padding: 30px; border-radius: 10px;">
-            <h2 style="color: #333; margin-bottom: 20px;">Reset Your Password</h2>
-            <p style="color: #666; margin-bottom: 25px;">
-              You requested to reset your admin panel password. Click the button below to create a new password.
-            </p>
-            
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${resetUrl}" style="background: #ec4899; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
-                Reset Password
-              </a>
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Password Reset</title>
+          </head>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #ec4899, #be185d); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+              <h1 style="color: white; margin: 0; font-size: 28px;">🔑 Password Reset</h1>
             </div>
             
-            <p style="color: #666; font-size: 14px; margin-top: 25px;">
-              This link will expire in 1 hour. If you didn't request this reset, please ignore this email.
-            </p>
-            
-            <div style="background: #fff; padding: 15px; border-radius: 6px; margin-top: 20px; border-left: 4px solid #ec4899;">
-              <p style="color: #666; font-size: 12px; margin: 0;">
-                If the button doesn't work, copy and paste this link into your browser:<br>
-                <span style="word-break: break-all; color: #ec4899;">${resetUrl}</span>
+            <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e9ecef;">
+              <h2 style="color: #333; margin-top: 0;">Reset Your Admin Password</h2>
+              
+              <p>Hello,</p>
+              
+              <p>You've requested to reset your password for your Lashed by Deedee admin account. Click the button below to create a new password:</p>
+              
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${resetUrl}" style="background: #ec4899; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 16px;">Reset Password</a>
+              </div>
+              
+              <p>Or copy and paste this link into your browser:</p>
+              <p style="background: #f1f3f4; padding: 10px; border-radius: 4px; word-break: break-all; font-family: monospace; font-size: 14px;">${resetUrl}</p>
+              
+              <p><strong>Important:</strong></p>
+              <ul style="color: #666;">
+                <li>This link expires in 1 hour</li>
+                <li>If you didn't request this reset, please ignore this email</li>
+                <li>Your password won't change until you create a new one</li>
+              </ul>
+              
+              <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+              
+              <p style="color: #666; font-size: 14px; text-align: center;">
+                This is an automated message from Lashed by Deedee Admin System<br>
+                Please do not reply to this email.
               </p>
             </div>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-            <p style="color: #999; font-size: 12px;">
-              This email was sent from Lashed by Deedee Admin System
-            </p>
-          </div>
-        </div>
+          </body>
+        </html>
       `,
     })
 

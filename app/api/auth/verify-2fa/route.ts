@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       message: "2FA verification successful",
     })
 
-    response.cookies.set("admin-session", result.sessionToken!, {
+    response.cookies.set("admin_session", result.sessionToken!, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",

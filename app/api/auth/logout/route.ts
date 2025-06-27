@@ -3,7 +3,7 @@ import { logout } from "@/lib/auth"
 
 export async function POST(request: NextRequest) {
   try {
-    const sessionToken = request.cookies.get("admin-session")?.value
+    const sessionToken = request.cookies.get("admin_session")?.value
 
     if (sessionToken) {
       await logout(sessionToken)
@@ -12,11 +12,11 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({ success: true })
 
     // Clear the session cookie
-    response.cookies.set("admin-session", "", {
+    response.cookies.set("admin_session", "", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 0,
+      maxAge: 0, // Expire immediately
     })
 
     return response

@@ -3,39 +3,34 @@ import { authenticateAdmin } from "@/lib/auth"
 
 export async function POST(request: NextRequest) {
   try {
-    const { username, password } = await request.json()
+    const { email, password } = await request.json()
 
-    if (!username || !password) {
-      return NextResponse.json({ error: "Username and password are required" }, { status: 400 })
+    if (!email || !password) {
+      return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
     }
 
-    const result = await authenticateAdmin(username, password)
+    const result = await authenticateAdmin(email, password)
 
     if (!result.success) {
       return NextResponse.json({ error: result.message }, { status: 401 })
     }
 
-    if (result.requiresTwoFactor) {
-      return NextResponse.json({
-        success: true,
-        requiresTwoFactor: true,
-        user: result.user,
-        message: result.message,
-      })
-    }
-
-    // Set session cookie
     const response = NextResponse.json({
       success: true,
+      requiresTwoFactor: result.requiresTwoFactor,
       user: result.user,
+      message: result.message,
     })
 
-    response.cookies.set("admin-session", result.sessionToken!, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 24 * 60 * 60, // 24 hours
-    })
+    // Set session cookie if login is complete (no 2FA required)
+    if (result.sessionToken) {
+      response.cookies.set("admin_session", result.sessionToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 24 * 60 * 60, // 24 hours
+      })
+    }
 
     return response
   } catch (error) {
