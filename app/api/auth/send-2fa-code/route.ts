@@ -24,17 +24,24 @@ export async function POST(request: NextRequest) {
           
           <div style="background: #f8f9fa; padding: 30px; border-radius: 10px; text-align: center;">
             <h2 style="color: #333; margin-bottom: 20px;">Your 2FA Code</h2>
-            <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
-              <span style="font-size: 32px; font-weight: bold; color: #e91e63; letter-spacing: 5px;">${code}</span>
+            <p style="color: #666; margin-bottom: 30px;">
+              Use this code to complete your login to the admin panel:
+            </p>
+            
+            <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 2px solid #e91e63;">
+              <div style="font-size: 32px; font-weight: bold; color: #e91e63; letter-spacing: 8px; font-family: monospace;">
+                ${code}
+              </div>
             </div>
-            <p style="color: #666; margin: 20px 0;">
-              This code will expire in 10 minutes. Do not share this code with anyone.
+            
+            <p style="color: #666; font-size: 14px; margin-top: 30px;">
+              This code will expire in 10 minutes for security reasons.
             </p>
           </div>
           
           <div style="margin-top: 30px; padding: 20px; background: #fff3cd; border-radius: 8px; border: 1px solid #ffeaa7;">
             <p style="margin: 0; color: #856404; font-size: 14px;">
-              <strong>Security Notice:</strong> If you didn't request this code, please contact support immediately.
+              <strong>Security Notice:</strong> If you didn't request this code, please ignore this email and contact support immediately.
             </p>
           </div>
           

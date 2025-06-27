@@ -15,22 +15,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: result.message }, { status: 401 })
     }
 
-    const response = NextResponse.json({
-      success: true,
-      requiresTwoFactor: result.requiresTwoFactor,
-      user: result.user,
-      message: result.message,
-    })
-
-    // Set session cookie if login is complete (no 2FA required)
-    if (result.sessionToken) {
-      response.cookies.set("admin-session", result.sessionToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 24 * 60 * 60, // 24 hours
+    if (result.requiresTwoFactor) {
+      return NextResponse.json({
+        success: true,
+        requiresTwoFactor: true,
+        user: result.user,
+        message: result.message,
       })
     }
+
+    // Set session cookie
+    const response = NextResponse.json({
+      success: true,
+      user: result.user,
+    })
+
+    response.cookies.set("admin-session", result.sessionToken!, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 24 * 60 * 60, // 24 hours
+    })
 
     return response
   } catch (error) {

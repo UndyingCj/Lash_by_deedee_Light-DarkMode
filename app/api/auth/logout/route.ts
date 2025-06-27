@@ -10,14 +10,7 @@ export async function POST(request: NextRequest) {
     }
 
     const response = NextResponse.json({ success: true })
-
-    // Clear session cookie
-    response.cookies.set("admin-session", "", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 0,
-    })
+    response.cookies.delete("admin-session")
 
     return response
   } catch (error) {

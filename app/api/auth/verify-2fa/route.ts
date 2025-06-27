@@ -15,20 +15,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: result.message }, { status: 401 })
     }
 
+    // Set session cookie
     const response = NextResponse.json({
       success: true,
-      message: "Authentication successful",
     })
 
-    // Set session cookie
-    if (result.sessionToken) {
-      response.cookies.set("admin-session", result.sessionToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 24 * 60 * 60, // 24 hours
-      })
-    }
+    response.cookies.set("admin-session", result.sessionToken!, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 24 * 60 * 60, // 24 hours
+    })
 
     return response
   } catch (error) {
