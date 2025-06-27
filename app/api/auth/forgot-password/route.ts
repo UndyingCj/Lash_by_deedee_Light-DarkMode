@@ -1,7 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabaseAdmin } from "@/lib/supabase-admin"
-import { sendPasswordResetEmail } from "@/lib/email"
-import crypto from "crypto"
+import { generatePasswordResetToken } from "@/lib/auth"
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,36 +9,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 })
     }
 
-    // Get user from database
-    const { data: user, error: userError } = await supabaseAdmin
-      .from("admin_users")
-      .select("*")
-      .eq("email", email)
-      .single()
+    const result = await generatePasswordResetToken(email)
 
-    if (userError || !user) {
-      // Don't reveal if user exists or not
-      return NextResponse.json({ success: true, message: "If the email exists, a reset link has been sent" })
-    }
-
-    // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString("hex")
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
-
-    // Save token to database
-    await supabaseAdmin
-      .from("admin_users")
-      .update({
-        reset_token: resetToken,
-        reset_expires: expiresAt.toISOString(),
-      })
-      .eq("id", user.id)
-
-    // Send reset email
-    const resetUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/egusi/reset-password?token=${resetToken}`
-    await sendPasswordResetEmail(email, resetUrl, user.name)
-
-    return NextResponse.json({ success: true, message: "If the email exists, a reset link has been sent" })
+    return NextResponse.json({
+      success: result.success,
+      message: result.message,
+    })
   } catch (error) {
     console.error("Forgot password error:", error)
     return NextResponse.json({ error: "Failed to process request" }, { status: 500 })

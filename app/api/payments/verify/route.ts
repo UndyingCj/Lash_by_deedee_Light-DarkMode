@@ -1,72 +1,58 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createBooking } from "@/lib/supabase"
-import { sendBookingConfirmation, sendBookingNotificationToAdmin } from "@/lib/email"
+import { verifyPayment } from "@/lib/paystack"
 
 export async function POST(request: NextRequest) {
   try {
-    const { reference, bookingData } = await request.json()
+    const { reference } = await request.json()
 
-    if (!reference || !bookingData) {
-      return NextResponse.json({ error: "Missing reference or booking data" }, { status: 400 })
+    if (!reference) {
+      return NextResponse.json({ status: false, message: "Payment reference is required" }, { status: 400 })
     }
+
+    console.log("Verifying payment with reference:", reference)
 
     // Verify payment with Paystack
-    const paystackResponse = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-      headers: {
-        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-        "Content-Type": "application/json",
-      },
-    })
+    const verificationResult = await verifyPayment(reference)
 
-    const paystackData = await paystackResponse.json()
-
-    if (!paystackData.status || paystackData.data.status !== "success") {
-      return NextResponse.json({ error: "Payment verification failed" }, { status: 400 })
+    if (!verificationResult.status) {
+      console.error("Payment verification failed:", verificationResult.message)
+      return NextResponse.json(
+        { status: false, message: verificationResult.message || "Payment verification failed" },
+        { status: 400 },
+      )
     }
 
-    // Create booking in database
-    const booking = await createBooking({
-      client_name: `${bookingData.firstName} ${bookingData.lastName}`,
-      phone: bookingData.phone,
-      email: bookingData.email,
-      service: bookingData.selectedServices.map((s: any) => s.name).join(", "),
-      booking_date: bookingData.date,
-      booking_time: bookingData.time,
-      status: "confirmed",
-      amount: paystackData.data.amount / 100, // Convert from kobo to naira
-      notes: bookingData.notes || "",
-    })
+    const paymentData = verificationResult.data
 
-    // Send confirmation emails
-    try {
-      const emailBookingDetails = {
-        customerName: `${bookingData.firstName} ${bookingData.lastName}`,
-        customerEmail: bookingData.email,
-        services: bookingData.selectedServices.map((s: any) => s.name),
-        date: bookingData.date,
-        time: bookingData.time,
-        totalAmount: bookingData.totalPrice,
-        depositAmount: paystackData.data.amount / 100,
-        paymentReference: reference,
-      }
-
-      // Send customer confirmation
-      await sendBookingConfirmation(bookingData.email, emailBookingDetails)
-
-      // Send admin notification
-      await sendBookingNotificationToAdmin(emailBookingDetails)
-    } catch (emailError) {
-      console.error("Email sending failed:", emailError)
-      // Don't fail the booking if emails fail
+    if (!paymentData || paymentData.status !== "success") {
+      console.error("Payment was not successful:", paymentData?.status)
+      return NextResponse.json({ status: false, message: "Payment was not successful" }, { status: 400 })
     }
 
+    console.log("Payment verified successfully:", {
+      reference: paymentData.reference,
+      amount: paymentData.amount,
+      status: paymentData.status,
+    })
+
+    // Return success response
     return NextResponse.json({
-      success: true,
-      booking,
-      message: "Payment verified and booking created successfully",
+      status: true,
+      message: "Payment verified successfully",
+      data: {
+        reference: paymentData.reference,
+        amount: paymentData.amount,
+        status: paymentData.status,
+        paid_at: paymentData.paid_at,
+        customer: paymentData.customer,
+        metadata: paymentData.metadata,
+      },
     })
   } catch (error) {
     console.error("Payment verification error:", error)
-    return NextResponse.json({ error: "Payment verification failed" }, { status: 500 })
+    return NextResponse.json(
+      { status: false, message: "Payment verification failed due to server error" },
+      { status: 500 },
+    )
   }
 }

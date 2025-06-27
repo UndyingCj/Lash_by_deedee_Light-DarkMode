@@ -1,48 +1,26 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabaseAdmin } from "@/lib/supabase-admin"
-import { sendPasswordResetEmail } from "@/lib/email"
-import crypto from "crypto"
+import { sendEmail } from "@/lib/email"
+import { PasswordResetEmail } from "@/components/emails/password-reset-email"
 
 export async function POST(request: NextRequest) {
   try {
-    const { email } = await request.json()
+    const { email, token } = await request.json()
 
-    if (!email) {
-      return NextResponse.json({ error: "Email is required" }, { status: 400 })
+    if (!email || !token) {
+      return NextResponse.json({ error: "Missing email or token" }, { status: 400 })
     }
 
-    // Get user from database
-    const { data: user, error: userError } = await supabaseAdmin
-      .from("admin_users")
-      .select("*")
-      .eq("email", email)
-      .single()
+    const resetUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/egusi/reset-password?token=${token}`
 
-    if (userError || !user) {
-      // Don't reveal if user exists or not for security
-      return NextResponse.json({ success: true, message: "Reset email sent if account exists" })
-    }
+    await sendEmail({
+      to: email,
+      subject: "Reset Your Password - Lashed by Deedee",
+      react: PasswordResetEmail({ resetUrl }),
+    })
 
-    // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString("hex")
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
-
-    // Save token to database
-    await supabaseAdmin
-      .from("admin_users")
-      .update({
-        reset_token: resetToken,
-        reset_expires: expiresAt.toISOString(),
-      })
-      .eq("id", user.id)
-
-    // Send reset email
-    const resetUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/egusi/reset-password?token=${resetToken}`
-    await sendPasswordResetEmail(email, resetUrl, user.name)
-
-    return NextResponse.json({ success: true, message: "Reset email sent if account exists" })
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Send reset email error:", error)
-    return NextResponse.json({ error: "Failed to send reset email" }, { status: 500 })
+    console.error("Error sending reset email:", error)
+    return NextResponse.json({ error: "Failed to send email" }, { status: 500 })
   }
 }

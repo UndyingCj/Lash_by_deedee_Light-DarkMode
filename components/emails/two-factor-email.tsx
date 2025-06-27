@@ -1,63 +1,72 @@
-import { Html, Head, Body, Container, Text, Section } from "@react-email/components"
+import { Body, Container, Head, Heading, Html, Preview, Section, Text } from "@react-email/components"
 
 interface TwoFactorEmailProps {
   code: string
 }
 
-export default function TwoFactorEmail({ code }: TwoFactorEmailProps) {
+export function TwoFactorEmail({ code }: TwoFactorEmailProps) {
   return (
     <Html>
       <Head />
-      <Body style={{ fontFamily: "Arial, sans-serif", backgroundColor: "#f9fafb" }}>
-        <Container style={{ maxWidth: "600px", margin: "0 auto", padding: "20px" }}>
-          <Section style={{ textAlign: "center", marginBottom: "30px" }}>
-            <Text style={{ color: "#ec4899", fontSize: "24px", fontWeight: "bold", margin: "0" }}>
-              Lashed by Deedee
-            </Text>
-            <Text style={{ color: "#666", margin: "5px 0" }}>Admin Portal</Text>
+      <Preview>Your two-factor authentication code</Preview>
+      <Body style={main}>
+        <Container style={container}>
+          <Heading style={h1}>Two-Factor Authentication</Heading>
+          <Text style={text}>Your verification code is:</Text>
+          <Section style={codeContainer}>
+            <Text style={codeText}>{code}</Text>
           </Section>
-
-          <Section style={{ backgroundColor: "white", padding: "30px", borderRadius: "8px" }}>
-            <Text style={{ color: "#1f2937", fontSize: "20px", fontWeight: "bold", marginBottom: "20px" }}>
-              Two-Factor Authentication
-            </Text>
-            <Text style={{ color: "#4b5563", marginBottom: "30px" }}>Use this code to complete your login:</Text>
-
-            <Section
-              style={{
-                backgroundColor: "#f9fafb",
-                padding: "20px",
-                borderRadius: "6px",
-                margin: "20px 0",
-                textAlign: "center",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: "32px",
-                  fontWeight: "bold",
-                  letterSpacing: "8px",
-                  color: "#ec4899",
-                  fontFamily: "monospace",
-                  margin: "0",
-                }}
-              >
-                {code}
-              </Text>
-            </Section>
-
-            <Text style={{ color: "#6b7280", fontSize: "14px", marginTop: "20px" }}>
-              This code will expire in 10 minutes.
-            </Text>
-          </Section>
-
-          <Section style={{ textAlign: "center", marginTop: "30px" }}>
-            <Text style={{ color: "#9ca3af", fontSize: "12px" }}>
-              If you didn't request this code, please ignore this email.
-            </Text>
-          </Section>
+          <Text style={text}>
+            This code will expire in 10 minutes. If you didn't request this code, please ignore this email.
+          </Text>
         </Container>
       </Body>
     </Html>
   )
+}
+
+const main = {
+  backgroundColor: "#f6f9fc",
+  fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Ubuntu,sans-serif',
+}
+
+const container = {
+  backgroundColor: "#ffffff",
+  margin: "0 auto",
+  padding: "20px 0 48px",
+  marginBottom: "64px",
+}
+
+const h1 = {
+  color: "#333",
+  fontSize: "24px",
+  fontWeight: "bold",
+  margin: "40px 0",
+  padding: "0",
+  textAlign: "center" as const,
+}
+
+const text = {
+  color: "#333",
+  fontSize: "16px",
+  lineHeight: "26px",
+  textAlign: "center" as const,
+}
+
+const codeContainer = {
+  background: "#f4f4f4",
+  borderRadius: "4px",
+  margin: "16px auto",
+  padding: "24px",
+  textAlign: "center" as const,
+}
+
+const codeText = {
+  color: "#000",
+  fontSize: "32px",
+  fontWeight: "bold",
+  letterSpacing: "6px",
+  lineHeight: "40px",
+  margin: "0",
+  fontFamily: "monospace",
 }

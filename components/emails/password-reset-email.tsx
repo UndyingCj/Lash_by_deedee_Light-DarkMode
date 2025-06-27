@@ -1,63 +1,73 @@
-import { Html, Head, Body, Container, Text, Button, Section } from "@react-email/components"
+import { Body, Button, Container, Head, Heading, Html, Preview, Section, Text } from "@react-email/components"
 
 interface PasswordResetEmailProps {
   resetUrl: string
-  name?: string
 }
 
-export default function PasswordResetEmail({ resetUrl, name = "Admin" }: PasswordResetEmailProps) {
+export function PasswordResetEmail({ resetUrl }: PasswordResetEmailProps) {
   return (
     <Html>
       <Head />
-      <Body style={{ fontFamily: "Arial, sans-serif", backgroundColor: "#f9fafb" }}>
-        <Container style={{ maxWidth: "600px", margin: "0 auto", padding: "20px" }}>
-          <Section style={{ textAlign: "center", marginBottom: "30px" }}>
-            <Text style={{ color: "#ec4899", fontSize: "24px", fontWeight: "bold", margin: "0" }}>
-              Lashed by Deedee
-            </Text>
-            <Text style={{ color: "#666", margin: "5px 0" }}>Admin Portal</Text>
+      <Preview>Reset your password</Preview>
+      <Body style={main}>
+        <Container style={container}>
+          <Heading style={h1}>Reset Your Password</Heading>
+          <Text style={text}>You requested to reset your password for your Lashed by Deedee admin account.</Text>
+          <Section style={buttonContainer}>
+            <Button style={button} href={resetUrl}>
+              Reset Password
+            </Button>
           </Section>
-
-          <Section style={{ backgroundColor: "white", padding: "30px", borderRadius: "8px" }}>
-            <Text style={{ color: "#1f2937", fontSize: "20px", fontWeight: "bold", marginBottom: "20px" }}>
-              Reset Your Password
-            </Text>
-            <Text style={{ color: "#4b5563", marginBottom: "30px" }}>
-              Hi {name}, you requested to reset your password. Click the button below to create a new password:
-            </Text>
-
-            <Section style={{ textAlign: "center", margin: "30px 0" }}>
-              <Button
-                href={resetUrl}
-                style={{
-                  backgroundColor: "#ec4899",
-                  color: "white",
-                  padding: "12px 30px",
-                  textDecoration: "none",
-                  borderRadius: "6px",
-                  fontWeight: "bold",
-                  display: "inline-block",
-                }}
-              >
-                Reset Password
-              </Button>
-            </Section>
-
-            <Text style={{ color: "#6b7280", fontSize: "14px" }}>
-              This link will expire in 1 hour. If you didn't request this reset, please ignore this email.
-            </Text>
-
-            <Section style={{ marginTop: "30px", paddingTop: "20px", borderTop: "1px solid #e5e7eb" }}>
-              <Text style={{ color: "#9ca3af", fontSize: "12px", margin: "0" }}>
-                If the button doesn't work, copy and paste this link into your browser:
-              </Text>
-              <Text style={{ color: "#6b7280", fontSize: "12px", wordBreak: "break-all", margin: "5px 0" }}>
-                {resetUrl}
-              </Text>
-            </Section>
-          </Section>
+          <Text style={text}>
+            This link will expire in 1 hour. If you didn't request this reset, please ignore this email.
+          </Text>
         </Container>
       </Body>
     </Html>
   )
+}
+
+const main = {
+  backgroundColor: "#f6f9fc",
+  fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Ubuntu,sans-serif',
+}
+
+const container = {
+  backgroundColor: "#ffffff",
+  margin: "0 auto",
+  padding: "20px 0 48px",
+  marginBottom: "64px",
+}
+
+const h1 = {
+  color: "#333",
+  fontSize: "24px",
+  fontWeight: "bold",
+  margin: "40px 0",
+  padding: "0",
+  textAlign: "center" as const,
+}
+
+const text = {
+  color: "#333",
+  fontSize: "16px",
+  lineHeight: "26px",
+  textAlign: "center" as const,
+}
+
+const buttonContainer = {
+  textAlign: "center" as const,
+  margin: "24px 0",
+}
+
+const button = {
+  backgroundColor: "#ec4899",
+  borderRadius: "4px",
+  color: "#fff",
+  fontSize: "16px",
+  fontWeight: "bold",
+  textDecoration: "none",
+  textAlign: "center" as const,
+  display: "block",
+  padding: "12px 24px",
 }
