@@ -1,13 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createBooking } from "@/lib/supabase"
-import { sendBookingConfirmation } from "@/lib/email"
+import { sendBookingConfirmation, sendBookingNotificationToAdmin } from "@/lib/email"
 
 export async function POST(request: NextRequest) {
   try {
     const { reference, bookingData } = await request.json()
 
     if (!reference || !bookingData) {
-      return NextResponse.json({ success: false, error: "Missing required data" }, { status: 400 })
+      return NextResponse.json({ error: "Missing reference or booking data" }, { status: 400 })
     }
 
     // Verify payment with Paystack
@@ -21,15 +21,15 @@ export async function POST(request: NextRequest) {
     const paystackData = await paystackResponse.json()
 
     if (!paystackData.status || paystackData.data.status !== "success") {
-      return NextResponse.json({ success: false, error: "Payment verification failed" }, { status: 400 })
+      return NextResponse.json({ error: "Payment verification failed" }, { status: 400 })
     }
 
     // Create booking in database
     const booking = await createBooking({
-      client_name: bookingData.clientName,
+      client_name: `${bookingData.firstName} ${bookingData.lastName}`,
       phone: bookingData.phone,
       email: bookingData.email,
-      service: bookingData.services.join(", "),
+      service: bookingData.selectedServices.map((s: any) => s.name).join(", "),
       booking_date: bookingData.date,
       booking_time: bookingData.time,
       status: "confirmed",
@@ -37,29 +37,36 @@ export async function POST(request: NextRequest) {
       notes: bookingData.notes || "",
     })
 
-    // Send confirmation email
+    // Send confirmation emails
     try {
-      await sendBookingConfirmation(bookingData.email, {
-        customerName: bookingData.clientName,
-        services: bookingData.services,
+      const emailBookingDetails = {
+        customerName: `${bookingData.firstName} ${bookingData.lastName}`,
+        customerEmail: bookingData.email,
+        services: bookingData.selectedServices.map((s: any) => s.name),
         date: bookingData.date,
         time: bookingData.time,
-        totalAmount: paystackData.data.amount / 100,
+        totalAmount: bookingData.totalPrice,
         depositAmount: paystackData.data.amount / 100,
         paymentReference: reference,
-      })
+      }
+
+      // Send customer confirmation
+      await sendBookingConfirmation(bookingData.email, emailBookingDetails)
+
+      // Send admin notification
+      await sendBookingNotificationToAdmin(emailBookingDetails)
     } catch (emailError) {
-      console.error("Error sending confirmation email:", emailError)
-      // Don't fail the booking if email fails
+      console.error("Email sending failed:", emailError)
+      // Don't fail the booking if emails fail
     }
 
     return NextResponse.json({
       success: true,
       booking,
-      message: "Payment verified and booking confirmed",
+      message: "Payment verified and booking created successfully",
     })
   } catch (error) {
     console.error("Payment verification error:", error)
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: "Payment verification failed" }, { status: 500 })
   }
 }

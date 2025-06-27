@@ -3,6 +3,25 @@ import { supabaseAdmin } from "@/lib/supabase-admin"
 
 export async function GET(request: NextRequest) {
   try {
+    // Check if environment variables are available
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.warn("Missing Supabase environment variables")
+      return NextResponse.json({
+        success: false,
+        error: "Database configuration missing",
+        data: {
+          totalRevenue: 0,
+          totalBookings: 0,
+          averageBookingValue: 0,
+          clientRetentionRate: 0,
+          popularServices: [],
+          monthlyTrends: [],
+          revenueGrowth: 0,
+          bookingGrowth: 0,
+        },
+      })
+    }
+
     const { searchParams } = new URL(request.url)
     const range = searchParams.get("range") || "30"
 
@@ -113,6 +132,16 @@ export async function GET(request: NextRequest) {
       {
         success: false,
         error: error instanceof Error ? error.message : "Failed to fetch analytics",
+        data: {
+          totalRevenue: 0,
+          totalBookings: 0,
+          averageBookingValue: 0,
+          clientRetentionRate: 0,
+          popularServices: [],
+          monthlyTrends: [],
+          revenueGrowth: 0,
+          bookingGrowth: 0,
+        },
       },
       { status: 500 },
     )

@@ -1,6 +1,6 @@
 import { Html, Head, Body, Container, Text, Section } from "@react-email/components"
 
-interface BookingConfirmationProps {
+interface BookingConfirmationEmailProps {
   customerName: string
   services: string[]
   date: string
@@ -18,7 +18,7 @@ export default function BookingConfirmationEmail({
   totalAmount,
   depositAmount,
   paymentReference,
-}: BookingConfirmationProps) {
+}: BookingConfirmationEmailProps) {
   return (
     <Html>
       <Head />
@@ -40,20 +40,20 @@ export default function BookingConfirmationEmail({
             </Text>
 
             <Section style={{ backgroundColor: "#f9fafb", padding: "20px", borderRadius: "6px", margin: "20px 0" }}>
-              <Text style={{ color: "#6b7280", fontWeight: "bold", margin: "8px 0" }}>Service(s):</Text>
-              <Text style={{ color: "#1f2937", margin: "8px 0" }}>{services.join(", ")}</Text>
+              <Text style={{ margin: "8px 0", color: "#6b7280", fontWeight: "bold" }}>Service(s):</Text>
+              <Text style={{ margin: "8px 0", color: "#1f2937" }}>{services.join(", ")}</Text>
 
-              <Text style={{ color: "#6b7280", fontWeight: "bold", margin: "8px 0" }}>Date:</Text>
-              <Text style={{ color: "#1f2937", margin: "8px 0" }}>{date}</Text>
+              <Text style={{ margin: "8px 0", color: "#6b7280", fontWeight: "bold" }}>Date:</Text>
+              <Text style={{ margin: "8px 0", color: "#1f2937" }}>{date}</Text>
 
-              <Text style={{ color: "#6b7280", fontWeight: "bold", margin: "8px 0" }}>Time:</Text>
-              <Text style={{ color: "#1f2937", margin: "8px 0" }}>{time}</Text>
+              <Text style={{ margin: "8px 0", color: "#6b7280", fontWeight: "bold" }}>Time:</Text>
+              <Text style={{ margin: "8px 0", color: "#1f2937" }}>{time}</Text>
 
-              <Text style={{ color: "#6b7280", fontWeight: "bold", margin: "8px 0" }}>Amount Paid:</Text>
-              <Text style={{ color: "#1f2937", margin: "8px 0" }}>₦{depositAmount.toLocaleString()}</Text>
+              <Text style={{ margin: "8px 0", color: "#6b7280", fontWeight: "bold" }}>Amount Paid:</Text>
+              <Text style={{ margin: "8px 0", color: "#1f2937" }}>₦{depositAmount.toLocaleString()}</Text>
 
-              <Text style={{ color: "#6b7280", fontWeight: "bold", margin: "8px 0" }}>Payment Reference:</Text>
-              <Text style={{ color: "#1f2937", fontFamily: "monospace", margin: "8px 0" }}>{paymentReference}</Text>
+              <Text style={{ margin: "8px 0", color: "#6b7280", fontWeight: "bold" }}>Payment Reference:</Text>
+              <Text style={{ margin: "8px 0", color: "#1f2937", fontFamily: "monospace" }}>{paymentReference}</Text>
             </Section>
 
             <Section

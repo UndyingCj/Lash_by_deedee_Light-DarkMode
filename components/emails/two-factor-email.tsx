@@ -28,8 +28,8 @@ export default function TwoFactorEmail({ code }: TwoFactorEmailProps) {
                 backgroundColor: "#f9fafb",
                 padding: "20px",
                 borderRadius: "6px",
-                textAlign: "center",
                 margin: "20px 0",
+                textAlign: "center",
               }}
             >
               <Text

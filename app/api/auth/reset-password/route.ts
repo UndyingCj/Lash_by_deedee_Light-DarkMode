@@ -7,54 +7,50 @@ export async function POST(request: NextRequest) {
     const { token, password } = await request.json()
 
     if (!token || !password) {
-      return NextResponse.json({ success: false, error: "Token and password are required" }, { status: 400 })
+      return NextResponse.json({ error: "Token and password are required" }, { status: 400 })
     }
 
     if (password.length < 8) {
-      return NextResponse.json(
-        { success: false, error: "Password must be at least 8 characters long" },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 })
     }
 
-    // Find admin with valid reset token
-    const { data: adminData, error: adminError } = await supabaseAdmin
-      .from("admin_auth")
-      .select("id, email, reset_expires")
+    // Find user with valid reset token
+    const { data: user, error: userError } = await supabaseAdmin
+      .from("admin_users")
+      .select("*")
       .eq("reset_token", token)
       .single()
 
-    if (adminError || !adminData) {
-      return NextResponse.json({ success: false, error: "Invalid or expired reset token" }, { status: 400 })
+    if (userError || !user) {
+      return NextResponse.json({ error: "Invalid or expired reset token" }, { status: 400 })
     }
 
-    // Check if token has expired
-    if (new Date() > new Date(adminData.reset_expires)) {
-      return NextResponse.json({ success: false, error: "Reset token has expired" }, { status: 400 })
+    // Check if token is expired
+    const now = new Date()
+    const expiresAt = new Date(user.reset_expires)
+
+    if (now > expiresAt) {
+      return NextResponse.json({ error: "Reset token has expired" }, { status: 400 })
     }
 
     // Hash new password
     const hashedPassword = await bcrypt.hash(password, 12)
 
     // Update password and clear reset token
-    const { error: updateError } = await supabaseAdmin
-      .from("admin_auth")
+    await supabaseAdmin
+      .from("admin_users")
       .update({
-        password: hashedPassword,
+        password_hash: hashedPassword,
         reset_token: null,
         reset_expires: null,
+        password_changed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq("reset_token", token)
-
-    if (updateError) {
-      console.error("Error updating password:", updateError)
-      return NextResponse.json({ success: false, error: "Failed to reset password" }, { status: 500 })
-    }
+      .eq("id", user.id)
 
     return NextResponse.json({ success: true, message: "Password reset successfully" })
   } catch (error) {
     console.error("Reset password error:", error)
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to reset password" }, { status: 500 })
   }
 }

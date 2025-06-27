@@ -8,42 +8,40 @@ export async function POST(request: NextRequest) {
     const { email } = await request.json()
 
     if (!email) {
-      return NextResponse.json({ success: false, error: "Email is required" }, { status: 400 })
+      return NextResponse.json({ error: "Email is required" }, { status: 400 })
     }
 
-    // Generate a 6-digit code
+    // Get user from database
+    const { data: user, error: userError } = await supabaseAdmin
+      .from("admin_users")
+      .select("*")
+      .eq("email", email)
+      .single()
+
+    if (userError || !user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    // Generate 6-digit code
     const code = Math.floor(100000 + Math.random() * 900000).toString()
-
-    // Hash the code before storing
     const hashedCode = await bcrypt.hash(code, 10)
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
 
-    // Set expiration time (10 minutes from now)
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
-
-    // Store the hashed code in database
-    const { error: updateError } = await supabaseAdmin
-      .from("admin_auth")
+    // Save code to database
+    await supabaseAdmin
+      .from("admin_users")
       .update({
         two_factor_code: hashedCode,
-        two_factor_expires: expiresAt,
+        two_factor_expires: expiresAt.toISOString(),
       })
-      .eq("email", email)
+      .eq("id", user.id)
 
-    if (updateError) {
-      console.error("Error storing 2FA code:", updateError)
-      return NextResponse.json({ success: false, error: "Failed to generate verification code" }, { status: 500 })
-    }
+    // Send email
+    await sendTwoFactorCode(email, code)
 
-    // Send the code via email
-    try {
-      await sendTwoFactorCode(email, code)
-      return NextResponse.json({ success: true, message: "Verification code sent successfully" })
-    } catch (emailError) {
-      console.error("Error sending 2FA email:", emailError)
-      return NextResponse.json({ success: false, error: "Failed to send verification code" }, { status: 500 })
-    }
+    return NextResponse.json({ success: true, message: "2FA code sent" })
   } catch (error) {
     console.error("Send 2FA code error:", error)
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to send 2FA code" }, { status: 500 })
   }
 }
