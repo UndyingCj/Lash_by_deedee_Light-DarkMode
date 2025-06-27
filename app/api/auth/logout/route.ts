@@ -8,15 +8,21 @@ export async function POST(request: NextRequest) {
     if (sessionToken) {
       // Delete session from database
       await supabaseAdmin.from("admin_sessions").delete().eq("session_token", sessionToken)
+
+      console.log("✅ Session logged out:", sessionToken.substring(0, 10) + "...")
     }
 
+    const response = NextResponse.json({
+      success: true,
+      message: "Logged out successfully",
+    })
+
     // Clear session cookie
-    const response = NextResponse.json({ success: true, message: "Logged out successfully" })
     response.cookies.delete("admin_session")
 
     return response
   } catch (error) {
     console.error("❌ Logout error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 })
   }
 }

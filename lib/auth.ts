@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js"
 import bcrypt from "bcryptjs"
 import crypto from "crypto"
+import { supabaseAdmin } from "./supabase-admin"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -36,6 +37,11 @@ export function generateTwoFactorCode(): string {
 
 // Generate secure session token
 export function generateSessionToken(): string {
+  return crypto.randomBytes(32).toString("hex")
+}
+
+// Generate secure token
+export function generateSecureToken(): string {
   return crypto.randomBytes(32).toString("hex")
 }
 
@@ -237,38 +243,74 @@ export async function verifyTwoFactorCode(userId: string, code: string): Promise
 }
 
 // Validate session
-export async function validateSession(sessionToken: string): Promise<AdminUser | null> {
+export async function validateSession(sessionToken: string) {
   try {
-    const { data: session, error } = await supabase
-      .from("admin_sessions")
-      .select(`
-        *,
-        admin_users (*)
-      `)
-      .eq("session_token", sessionToken)
-      .gt("expires_at", new Date().toISOString())
-      .single()
-
-    if (error || !session || !session.admin_users) {
+    if (!sessionToken) {
       return null
     }
 
-    const user = Array.isArray(session.admin_users) ? session.admin_users[0] : session.admin_users
+    // Get session from database
+    const { data: session, error: sessionError } = await supabaseAdmin
+      .from("admin_sessions")
+      .select(`
+        *,
+        admin_users (
+          id,
+          email,
+          name,
+          two_factor_enabled
+        )
+      `)
+      .eq("session_token", sessionToken)
+      .single()
+
+    if (sessionError || !session) {
+      return null
+    }
+
+    // Check if session is expired
+    if (new Date(session.expires_at) < new Date()) {
+      // Delete expired session
+      await supabaseAdmin.from("admin_sessions").delete().eq("session_token", sessionToken)
+
+      return null
+    }
+
+    // Update last activity
+    await supabaseAdmin
+      .from("admin_sessions")
+      .update({ last_activity: new Date().toISOString() })
+      .eq("session_token", sessionToken)
 
     return {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      is_active: user.is_active,
-      two_factor_enabled: user.two_factor_enabled,
-      last_login: user.last_login,
-      failed_login_attempts: user.failed_login_attempts,
-      locked_until: user.locked_until,
+      user: session.admin_users,
+      session: {
+        id: session.id,
+        expires_at: session.expires_at,
+        last_activity: session.last_activity,
+      },
     }
   } catch (error) {
     console.error("Session validation error:", error)
     return null
   }
+}
+
+// Require authentication middleware
+export async function requireAuth(request: Request) {
+  const sessionToken = request.headers.get("cookie")?.match(/admin_session=([^;]+)/)?.[1]
+
+  if (!sessionToken) {
+    throw new Error("No session token")
+  }
+
+  const auth = await validateSession(sessionToken)
+
+  if (!auth) {
+    throw new Error("Invalid session")
+  }
+
+  return auth
 }
 
 // Generate password reset token

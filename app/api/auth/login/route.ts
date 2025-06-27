@@ -1,17 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { supabaseAdmin } from "@/lib/supabase-admin"
+import { generateSecureToken } from "@/lib/auth"
 import { sendTwoFactorCode } from "@/lib/email"
 
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json()
 
-    console.log("🔐 Login attempt for:", email)
-
     if (!email || !password) {
-      return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
+      return NextResponse.json({ success: false, message: "Email and password are required" }, { status: 400 })
     }
+
+    console.log("🔐 Login attempt for:", email)
 
     // Get user from database
     const { data: user, error: userError } = await supabaseAdmin
@@ -22,41 +23,52 @@ export async function POST(request: NextRequest) {
 
     if (userError || !user) {
       console.log("❌ User not found:", email)
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+      return NextResponse.json({ success: false, message: "Invalid email or password" }, { status: 401 })
     }
 
     // Check if account is locked
     if (user.locked_until && new Date(user.locked_until) > new Date()) {
-      console.log("🔒 Account locked until:", user.locked_until)
-      return NextResponse.json({ error: "Account is temporarily locked" }, { status: 423 })
+      const lockTime = Math.ceil((new Date(user.locked_until).getTime() - Date.now()) / (1000 * 60))
+      return NextResponse.json(
+        { success: false, message: `Account locked. Try again in ${lockTime} minutes.` },
+        { status: 423 },
+      )
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password_hash)
+    const isValidPassword = await bcrypt.compare(password, user.password_hash)
 
-    if (!isPasswordValid) {
+    if (!isValidPassword) {
       console.log("❌ Invalid password for:", email)
 
-      // Increment failed login attempts
-      const failedAttempts = (user.failed_login_attempts || 0) + 1
-      const lockUntil = failedAttempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null // 30 minutes
+      // Increment failed attempts
+      const failedAttempts = (user.failed_attempts || 0) + 1
+      const lockUntil = failedAttempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null
 
       await supabaseAdmin
         .from("admin_users")
         .update({
-          failed_login_attempts: failedAttempts,
+          failed_attempts: failedAttempts,
           locked_until: lockUntil?.toISOString(),
+          last_failed_login: new Date().toISOString(),
         })
         .eq("id", user.id)
 
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+      if (lockUntil) {
+        return NextResponse.json(
+          { success: false, message: "Too many failed attempts. Account locked for 30 minutes." },
+          { status: 423 },
+        )
+      }
+
+      return NextResponse.json({ success: false, message: "Invalid email or password" }, { status: 401 })
     }
 
-    // Reset failed login attempts on successful password verification
+    // Reset failed attempts on successful password verification
     await supabaseAdmin
       .from("admin_users")
       .update({
-        failed_login_attempts: 0,
+        failed_attempts: 0,
         locked_until: null,
         last_login: new Date().toISOString(),
       })
@@ -64,68 +76,73 @@ export async function POST(request: NextRequest) {
 
     // Check if 2FA is enabled
     if (user.two_factor_enabled) {
-      console.log("📱 2FA required for:", email)
-
       // Generate and send 2FA code
       const twoFactorCode = Math.floor(100000 + Math.random() * 900000).toString()
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+      const codeExpiry = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
 
-      // Store 2FA code
-      await supabaseAdmin.from("two_factor_codes").insert({
-        user_id: user.id,
-        code: twoFactorCode,
-        expires_at: expiresAt.toISOString(),
-      })
+      await supabaseAdmin
+        .from("admin_users")
+        .update({
+          two_factor_code: twoFactorCode,
+          two_factor_expires: codeExpiry.toISOString(),
+        })
+        .eq("id", user.id)
 
       // Send 2FA code via email
       try {
         await sendTwoFactorCode(user.email, twoFactorCode)
-        console.log("✅ 2FA code sent to:", email)
+        console.log("✅ 2FA code sent to:", user.email)
       } catch (emailError) {
         console.error("❌ Failed to send 2FA code:", emailError)
-        return NextResponse.json({ error: "Failed to send verification code" }, { status: 500 })
+        return NextResponse.json(
+          { success: false, message: "Failed to send verification code. Please try again." },
+          { status: 500 },
+        )
       }
 
       return NextResponse.json({
+        success: true,
         requiresTwoFactor: true,
-        userId: user.id,
         message: "Verification code sent to your email",
       })
     }
 
-    // Create session for non-2FA login
-    const sessionToken = crypto.randomUUID()
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+    // Create session
+    const sessionToken = generateSecureToken()
+    const sessionExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
     await supabaseAdmin.from("admin_sessions").insert({
       user_id: user.id,
       session_token: sessionToken,
-      expires_at: expiresAt.toISOString(),
+      expires_at: sessionExpiry.toISOString(),
+      ip_address: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
+      user_agent: request.headers.get("user-agent") || "unknown",
     })
 
     console.log("✅ Login successful for:", email)
 
-    // Set session cookie
     const response = NextResponse.json({
       success: true,
+      message: "Login successful",
       user: {
         id: user.id,
         email: user.email,
-        username: user.username,
+        name: user.name,
       },
     })
 
+    // Set secure session cookie
     response.cookies.set("admin_session", sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 24 * 60 * 60, // 24 hours
-      path: "/",
+      path: "/egusi",
     })
 
     return response
   } catch (error) {
     console.error("❌ Login error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 })
   }
 }

@@ -1,73 +1,75 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabaseAdmin } from "@/lib/supabase-admin"
 import bcrypt from "bcryptjs"
+import { supabaseAdmin } from "@/lib/supabase-admin"
 
 export async function POST(request: NextRequest) {
   try {
     const { token, password } = await request.json()
 
-    console.log("🔑 Password reset attempt with token")
-
     if (!token || !password) {
-      return NextResponse.json({ error: "Token and password are required" }, { status: 400 })
+      return NextResponse.json({ success: false, message: "Token and password are required" }, { status: 400 })
     }
 
     if (password.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters long" }, { status: 400 })
+      return NextResponse.json(
+        { success: false, message: "Password must be at least 8 characters long" },
+        { status: 400 },
+      )
     }
 
-    // Validate reset token
-    const { data: resetToken, error: tokenError } = await supabaseAdmin
-      .from("password_reset_tokens")
+    console.log("🔐 Password reset attempt with token:", token.substring(0, 10) + "...")
+
+    // Find user with valid reset token
+    const { data: user, error: userError } = await supabaseAdmin
+      .from("admin_users")
       .select("*")
-      .eq("token", token)
-      .eq("used", false)
-      .gt("expires_at", new Date().toISOString())
+      .eq("reset_token", token)
       .single()
 
-    if (tokenError || !resetToken) {
-      console.log("❌ Invalid or expired reset token")
-      return NextResponse.json({ error: "Invalid or expired reset token" }, { status: 400 })
+    if (userError || !user) {
+      console.log("❌ Invalid reset token:", token.substring(0, 10) + "...")
+      return NextResponse.json({ success: false, message: "Invalid or expired reset token" }, { status: 401 })
     }
 
-    console.log("✅ Valid reset token found")
+    // Check if token is expired
+    if (!user.reset_token_expires || new Date(user.reset_token_expires) < new Date()) {
+      console.log("❌ Expired reset token for:", user.email)
+      return NextResponse.json({ success: false, message: "Reset token has expired" }, { status: 401 })
+    }
 
     // Hash new password
-    const passwordHash = await bcrypt.hash(password, 12)
+    const saltRounds = 12
+    const passwordHash = await bcrypt.hash(password, saltRounds)
 
-    // Update user password
+    // Update password and clear reset token
     const { error: updateError } = await supabaseAdmin
       .from("admin_users")
       .update({
         password_hash: passwordHash,
-        password_changed_at: new Date().toISOString(),
-        failed_login_attempts: 0,
+        reset_token: null,
+        reset_token_expires: null,
+        failed_attempts: 0,
         locked_until: null,
+        updated_at: new Date().toISOString(),
       })
-      .eq("id", resetToken.user_id)
+      .eq("id", user.id)
 
     if (updateError) {
       console.error("❌ Failed to update password:", updateError)
-      return NextResponse.json({ error: "Failed to reset password" }, { status: 500 })
+      return NextResponse.json({ success: false, message: "Failed to update password" }, { status: 500 })
     }
 
-    // Mark token as used
-    await supabaseAdmin
-      .from("password_reset_tokens")
-      .update({ used: true, used_at: new Date().toISOString() })
-      .eq("id", resetToken.id)
+    // Clear all existing sessions for security
+    await supabaseAdmin.from("admin_sessions").delete().eq("user_id", user.id)
 
-    // Invalidate all existing sessions for this user
-    await supabaseAdmin.from("admin_sessions").delete().eq("user_id", resetToken.user_id)
-
-    console.log("✅ Password reset successfully")
+    console.log("✅ Password reset successful for:", user.email)
 
     return NextResponse.json({
       success: true,
-      message: "Password reset successfully",
+      message: "Password has been reset successfully. You can now log in with your new password.",
     })
   } catch (error) {
-    console.error("❌ Reset password error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("❌ Password reset error:", error)
+    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 })
   }
 }

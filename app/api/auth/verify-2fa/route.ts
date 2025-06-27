@@ -1,69 +1,86 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase-admin"
+import { generateSecureToken } from "@/lib/auth"
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, code } = await request.json()
+    const { email, code } = await request.json()
 
-    console.log("🔐 2FA verification attempt for user:", userId)
-
-    if (!userId || !code) {
-      return NextResponse.json({ error: "User ID and code are required" }, { status: 400 })
+    if (!email || !code) {
+      return NextResponse.json({ success: false, message: "Email and verification code are required" }, { status: 400 })
     }
 
-    // Find valid 2FA code
-    const { data: twoFactorCode, error: codeError } = await supabaseAdmin
-      .from("two_factor_codes")
+    console.log("🔐 2FA verification attempt for:", email)
+
+    // Get user from database
+    const { data: user, error: userError } = await supabaseAdmin
+      .from("admin_users")
       .select("*")
-      .eq("user_id", userId)
-      .eq("code", code)
-      .eq("used", false)
-      .gt("expires_at", new Date().toISOString())
+      .eq("email", email.toLowerCase())
       .single()
 
-    if (codeError || !twoFactorCode) {
-      console.log("❌ Invalid or expired 2FA code")
-      return NextResponse.json({ error: "Invalid or expired verification code" }, { status: 400 })
+    if (userError || !user) {
+      console.log("❌ User not found:", email)
+      return NextResponse.json({ success: false, message: "Invalid verification attempt" }, { status: 401 })
     }
 
-    // Mark code as used
+    // Check if 2FA code is valid and not expired
+    if (!user.two_factor_code || user.two_factor_code !== code) {
+      console.log("❌ Invalid 2FA code for:", email)
+      return NextResponse.json({ success: false, message: "Invalid verification code" }, { status: 401 })
+    }
+
+    if (!user.two_factor_expires || new Date(user.two_factor_expires) < new Date()) {
+      console.log("❌ Expired 2FA code for:", email)
+      return NextResponse.json({ success: false, message: "Verification code has expired" }, { status: 401 })
+    }
+
+    // Clear 2FA code
     await supabaseAdmin
-      .from("two_factor_codes")
-      .update({ used: true, used_at: new Date().toISOString() })
-      .eq("id", twoFactorCode.id)
+      .from("admin_users")
+      .update({
+        two_factor_code: null,
+        two_factor_expires: null,
+        last_login: new Date().toISOString(),
+      })
+      .eq("id", user.id)
 
     // Create session
-    const sessionToken = crypto.randomUUID()
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+    const sessionToken = generateSecureToken()
+    const sessionExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
     await supabaseAdmin.from("admin_sessions").insert({
-      user_id: userId,
+      user_id: user.id,
       session_token: sessionToken,
-      expires_at: expiresAt.toISOString(),
+      expires_at: sessionExpiry.toISOString(),
+      ip_address: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
+      user_agent: request.headers.get("user-agent") || "unknown",
     })
 
-    // Update last login
-    await supabaseAdmin.from("admin_users").update({ last_login: new Date().toISOString() }).eq("id", userId)
+    console.log("✅ 2FA verification successful for:", email)
 
-    console.log("✅ 2FA verification successful")
-
-    // Set session cookie
     const response = NextResponse.json({
       success: true,
       message: "Verification successful",
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      },
     })
 
+    // Set secure session cookie
     response.cookies.set("admin_session", sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 24 * 60 * 60, // 24 hours
-      path: "/",
+      path: "/egusi",
     })
 
     return response
   } catch (error) {
     console.error("❌ 2FA verification error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 })
   }
 }
