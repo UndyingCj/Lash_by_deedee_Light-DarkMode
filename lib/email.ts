@@ -1,70 +1,11 @@
 import { Resend } from "resend"
-import { render } from "@react-email/render"
+import BookingConfirmationEmail from "@/components/emails/booking-confirmation"
 import TwoFactorEmail from "@/components/emails/two-factor-email"
 import PasswordResetEmail from "@/components/emails/password-reset-email"
-import BookingConfirmationEmail from "@/components/emails/booking-confirmation"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-export async function sendTwoFactorCode(email: string, code: string) {
-  try {
-    const emailHtml = await render(TwoFactorEmail({ code }))
-
-    const { data, error } = await resend.emails.send({
-      from: "Lashed by Deedee <admin@lashedbydeedee.com>",
-      to: [email],
-      subject: "Your verification code",
-      html: emailHtml,
-    })
-
-    if (error) {
-      console.error("Failed to send 2FA email:", error)
-      throw new Error(`Email sending failed: ${error.message}`)
-    }
-
-    console.log("2FA email sent successfully:", data?.id)
-    return data
-  } catch (error) {
-    console.error("Error sending 2FA email:", error)
-    throw error
-  }
-}
-
-export async function sendPasswordResetEmail(email: string, resetToken: string) {
-  try {
-    const resetUrl = `https://lashedbydeedee.com/egusi/reset-password?token=${resetToken}`
-    const emailHtml = await render(PasswordResetEmail({ resetUrl }))
-
-    const { data, error } = await resend.emails.send({
-      from: "Lashed by Deedee <admin@lashedbydeedee.com>",
-      to: [email],
-      subject: "Reset your password",
-      html: emailHtml,
-    })
-
-    if (error) {
-      console.error("Failed to send password reset email:", error)
-      throw new Error(`Email sending failed: ${error.message}`)
-    }
-
-    console.log("Password reset email sent successfully:", data?.id)
-    return data
-  } catch (error) {
-    console.error("Error sending password reset email:", error)
-    throw error
-  }
-}
-
-export async function sendBookingConfirmationEmail({
-  customerName,
-  customerEmail,
-  services,
-  date,
-  time,
-  totalAmount,
-  depositAmount,
-  paymentReference,
-}: {
+export interface BookingEmailData {
   customerName: string
   customerEmail: string
   services: string[]
@@ -72,40 +13,77 @@ export async function sendBookingConfirmationEmail({
   time: string
   totalAmount: number
   depositAmount: number
-  paymentReference?: string
-}) {
-  try {
-    const emailHtml = await render(
-      BookingConfirmationEmail({
-        customerName,
-        services,
-        date,
-        time,
-        totalAmount,
-        depositAmount,
-        paymentReference,
-      }),
-    )
+  paymentReference: string
+}
 
-    const { data, error } = await resend.emails.send({
+export async function sendBookingConfirmationEmail(data: BookingEmailData) {
+  try {
+    console.log("📧 Sending booking confirmation email to:", data.customerEmail)
+
+    const { data: emailData, error } = await resend.emails.send({
       from: "Lashed by Deedee <bookings@lashedbydeedee.com>",
-      to: [customerEmail],
-      subject: `Booking Confirmed - ${new Date(date).toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-      })} at ${time}`,
-      html: emailHtml,
+      to: [data.customerEmail],
+      subject: "Booking Confirmation - Lashed by Deedee",
+      react: BookingConfirmationEmail(data),
     })
 
     if (error) {
-      console.error("Failed to send confirmation email:", error)
-      throw new Error(`Email sending failed: ${error.message}`)
+      console.error("❌ Failed to send booking confirmation email:", error)
+      throw new Error(`Failed to send booking confirmation: ${error.message}`)
     }
 
-    console.log("Confirmation email sent successfully:", data?.id)
+    console.log("✅ Booking confirmation email sent successfully:", emailData?.id)
+    return emailData
+  } catch (error) {
+    console.error("❌ Booking email error:", error)
+    throw error
+  }
+}
+
+export async function sendTwoFactorCode(email: string, code: string) {
+  try {
+    console.log("📧 Sending 2FA code to:", email)
+
+    const { data, error } = await resend.emails.send({
+      from: "Lashed by Deedee <noreply@lashedbydeedee.com>",
+      to: [email],
+      subject: "Your Admin Login Verification Code",
+      react: TwoFactorEmail({ code }),
+    })
+
+    if (error) {
+      console.error("❌ Failed to send 2FA email:", error)
+      throw new Error(`Failed to send 2FA code: ${error.message}`)
+    }
+
+    console.log("✅ 2FA email sent successfully:", data?.id)
     return data
   } catch (error) {
-    console.error("Error sending confirmation email:", error)
+    console.error("❌ 2FA email error:", error)
+    throw error
+  }
+}
+
+export async function sendPasswordResetEmail(email: string, resetUrl: string) {
+  try {
+    console.log("📧 Sending password reset email to:", email)
+
+    const { data, error } = await resend.emails.send({
+      from: "Lashed by Deedee <noreply@lashedbydeedee.com>",
+      to: [email],
+      subject: "Reset Your Admin Password",
+      react: PasswordResetEmail({ resetUrl, email }),
+    })
+
+    if (error) {
+      console.error("❌ Failed to send reset email:", error)
+      throw new Error(`Failed to send reset email: ${error.message}`)
+    }
+
+    console.log("✅ Reset email sent successfully:", data?.id)
+    return data
+  } catch (error) {
+    console.error("❌ Reset email error:", error)
     throw error
   }
 }

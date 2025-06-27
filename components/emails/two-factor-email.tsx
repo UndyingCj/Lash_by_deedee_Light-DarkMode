@@ -1,4 +1,4 @@
-import { Html, Head, Body, Container, Text, Section } from "@react-email/components"
+import { Body, Container, Head, Heading, Html, Img, Preview, Section, Text } from "@react-email/components"
 
 interface TwoFactorEmailProps {
   code: string
@@ -8,68 +8,98 @@ export default function TwoFactorEmail({ code }: TwoFactorEmailProps) {
   return (
     <Html>
       <Head />
-      <Body style={{ fontFamily: "Arial, sans-serif", backgroundColor: "#f9fafb" }}>
-        <Container style={{ maxWidth: "600px", margin: "0 auto", padding: "20px" }}>
-          <Section
-            style={{
-              backgroundColor: "white",
-              padding: "40px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-            }}
-          >
-            <Text
-              style={{
-                fontSize: "24px",
-                fontWeight: "bold",
-                color: "#1f2937",
-                textAlign: "center",
-                marginBottom: "20px",
-              }}
-            >
-              🔐 Admin Login Verification
-            </Text>
-
-            <Text style={{ fontSize: "16px", color: "#4b5563", lineHeight: "1.5", marginBottom: "30px" }}>
-              Someone is trying to access your Lashed by Deedee admin panel. If this was you, use the verification code
-              below:
-            </Text>
-
-            <Section style={{ textAlign: "center", margin: "40px 0" }}>
-              <Text
-                style={{
-                  fontSize: "32px",
-                  fontWeight: "bold",
-                  color: "#ec4899",
-                  backgroundColor: "#fdf2f8",
-                  padding: "20px 40px",
-                  borderRadius: "8px",
-                  letterSpacing: "4px",
-                  border: "2px solid #f9a8d4",
-                }}
-              >
-                {code}
-              </Text>
-            </Section>
-
-            <Text style={{ fontSize: "14px", color: "#6b7280", textAlign: "center", marginBottom: "20px" }}>
-              This code will expire in 10 minutes for security reasons.
-            </Text>
-
-            <Text style={{ fontSize: "14px", color: "#ef4444", textAlign: "center", marginBottom: "30px" }}>
-              If you didn't request this code, please ignore this email and consider changing your password.
-            </Text>
-
-            <Section style={{ borderTop: "1px solid #e5e7eb", paddingTop: "20px", textAlign: "center" }}>
-              <Text style={{ fontSize: "12px", color: "#9ca3af" }}>
-                Lashed by Deedee Admin System
-                <br />
-                This is an automated security email.
-              </Text>
-            </Section>
+      <Preview>Your admin login verification code</Preview>
+      <Body style={main}>
+        <Container style={container}>
+          <Section style={logoContainer}>
+            <Img
+              src="https://lashedbydeedee.com/placeholder-logo.png"
+              width="120"
+              height="36"
+              alt="Lashed by Deedee"
+              style={logo}
+            />
           </Section>
+          <Heading style={h1}>Admin Login Verification</Heading>
+          <Text style={text}>
+            Someone is trying to sign in to your Lashed by Deedee admin account. If this was you, please use the
+            verification code below:
+          </Text>
+          <Section style={codeContainer}>
+            <Text style={codeText}>{code}</Text>
+          </Section>
+          <Text style={text}>This code will expire in 10 minutes.</Text>
+          <Text style={text}>
+            If you didn't request this code, please ignore this email or contact us if you have concerns about your
+            account security.
+          </Text>
+          <Text style={footer}>
+            Best regards,
+            <br />
+            The Lashed by Deedee Team
+          </Text>
         </Container>
       </Body>
     </Html>
   )
+}
+
+const main = {
+  backgroundColor: "#ffffff",
+  fontFamily:
+    '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif',
+}
+
+const container = {
+  margin: "0 auto",
+  padding: "20px 0 48px",
+  maxWidth: "560px",
+}
+
+const logoContainer = {
+  textAlign: "center" as const,
+  margin: "0 0 40px",
+}
+
+const logo = {
+  margin: "0 auto",
+}
+
+const h1 = {
+  color: "#333",
+  fontSize: "24px",
+  fontWeight: "bold",
+  margin: "40px 0",
+  padding: "0",
+  textAlign: "center" as const,
+}
+
+const text = {
+  color: "#333",
+  fontSize: "16px",
+  lineHeight: "26px",
+  margin: "16px 0",
+}
+
+const codeContainer = {
+  background: "#f4f4f4",
+  borderRadius: "4px",
+  margin: "16px auto 40px",
+  padding: "24px",
+  textAlign: "center" as const,
+}
+
+const codeText = {
+  fontSize: "32px",
+  fontWeight: "bold",
+  letterSpacing: "6px",
+  color: "#333",
+  margin: "0",
+}
+
+const footer = {
+  color: "#898989",
+  fontSize: "14px",
+  lineHeight: "22px",
+  margin: "40px 0 0",
 }

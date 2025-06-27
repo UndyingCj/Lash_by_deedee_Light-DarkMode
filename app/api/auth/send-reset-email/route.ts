@@ -1,64 +1,37 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabaseAdmin } from "@/lib/supabase-admin"
-import { generateSecureToken } from "@/lib/auth"
-import { sendPasswordResetEmail } from "@/lib/email"
+import { Resend } from "resend"
+import PasswordResetEmail from "@/components/emails/password-reset-email"
+
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function POST(request: NextRequest) {
   try {
-    const { email } = await request.json()
+    const { email, token } = await request.json()
 
-    if (!email) {
-      return NextResponse.json({ success: false, message: "Email is required" }, { status: 400 })
+    if (!email || !token) {
+      return NextResponse.json({ error: "Email and token are required" }, { status: 400 })
     }
 
     console.log("📧 Sending password reset email to:", email)
 
-    // Get user from database
-    const { data: user, error: userError } = await supabaseAdmin
-      .from("admin_users")
-      .select("*")
-      .eq("email", email.toLowerCase())
-      .single()
+    const resetUrl = `https://lashedbydeedee.com/egusi/reset-password?token=${token}`
 
-    if (userError || !user) {
-      console.log("❌ User not found:", email)
-      // Don't reveal if user exists or not for security
-      return NextResponse.json({
-        success: true,
-        message: "If an account with that email exists, a reset link has been sent.",
-      })
-    }
-
-    // Generate reset token
-    const resetToken = generateSecureToken()
-    const tokenExpiry = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
-
-    await supabaseAdmin
-      .from("admin_users")
-      .update({
-        reset_token: resetToken,
-        reset_token_expires: tokenExpiry.toISOString(),
-      })
-      .eq("id", user.id)
-
-    // Send reset email
-    try {
-      await sendPasswordResetEmail(user.email, resetToken)
-      console.log("✅ Password reset email sent successfully to:", user.email)
-    } catch (emailError) {
-      console.error("❌ Failed to send reset email:", emailError)
-      return NextResponse.json(
-        { success: false, message: "Failed to send reset email. Please try again." },
-        { status: 500 },
-      )
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: "Reset link has been sent to your email address.",
+    const { data, error } = await resend.emails.send({
+      from: "Lashed by Deedee <noreply@lashedbydeedee.com>",
+      to: [email],
+      subject: "Reset Your Admin Password",
+      react: PasswordResetEmail({ resetUrl, email }),
     })
+
+    if (error) {
+      console.error("❌ Failed to send reset email:", error)
+      return NextResponse.json({ error: "Failed to send reset email" }, { status: 500 })
+    }
+
+    console.log("✅ Reset email sent successfully:", data?.id)
+    return NextResponse.json({ success: true, message: "Reset email sent" })
   } catch (error) {
-    console.error("❌ Send reset email error:", error)
-    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 })
+    console.error("❌ Reset email error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
