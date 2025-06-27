@@ -1,248 +1,82 @@
-import { Body, Container, Head, Heading, Html, Img, Preview, Section, Text } from "@react-email/components"
+import { Html, Head, Body, Container, Text, Section } from "@react-email/components"
 
-interface BookingConfirmationEmailProps {
-  customerName: string
-  services: string[]
-  date: string
-  time: string
+interface BookingConfirmationProps {
+  bookingId: string
+  clientName: string
+  serviceName: string
+  appointmentDate: string
+  appointmentTime: string
   totalAmount: number
   depositAmount: number
-  paymentReference?: string
 }
 
 export function BookingConfirmationEmail({
-  customerName,
-  services,
-  date,
-  time,
+  bookingId,
+  clientName,
+  serviceName,
+  appointmentDate,
+  appointmentTime,
   totalAmount,
   depositAmount,
-  paymentReference,
-}: BookingConfirmationEmailProps) {
-  const formattedDate = new Date(date).toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  })
-
+}: BookingConfirmationProps) {
   return (
     <Html>
       <Head />
-      <Preview>Your booking with Lashed by Deedee has been confirmed!</Preview>
-      <Body style={main}>
-        <Container style={container}>
-          <Section style={header}>
-            <Img
-              src="/placeholder.svg?height=60&width=200&text=Lashed+by+Deedee"
-              width="200"
-              height="60"
-              alt="Lashed by Deedee"
-              style={logo}
-            />
-          </Section>
+      <Body style={{ fontFamily: "Arial, sans-serif", backgroundColor: "#f9fafb" }}>
+        <Container style={{ maxWidth: "600px", margin: "0 auto", padding: "20px" }}>
+          <Section style={{ backgroundColor: "white", padding: "40px", borderRadius: "8px" }}>
+            <Text
+              style={{
+                fontSize: "24px",
+                fontWeight: "bold",
+                color: "#1f2937",
+                marginBottom: "20px",
+                textAlign: "center",
+              }}
+            >
+              Lashed by Deedee
+            </Text>
+            <Text style={{ fontSize: "18px", color: "#374151", marginBottom: "30px", textAlign: "center" }}>
+              Booking Confirmed! 🎉
+            </Text>
+            <Text style={{ fontSize: "16px", color: "#6b7280", marginBottom: "20px" }}>Hi {clientName},</Text>
+            <Text style={{ fontSize: "16px", color: "#6b7280", marginBottom: "30px" }}>
+              Your booking has been confirmed! Here are the details:
+            </Text>
 
-          <Section style={content}>
-            <Heading style={h1}>Booking Confirmed! 💕</Heading>
-
-            <Text style={text}>Hi {customerName},</Text>
-
-            <Text style={text}>Thank you for booking with Lashed by Deedee! Your appointment has been confirmed.</Text>
-
-            <Section style={bookingDetails}>
-              <Heading style={h2}>Booking Details</Heading>
-
-              <Text style={detailItem}>
-                <strong>Services:</strong> {services.join(", ")}
+            <Section style={{ backgroundColor: "#fdf2f8", padding: "20px", borderRadius: "8px", marginBottom: "30px" }}>
+              <Text style={{ fontSize: "14px", color: "#374151", margin: "5px 0" }}>
+                <strong>Booking ID:</strong> {bookingId}
               </Text>
-
-              <Text style={detailItem}>
-                <strong>Date:</strong> {formattedDate}
+              <Text style={{ fontSize: "14px", color: "#374151", margin: "5px 0" }}>
+                <strong>Service:</strong> {serviceName}
               </Text>
-
-              <Text style={detailItem}>
-                <strong>Time:</strong> {time}
+              <Text style={{ fontSize: "14px", color: "#374151", margin: "5px 0" }}>
+                <strong>Date:</strong> {appointmentDate}
               </Text>
-
-              <Text style={detailItem}>
+              <Text style={{ fontSize: "14px", color: "#374151", margin: "5px 0" }}>
+                <strong>Time:</strong> {appointmentTime}
+              </Text>
+              <Text style={{ fontSize: "14px", color: "#374151", margin: "5px 0" }}>
                 <strong>Total Amount:</strong> ₦{totalAmount.toLocaleString()}
               </Text>
-
-              <Text style={detailItem}>
-                <strong>Deposit Required:</strong> ₦{depositAmount.toLocaleString()}
-              </Text>
-              {paymentReference && (
-                <Text style={detailItem}>
-                  <strong>Payment Reference:</strong> {paymentReference}
-                </Text>
-              )}
-            </Section>
-
-            <Section style={importantInfo}>
-              <Heading style={h3}>Important Information</Heading>
-
-              <Text style={text}>• Please arrive 10 minutes early for your appointment</Text>
-
-              <Text style={text}>
-                • A deposit of ₦{depositAmount.toLocaleString()} is required to secure your booking
-              </Text>
-
-              <Text style={text}>• Cancellations must be made 24 hours in advance</Text>
-
-              <Text style={text}>• Please come with clean lashes/brows (no makeup)</Text>
-            </Section>
-
-            <Section style={contactInfo}>
-              <Heading style={h3}>Contact Information</Heading>
-
-              <Text style={text}>
-                📍 Location: Rumigbo, Port Harcourt, Rivers State
-                <br />📞 WhatsApp:{" "}
-                <a href="https://wa.me/message/X5M2NOA553NGK1" style={link}>
-                  Contact Us
-                </a>
-                <br />📧 Email:{" "}
-                <a href="mailto:bookings@lashedbydeedee.com" style={link}>
-                  bookings@lashedbydeedee.com
-                </a>
-                <br />📱 Instagram:{" "}
-                <a href="https://www.instagram.com/lashedbydeedee?igsh=MWR3NzV6amtpZHdwbg==" style={link}>
-                  @lashedbydeedee
-                </a>
+              <Text style={{ fontSize: "14px", color: "#374151", margin: "5px 0" }}>
+                <strong>Deposit Paid:</strong> ₦{depositAmount.toLocaleString()}
               </Text>
             </Section>
 
-            <Text style={text}>
-              We can't wait to see you! If you have any questions, please don't hesitate to reach out.
+            <Text style={{ fontSize: "16px", color: "#6b7280", marginBottom: "20px" }}>
+              We're excited to see you! Please arrive 10 minutes early for your appointment.
             </Text>
-
-            <Text style={signature}>
-              Best regards,
-              <br />
-              Deedee
-              <br />
-              Lashed by Deedee ✨
+            <Text style={{ fontSize: "14px", color: "#6b7280", marginBottom: "20px" }}>
+              If you need to reschedule or have any questions, please contact us at lashedbydeedeee@gmail.com
             </Text>
-          </Section>
-
-          <Section style={footer}>
-            <Text style={footerText}>© 2024 Lashed by Deedee. All rights reserved.</Text>
+            <Text style={{ fontSize: "12px", color: "#9ca3af", textAlign: "center" }}>
+              © 2024 Lashed by Deedee. All rights reserved.
+            </Text>
           </Section>
         </Container>
       </Body>
     </Html>
   )
-}
-
-// Styles remain the same...
-const main = {
-  backgroundColor: "#f6f9fc",
-  fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Ubuntu,sans-serif',
-}
-
-const container = {
-  backgroundColor: "#ffffff",
-  margin: "0 auto",
-  padding: "20px 0 48px",
-  marginBottom: "64px",
-}
-
-const header = {
-  padding: "32px 24px",
-  textAlign: "center" as const,
-  backgroundColor: "#000000",
-}
-
-const logo = {
-  margin: "0 auto",
-}
-
-const content = {
-  padding: "24px",
-}
-
-const h1 = {
-  color: "#333",
-  fontSize: "24px",
-  fontWeight: "bold",
-  margin: "30px 0",
-  padding: "0",
-  textAlign: "center" as const,
-}
-
-const h2 = {
-  color: "#333",
-  fontSize: "20px",
-  fontWeight: "bold",
-  margin: "20px 0 10px 0",
-  padding: "0",
-}
-
-const h3 = {
-  color: "#333",
-  fontSize: "18px",
-  fontWeight: "bold",
-  margin: "20px 0 10px 0",
-  padding: "0",
-}
-
-const text = {
-  color: "#333",
-  fontSize: "16px",
-  lineHeight: "26px",
-  margin: "16px 0",
-}
-
-const bookingDetails = {
-  backgroundColor: "#f8f9fa",
-  borderRadius: "8px",
-  padding: "20px",
-  margin: "20px 0",
-}
-
-const detailItem = {
-  color: "#333",
-  fontSize: "16px",
-  lineHeight: "24px",
-  margin: "8px 0",
-}
-
-const importantInfo = {
-  backgroundColor: "#fff3cd",
-  borderRadius: "8px",
-  padding: "20px",
-  margin: "20px 0",
-  border: "1px solid #ffeaa7",
-}
-
-const contactInfo = {
-  backgroundColor: "#e3f2fd",
-  borderRadius: "8px",
-  padding: "20px",
-  margin: "20px 0",
-}
-
-const link = {
-  color: "#e91e63",
-  textDecoration: "underline",
-}
-
-const signature = {
-  color: "#333",
-  fontSize: "16px",
-  lineHeight: "26px",
-  margin: "30px 0 0 0",
-  fontStyle: "italic",
-}
-
-const footer = {
-  textAlign: "center" as const,
-  padding: "24px",
-  backgroundColor: "#f8f9fa",
-}
-
-const footerText = {
-  color: "#666",
-  fontSize: "12px",
-  lineHeight: "16px",
 }

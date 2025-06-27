@@ -9,6 +9,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   console.error("❌ Missing environment variables:")
   console.error("SUPABASE_URL:", SUPABASE_URL ? "✅ Set" : "❌ Missing")
   console.error("SUPABASE_SERVICE_KEY:", SUPABASE_SERVICE_KEY ? "✅ Set" : "❌ Missing")
+  console.log("\n💡 Please check your environment variables in .env.local or deployment settings")
   process.exit(1)
 }
 
@@ -25,64 +26,31 @@ async function debugLoginIssue() {
 
     if (testError) {
       console.error("❌ Database connection failed:", testError.message)
+      console.log("💡 Please check your Supabase credentials and ensure the admin_users table exists")
       return
     }
 
     console.log("✅ Database connection successful")
 
-    // Check if admin_users table exists and has data
-    console.log("\n2️⃣ Checking admin_users table...")
-    const { data: users, error: usersError } = await supabase.from("admin_users").select("*")
-
-    if (usersError) {
-      console.error("❌ Failed to query admin_users:", usersError.message)
-      console.log("🔧 Creating admin_users table...")
-
-      // Create the table
-      const { error: createError } = await supabase.rpc("exec_sql", {
-        sql: `
-          CREATE TABLE IF NOT EXISTS admin_users (
-            id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-            email VARCHAR(255) UNIQUE NOT NULL,
-            username VARCHAR(100) NOT NULL,
-            name VARCHAR(255) NOT NULL,
-            password_hash TEXT NOT NULL,
-            is_active BOOLEAN DEFAULT true,
-            two_factor_enabled BOOLEAN DEFAULT false,
-            two_factor_code VARCHAR(6),
-            two_factor_expires TIMESTAMP WITH TIME ZONE,
-            failed_attempts INTEGER DEFAULT 0,
-            locked_until TIMESTAMP WITH TIME ZONE,
-            last_login TIMESTAMP WITH TIME ZONE,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-          );
-        `,
-      })
-
-      if (createError) {
-        console.error("❌ Failed to create table:", createError.message)
-        return
-      }
-    }
-
-    console.log("✅ Found", users?.length || 0, "admin users")
-
-    // Check for the specific admin user
-    console.log("\n3️⃣ Checking for admin user...")
-    const { data: adminUser, error: adminError } = await supabase
+    // Check current admin user
+    console.log("\n2️⃣ Checking current admin user...")
+    const { data: users, error: usersError } = await supabase
       .from("admin_users")
       .select("*")
       .eq("email", "lashedbydeedeee@gmail.com")
-      .single()
 
-    if (adminError || !adminUser) {
-      console.log("❌ Admin user not found, creating...")
+    if (usersError) {
+      console.error("❌ Error querying admin_users:", usersError.message)
+      return
+    }
 
-      // Hash the password
-      const passwordHash = await bcrypt.hash("admin123", 12)
+    if (!users || users.length === 0) {
+      console.log("❌ No admin user found. Creating new admin user...")
 
-      // Create admin user
-      const { data: newUser, error: createUserError } = await supabase
+      // Create new admin user with current password
+      const passwordHash = await bcrypt.hash("newpassword123", 12)
+
+      const { data: newUser, error: createError } = await supabase
         .from("admin_users")
         .insert({
           email: "lashedbydeedeee@gmail.com",
@@ -95,32 +63,55 @@ async function debugLoginIssue() {
         .select()
         .single()
 
-      if (createUserError) {
-        console.error("❌ Failed to create admin user:", createUserError.message)
+      if (createError) {
+        console.error("❌ Failed to create admin user:", createError.message)
         return
       }
 
-      console.log("✅ Admin user created successfully")
+      console.log("✅ New admin user created successfully")
+      console.log("📧 Email: lashedbydeedeee@gmail.com")
+      console.log("🔑 Password: newpassword123")
     } else {
-      console.log("✅ Admin user found:", adminUser.email)
+      const user = users[0]
+      console.log("✅ Found admin user:", user.email)
+      console.log("👤 User ID:", user.id)
+      console.log("🔐 Two-factor enabled:", user.two_factor_enabled)
+      console.log("🔒 Account locked:", user.locked_until ? "Yes" : "No")
+      console.log("❌ Failed attempts:", user.failed_attempts || 0)
 
-      // Test password verification
-      console.log("\n4️⃣ Testing password verification...")
-      const isValidPassword = await bcrypt.compare("admin123", adminUser.password_hash)
+      // Check what password they're currently using
+      console.log("\n3️⃣ Testing current password...")
+      const testPasswords = ["admin123", "newpassword123", "password123", "Admin123!", "lashedbydeedee"]
+      let currentPassword = null
 
-      if (!isValidPassword) {
-        console.log("❌ Password verification failed, updating password...")
+      for (const testPassword of testPasswords) {
+        try {
+          const isValid = await bcrypt.compare(testPassword, user.password_hash)
+          if (isValid) {
+            currentPassword = testPassword
+            console.log(`✅ Current password is: ${testPassword}`)
+            break
+          }
+        } catch (error) {
+          console.log(`❌ Error testing password "${testPassword}":`, error.message)
+        }
+      }
 
-        // Update password
-        const newPasswordHash = await bcrypt.hash("admin123", 12)
+      if (!currentPassword) {
+        console.log("❌ Could not determine current password. Setting new password...")
+
+        // Set a new known password
+        const newPasswordHash = await bcrypt.hash("newpassword123", 12)
+
         const { error: updateError } = await supabase
           .from("admin_users")
           .update({
             password_hash: newPasswordHash,
             failed_attempts: 0,
             locked_until: null,
+            password_changed_at: new Date().toISOString(),
           })
-          .eq("id", adminUser.id)
+          .eq("id", user.id)
 
         if (updateError) {
           console.error("❌ Failed to update password:", updateError.message)
@@ -128,46 +119,50 @@ async function debugLoginIssue() {
         }
 
         console.log("✅ Password updated successfully")
-      } else {
-        console.log("✅ Password verification successful")
+        console.log("🔑 New password: newpassword123")
+        currentPassword = "newpassword123"
       }
+
+      // Reset any account locks
+      if (user.failed_attempts > 0 || user.locked_until) {
+        console.log("\n4️⃣ Resetting account locks...")
+
+        const { error: resetError } = await supabase
+          .from("admin_users")
+          .update({
+            failed_attempts: 0,
+            locked_until: null,
+          })
+          .eq("id", user.id)
+
+        if (resetError) {
+          console.error("❌ Failed to reset account locks:", resetError.message)
+        } else {
+          console.log("✅ Account locks reset")
+        }
+      }
+
+      console.log("\n📋 Current login credentials:")
+      console.log("📧 Email: lashedbydeedeee@gmail.com")
+      console.log("🔑 Password:", currentPassword)
     }
 
-    // Check admin_sessions table
-    console.log("\n5️⃣ Checking admin_sessions table...")
-    const { data: sessions, error: sessionsError } = await supabase.from("admin_sessions").select("count(*)")
+    // Clean up old sessions
+    console.log("\n5️⃣ Cleaning up old sessions...")
+    const { error: cleanupError } = await supabase
+      .from("admin_sessions")
+      .delete()
+      .lt("expires_at", new Date().toISOString())
 
-    if (sessionsError) {
-      console.log("❌ admin_sessions table not found, creating...")
-
-      const { error: createSessionsError } = await supabase.rpc("exec_sql", {
-        sql: `
-          CREATE TABLE IF NOT EXISTS admin_sessions (
-            id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-            user_id UUID REFERENCES admin_users(id) ON DELETE CASCADE,
-            session_token VARCHAR(255) UNIQUE NOT NULL,
-            expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-            last_activity TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            ip_address VARCHAR(45),
-            user_agent TEXT,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-          );
-        `,
-      })
-
-      if (createSessionsError) {
-        console.error("❌ Failed to create sessions table:", createSessionsError.message)
-      } else {
-        console.log("✅ admin_sessions table created")
-      }
+    if (cleanupError) {
+      console.error("❌ Error cleaning sessions:", cleanupError.message)
     } else {
-      console.log("✅ admin_sessions table exists")
+      console.log("✅ Old sessions cleaned up")
     }
 
-    console.log("\n🎉 Debug complete! Try logging in with:")
-    console.log("📧 Email: lashedbydeedeee@gmail.com")
-    console.log("🔑 Password: admin123")
-    console.log("🌐 URL: https://lashedbydeedee.com/egusi")
+    console.log("\n🎉 Debug complete!")
+    console.log("🌐 Admin Panel: https://lashedbydeedee.com/egusi")
+    console.log("\n💡 If login still fails, check the browser console for errors")
   } catch (error) {
     console.error("❌ Debug error:", error.message)
   }

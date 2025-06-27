@@ -9,12 +9,22 @@ export async function POST(request: NextRequest) {
       // Delete session from database
       await supabaseAdmin.from("admin_sessions").delete().eq("session_token", sessionToken)
 
-      console.log("✅ User logged out successfully")
+      console.log("✅ Session logged out successfully")
     }
 
+    const response = NextResponse.json({
+      success: true,
+      message: "Logged out successfully",
+    })
+
     // Clear session cookie
-    const response = NextResponse.json({ success: true, message: "Logged out successfully" })
-    response.cookies.delete("admin_session")
+    response.cookies.set("admin_session", "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 0,
+      path: "/egusi",
+    })
 
     return response
   } catch (error) {

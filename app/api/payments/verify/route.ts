@@ -1,124 +1,100 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyPayment } from "@/lib/paystack"
-import { createBooking } from "@/lib/supabase"
-import { sendBookingConfirmationEmail } from "@/lib/email"
+import { supabaseAdmin } from "@/lib/supabase-admin"
+import { sendBookingConfirmation } from "@/lib/email"
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { reference } = body
+    const { reference, bookingData } = await request.json()
 
     if (!reference) {
-      console.error("❌ No payment reference provided")
-      return NextResponse.json({ status: false, message: "Payment reference is required" }, { status: 400 })
+      return NextResponse.json({ success: false, message: "Payment reference is required" }, { status: 400 })
     }
 
-    console.log("🔍 Verifying payment with reference:", reference)
+    console.log("💳 Verifying payment with reference:", reference)
 
-    const verificationResponse = await verifyPayment(reference)
-
-    if (!verificationResponse.status) {
-      console.error("❌ Payment verification failed:", verificationResponse.message)
-      return NextResponse.json(
-        { status: false, message: verificationResponse.message || "Payment verification failed" },
-        { status: 400 },
-      )
-    }
-
-    const paymentData = verificationResponse.data
-
-    if (!paymentData) {
-      console.error("❌ No payment data found")
-      return NextResponse.json({ status: false, message: "No payment data found" }, { status: 400 })
-    }
-
-    console.log("✅ Payment verification successful:", {
-      reference: paymentData.reference,
-      status: paymentData.status,
-      amount: paymentData.amount,
-      customer: paymentData.customer?.email,
+    // Verify payment with Paystack
+    const paystackResponse = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        "Content-Type": "application/json",
+      },
     })
 
-    // Check if payment was successful
-    if (paymentData.status !== "success") {
-      console.error("❌ Payment not successful:", paymentData.status, paymentData.gateway_response)
-      return NextResponse.json(
-        { status: false, message: `Payment ${paymentData.status}. ${paymentData.gateway_response}` },
-        { status: 400 },
-      )
+    if (!paystackResponse.ok) {
+      console.error("❌ Paystack API error:", paystackResponse.status)
+      return NextResponse.json({ success: false, message: "Payment verification failed" }, { status: 400 })
     }
 
-    // Extract booking data from metadata
-    const metadata = paymentData.metadata
-    if (!metadata) {
-      console.error("❌ No booking metadata found in payment")
-      return NextResponse.json({ status: false, message: "No booking metadata found in payment" }, { status: 400 })
+    const paystackData = await paystackResponse.json()
+
+    if (!paystackData.status || paystackData.data.status !== "success") {
+      console.log("❌ Payment not successful:", paystackData.data.status)
+      return NextResponse.json({ success: false, message: "Payment was not successful" }, { status: 400 })
     }
 
+    console.log("✅ Payment verified successfully")
+
+    // Create booking in database
+    const bookingRecord = {
+      client_name: bookingData.clientName,
+      client_email: bookingData.clientEmail,
+      client_phone: bookingData.clientPhone,
+      service_type: bookingData.serviceType,
+      service_name: bookingData.serviceName,
+      appointment_date: bookingData.appointmentDate,
+      appointment_time: bookingData.appointmentTime,
+      total_amount: paystackData.data.amount / 100, // Convert from kobo to naira
+      deposit_amount: bookingData.depositAmount,
+      payment_status: "paid",
+      payment_reference: reference,
+      payment_method: paystackData.data.channel,
+      booking_status: "confirmed",
+      special_notes: bookingData.specialNotes || null,
+      created_at: new Date().toISOString(),
+    }
+
+    const { data: booking, error: bookingError } = await supabaseAdmin
+      .from("bookings")
+      .insert(bookingRecord)
+      .select()
+      .single()
+
+    if (bookingError) {
+      console.error("❌ Error creating booking:", bookingError)
+      return NextResponse.json({ success: false, message: "Failed to create booking" }, { status: 500 })
+    }
+
+    console.log("✅ Booking created successfully:", booking.id)
+
+    // Send confirmation email
     try {
-      // Create booking in database
-      const booking = await createBooking({
-        client_name: metadata.customerName,
-        phone: metadata.customerPhone,
-        email: paymentData.customer.email,
-        service: Array.isArray(metadata.services) ? metadata.services.join(", ") : metadata.services,
-        booking_date: metadata.bookingDate,
-        booking_time: metadata.bookingTime,
-        status: "confirmed", // Automatically confirm paid bookings
-        amount: metadata.totalAmount,
-        notes:
-          metadata.notes ||
-          `Deposit paid: ₦${(paymentData.amount / 100).toLocaleString()}. Payment reference: ${paymentData.reference}`,
+      await sendBookingConfirmation(bookingData.clientEmail, {
+        bookingId: booking.id,
+        clientName: bookingData.clientName,
+        serviceName: bookingData.serviceName,
+        appointmentDate: bookingData.appointmentDate,
+        appointmentTime: bookingData.appointmentTime,
+        totalAmount: booking.total_amount,
+        depositAmount: booking.deposit_amount,
       })
-
-      console.log("✅ Booking created successfully:", booking.id)
-
-      // Send confirmation email
-      try {
-        await sendBookingConfirmationEmail({
-          customerName: metadata.customerName,
-          customerEmail: paymentData.customer.email,
-          services: Array.isArray(metadata.services) ? metadata.services : [metadata.services],
-          date: metadata.bookingDate,
-          time: metadata.bookingTime,
-          totalAmount: metadata.totalAmount,
-          depositAmount: metadata.depositAmount,
-          paymentReference: paymentData.reference,
-        })
-        console.log("✅ Confirmation email sent successfully")
-      } catch (emailError) {
-        console.error("❌ Failed to send confirmation email:", emailError)
-        // Don't fail the entire process if email fails
-      }
-
-      return NextResponse.json({
-        status: true,
-        message: "Payment verified and booking confirmed",
-        data: {
-          payment: {
-            reference: paymentData.reference,
-            amount: paymentData.amount,
-            status: paymentData.status,
-            paid_at: paymentData.paid_at,
-          },
-          booking: {
-            id: booking.id,
-            status: booking.status,
-          },
-        },
-      })
-    } catch (bookingError) {
-      console.error("❌ Failed to create booking:", bookingError)
-      return NextResponse.json(
-        { status: false, message: "Payment successful but failed to create booking. Please contact support." },
-        { status: 500 },
-      )
+      console.log("✅ Confirmation email sent to:", bookingData.clientEmail)
+    } catch (emailError) {
+      console.error("❌ Error sending confirmation email:", emailError)
+      // Don't fail the booking if email fails
     }
+
+    return NextResponse.json({
+      success: true,
+      message: "Payment verified and booking confirmed",
+      booking: {
+        id: booking.id,
+        reference: reference,
+        amount: booking.total_amount,
+        status: "confirmed",
+      },
+    })
   } catch (error) {
     console.error("❌ Payment verification error:", error)
-    return NextResponse.json(
-      { status: false, message: "Internal server error during payment verification" },
-      { status: 500 },
-    )
+    return NextResponse.json({ success: false, message: "Payment verification failed" }, { status: 500 })
   }
 }
