@@ -1,124 +1,125 @@
 -- Drop existing tables if they exist
 DROP TABLE IF EXISTS admin_sessions CASCADE;
 DROP TABLE IF EXISTS admin_users CASCADE;
-DROP TABLE IF EXISTS blocked_dates CASCADE;
-DROP TABLE IF EXISTS blocked_time_slots CASCADE;
-DROP TABLE IF EXISTS business_hours CASCADE;
 DROP TABLE IF EXISTS bookings CASCADE;
+DROP TABLE IF EXISTS blocked_dates CASCADE;
+DROP TABLE IF EXISTS availability CASCADE;
+DROP TABLE IF EXISTS settings CASCADE;
 
--- Create admin_users table with all required columns
+-- Create admin_users table
 CREATE TABLE admin_users (
-  id SERIAL PRIMARY KEY,
-  email VARCHAR(255) UNIQUE NOT NULL,
-  username VARCHAR(100) UNIQUE NOT NULL,
-  name VARCHAR(255) NOT NULL,
-  password_hash TEXT NOT NULL,
-  is_active BOOLEAN DEFAULT true,
-  two_factor_enabled BOOLEAN DEFAULT false,
-  auth_provider VARCHAR(50) DEFAULT 'email',
-  google_id VARCHAR(255),
-  failed_attempts INTEGER DEFAULT 0,
-  locked_until TIMESTAMP,
-  last_login TIMESTAMP,
-  last_failed_login TIMESTAMP,
-  password_changed_at TIMESTAMP DEFAULT NOW(),
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    username VARCHAR(255) UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    two_factor_enabled BOOLEAN DEFAULT false,
+    auth_provider VARCHAR(50) DEFAULT 'email',
+    google_id VARCHAR(255),
+    failed_attempts INTEGER DEFAULT 0,
+    locked_until TIMESTAMP WITH TIME ZONE,
+    last_login TIMESTAMP WITH TIME ZONE,
+    last_failed_login TIMESTAMP WITH TIME ZONE,
+    password_changed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create admin_sessions table
 CREATE TABLE admin_sessions (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES admin_users(id) ON DELETE CASCADE,
-  session_token VARCHAR(255) UNIQUE NOT NULL,
-  expires_at TIMESTAMP NOT NULL,
-  ip_address VARCHAR(45),
-  user_agent TEXT,
-  last_activity TIMESTAMP DEFAULT NOW(),
-  created_at TIMESTAMP DEFAULT NOW()
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES admin_users(id) ON DELETE CASCADE,
+    session_token VARCHAR(255) UNIQUE NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    last_activity TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create bookings table
 CREATE TABLE bookings (
-  id SERIAL PRIMARY KEY,
-  client_name VARCHAR(255) NOT NULL,
-  client_email VARCHAR(255) NOT NULL,
-  client_phone VARCHAR(20),
-  service_type VARCHAR(100) NOT NULL,
-  appointment_date DATE NOT NULL,
-  appointment_time TIME NOT NULL,
-  total_amount DECIMAL(10,2) NOT NULL,
-  deposit_amount DECIMAL(10,2),
-  paid_amount DECIMAL(10,2) DEFAULT 0,
-  status VARCHAR(50) DEFAULT 'pending',
-  payment_status VARCHAR(50) DEFAULT 'pending',
-  payment_reference VARCHAR(255),
-  paystack_transaction_id VARCHAR(255),
-  payment_date TIMESTAMP,
-  notes TEXT,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    client_name VARCHAR(255) NOT NULL,
+    client_email VARCHAR(255) NOT NULL,
+    client_phone VARCHAR(50),
+    service_type VARCHAR(100) NOT NULL,
+    appointment_date DATE NOT NULL,
+    appointment_time TIME NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL,
+    deposit_amount DECIMAL(10,2) NOT NULL,
+    payment_status VARCHAR(50) DEFAULT 'pending',
+    payment_reference VARCHAR(255),
+    special_notes TEXT,
+    status VARCHAR(50) DEFAULT 'confirmed',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create blocked_dates table
 CREATE TABLE blocked_dates (
-  id SERIAL PRIMARY KEY,
-  date DATE NOT NULL,
-  reason TEXT,
-  created_at TIMESTAMP DEFAULT NOW()
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    date DATE NOT NULL UNIQUE,
+    reason VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create blocked_time_slots table
-CREATE TABLE blocked_time_slots (
-  id SERIAL PRIMARY KEY,
-  date DATE NOT NULL,
-  time_slot TIME NOT NULL,
-  reason TEXT,
-  created_at TIMESTAMP DEFAULT NOW()
+-- Create availability table
+CREATE TABLE availability (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    date DATE NOT NULL,
+    time_slot TIME NOT NULL,
+    is_available BOOLEAN DEFAULT true,
+    booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(date, time_slot)
 );
 
--- Create business_hours table
-CREATE TABLE business_hours (
-  id SERIAL PRIMARY KEY,
-  monday_start TIME DEFAULT '09:00',
-  monday_end TIME DEFAULT '17:00',
-  monday_enabled BOOLEAN DEFAULT true,
-  tuesday_start TIME DEFAULT '09:00',
-  tuesday_end TIME DEFAULT '17:00',
-  tuesday_enabled BOOLEAN DEFAULT true,
-  wednesday_start TIME DEFAULT '09:00',
-  wednesday_end TIME DEFAULT '17:00',
-  wednesday_enabled BOOLEAN DEFAULT true,
-  thursday_start TIME DEFAULT '09:00',
-  thursday_end TIME DEFAULT '17:00',
-  thursday_enabled BOOLEAN DEFAULT true,
-  friday_start TIME DEFAULT '09:00',
-  friday_end TIME DEFAULT '17:00',
-  friday_enabled BOOLEAN DEFAULT true,
-  saturday_start TIME DEFAULT '10:00',
-  saturday_end TIME DEFAULT '16:00',
-  saturday_enabled BOOLEAN DEFAULT true,
-  sunday_start TIME DEFAULT '10:00',
-  sunday_end TIME DEFAULT '16:00',
-  sunday_enabled BOOLEAN DEFAULT false,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+-- Create settings table
+CREATE TABLE settings (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    key VARCHAR(255) UNIQUE NOT NULL,
+    value TEXT,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Insert default business hours
-INSERT INTO business_hours DEFAULT VALUES;
+-- Insert default settings
+INSERT INTO settings (key, value, description) VALUES
+('business_hours_start', '09:00', 'Business opening time'),
+('business_hours_end', '18:00', 'Business closing time'),
+('booking_advance_days', '30', 'How many days in advance bookings can be made'),
+('deposit_percentage', '50', 'Percentage of total amount required as deposit');
 
--- Insert admin user with hashed password (password: newpassword123)
-INSERT INTO admin_users (email, username, name, password_hash, is_active, failed_attempts) 
-VALUES (
-  'lashedbydeedeee@gmail.com',
-  'admin',
-  'Deedee Admin',
-  '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBdXwtGTrSvF5u',
-  true,
-  0
-) ON CONFLICT (email) DO UPDATE SET
-  password_hash = EXCLUDED.password_hash,
-  failed_attempts = 0,
-  locked_until = NULL,
-  updated_at = NOW();
+-- Create indexes for better performance
+CREATE INDEX idx_admin_sessions_token ON admin_sessions(session_token);
+CREATE INDEX idx_admin_sessions_user_id ON admin_sessions(user_id);
+CREATE INDEX idx_admin_sessions_expires_at ON admin_sessions(expires_at);
+CREATE INDEX idx_bookings_date ON bookings(appointment_date);
+CREATE INDEX idx_bookings_email ON bookings(client_email);
+CREATE INDEX idx_availability_date ON availability(date);
+CREATE INDEX idx_blocked_dates_date ON blocked_dates(date);
+
+-- Enable Row Level Security (RLS) but allow service role access
+ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE blocked_dates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE availability ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
+
+-- Create policies that allow service role to access everything
+CREATE POLICY "Service role can access admin_users" ON admin_users FOR ALL USING (true);
+CREATE POLICY "Service role can access admin_sessions" ON admin_sessions FOR ALL USING (true);
+CREATE POLICY "Service role can access bookings" ON bookings FOR ALL USING (true);
+CREATE POLICY "Service role can access blocked_dates" ON blocked_dates FOR ALL USING (true);
+CREATE POLICY "Service role can access availability" ON availability FOR ALL USING (true);
+CREATE POLICY "Service role can access settings" ON settings FOR ALL USING (true);
+
+-- Grant permissions to authenticated and service roles
+GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;

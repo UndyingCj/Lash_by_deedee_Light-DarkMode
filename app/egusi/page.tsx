@@ -1,8 +1,7 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,12 +11,29 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Eye, EyeOff } from "lucide-react"
 
 export default function AdminLogin() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const [email, setEmail] = useState("lashedbydeedeee@gmail.com")
+  const [password, setPassword] = useState("newpassword123")
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
+
+  // Check if already logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch("/api/auth/check", {
+          credentials: "include",
+        })
+        if (response.ok) {
+          router.push("/egusi/dashboard")
+        }
+      } catch (error) {
+        // Not logged in, stay on login page
+      }
+    }
+    checkAuth()
+  }, [router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -25,24 +41,32 @@ export default function AdminLogin() {
     setError("")
 
     try {
+      console.log("🔐 Attempting login...")
+
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, password }),
+        credentials: "include",
       })
 
       const data = await response.json()
+      console.log("📡 Login response:", data)
 
       if (response.ok && data.success) {
-        console.log("✅ Login successful")
-        router.push("/egusi/dashboard")
+        console.log("✅ Login successful, redirecting...")
+        // Small delay to ensure cookie is set
+        setTimeout(() => {
+          router.push("/egusi/dashboard")
+        }, 100)
       } else {
+        console.log("❌ Login failed:", data.error)
         setError(data.error || "Login failed")
       }
     } catch (error) {
-      console.error("Login error:", error)
+      console.error("❌ Login error:", error)
       setError("Network error. Please try again.")
     } finally {
       setIsLoading(false)
@@ -54,46 +78,12 @@ export default function AdminLogin() {
     setError("")
 
     try {
-      // Initialize Google OAuth
-      if (typeof window !== "undefined" && window.google) {
-        window.google.accounts.oauth2
-          .initTokenClient({
-            client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-            scope: "email profile",
-            callback: async (response: any) => {
-              try {
-                const loginResponse = await fetch("/api/auth/google", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({ token: response.access_token }),
-                })
-
-                const loginData = await loginResponse.json()
-
-                if (loginResponse.ok && loginData.success) {
-                  console.log("✅ Google login successful")
-                  router.push("/egusi/dashboard")
-                } else {
-                  setError(loginData.error || "Google login failed")
-                }
-              } catch (error) {
-                console.error("Google login error:", error)
-                setError("Google login failed. Please try again.")
-              } finally {
-                setIsLoading(false)
-              }
-            },
-          })
-          .requestAccessToken()
-      } else {
-        setError("Google login not available")
-        setIsLoading(false)
-      }
+      // For now, just show a message that Google login is not configured
+      setError("Google login is not configured yet. Please use email/password login.")
     } catch (error) {
-      console.error("Google login initialization error:", error)
-      setError("Google login initialization failed")
+      console.error("Google login error:", error)
+      setError("Google login failed. Please try again.")
+    } finally {
       setIsLoading(false)
     }
   }
@@ -211,9 +201,6 @@ export default function AdminLogin() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Google OAuth Script */}
-      <script src="https://accounts.google.com/gsi/client" async defer></script>
     </div>
   )
 }

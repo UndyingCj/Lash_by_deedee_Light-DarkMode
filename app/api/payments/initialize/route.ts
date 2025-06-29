@@ -1,24 +1,30 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, amount, metadata } = await request.json()
+    const { email, amount, service, date, time, clientName, clientPhone, specialNotes } = await request.json()
 
-    if (!email || !amount) {
-      return NextResponse.json({ error: "Email and amount are required" }, { status: 400 })
+    // Validate required fields
+    if (!email || !amount || !service || !date || !time || !clientName) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
-
-    console.log("💳 Initializing payment for:", email, "Amount:", amount)
 
     // Check if we have Paystack credentials
     const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY
-
     if (!paystackSecretKey) {
-      console.error("❌ Paystack secret key not configured")
+      console.error("❌ Missing Paystack secret key")
       return NextResponse.json({ error: "Payment system not configured" }, { status: 503 })
     }
 
-    // Initialize payment with Paystack
+    // Calculate deposit (50% of total amount)
+    const totalAmount = Number.parseFloat(amount)
+    const depositAmount = Math.round(totalAmount * 0.5)
+
+    // Generate unique reference
+    const reference = `lbd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+    // Initialize Paystack transaction
     const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
       headers: {
@@ -27,12 +33,19 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         email,
-        amount: Math.round(amount * 100), // Convert to kobo
+        amount: depositAmount * 100, // Paystack expects amount in kobo
+        reference,
         currency: "NGN",
-        callback_url: `${process.env.NEXT_PUBLIC_SITE_URL || "https://lashedbydeedee.com"}/book/success`,
+        callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/book/success`,
         metadata: {
-          ...metadata,
-          cancel_action: `${process.env.NEXT_PUBLIC_SITE_URL || "https://lashedbydeedee.com"}/book`,
+          service,
+          appointment_date: date,
+          appointment_time: time,
+          client_name: clientName,
+          client_phone: clientPhone,
+          special_notes: specialNotes,
+          total_amount: totalAmount,
+          deposit_amount: depositAmount,
         },
       }),
     })
@@ -44,7 +57,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: paystackData.message || "Payment initialization failed" }, { status: 400 })
     }
 
-    console.log("✅ Payment initialized successfully:", paystackData.data.reference)
+    // Save booking to database
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (supabaseUrl && supabaseKey) {
+      const supabase = createClient(supabaseUrl, supabaseKey)
+
+      const { error: bookingError } = await supabase.from("bookings").insert({
+        client_name: clientName,
+        client_email: email,
+        client_phone: clientPhone,
+        service_type: service,
+        appointment_date: date,
+        appointment_time: time,
+        total_amount: totalAmount,
+        deposit_amount: depositAmount,
+        payment_status: "pending",
+        payment_reference: reference,
+        special_notes: specialNotes,
+        status: "pending",
+      })
+
+      if (bookingError) {
+        console.error("❌ Failed to save booking:", bookingError)
+        // Continue anyway, payment can still proceed
+      }
+    }
+
+    console.log("✅ Payment initialized successfully:", reference)
 
     return NextResponse.json({
       success: true,

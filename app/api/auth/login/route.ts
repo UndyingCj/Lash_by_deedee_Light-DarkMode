@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to create session" }, { status: 500 })
     }
 
+    console.log("✅ Session created successfully")
     console.log("✅ Login successful for:", email)
 
     const response = NextResponse.json({
@@ -118,6 +119,8 @@ export async function POST(request: NextRequest) {
       maxAge: 24 * 60 * 60, // 24 hours
       path: "/",
     })
+
+    console.log("✅ Cookie set successfully")
 
     return response
   } catch (error) {
