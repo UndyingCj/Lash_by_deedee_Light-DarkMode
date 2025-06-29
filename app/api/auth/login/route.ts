@@ -2,8 +2,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { createClient } from "@supabase/supabase-js"
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json()
@@ -14,6 +12,17 @@ export async function POST(request: NextRequest) {
 
     console.log("🔐 Login attempt for:", email)
 
+    // Check if we have the required environment variables
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ Missing Supabase credentials")
+      return NextResponse.json({ error: "Database not configured" }, { status: 503 })
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
     // Get user from database
     const { data: user, error: userError } = await supabase
       .from("admin_users")
@@ -22,9 +31,11 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (userError || !user) {
-      console.log("❌ User not found:", email, userError)
+      console.log("❌ User not found:", email, userError?.message)
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
     }
+
+    console.log("✅ User found:", user.email)
 
     // Check if account is locked
     if (user.locked_until && new Date(user.locked_until) > new Date()) {
@@ -57,6 +68,8 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
     }
+
+    console.log("✅ Password verified successfully")
 
     // Reset failed attempts on successful password verification
     await supabase

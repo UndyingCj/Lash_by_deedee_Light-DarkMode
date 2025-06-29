@@ -1,214 +1,137 @@
 import { type NextRequest, NextResponse } from "next/server"
-import {
-  getBlockedDates,
-  addBlockedDate,
-  removeBlockedDate,
-  getBlockedTimeSlots,
-  addBlockedTimeSlot,
-  removeBlockedTimeSlot,
-} from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 Availability API: Fetching data from database...")
+    // Check if we have the required environment variables
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-    // If env-vars are missing, this will throw – we trap it below.
-    try {
-      const [blockedDates, blockedSlots] = await Promise.all([getBlockedDates(), getBlockedTimeSlots()])
-
-      console.log("📊 Raw blocked dates from DB:", blockedDates)
-
-      // CRITICAL FIX: Return dates exactly as stored, no timezone conversion
-      const processedBlockedDates = (blockedDates || []).map((item) => ({
-        ...item,
-        blocked_date: item.blocked_date, // Keep exact format from database
-      }))
-
-      const processedBlockedSlots = (blockedSlots || []).map((item) => ({
-        ...item,
-        blocked_date: item.blocked_date, // Keep exact format from database
-      }))
-
-      const response = {
-        success: true,
-        blockedDates: processedBlockedDates,
-        blockedSlots: processedBlockedSlots,
-        timestamp: new Date().toISOString(),
-        debug: {
-          totalBlockedDates: processedBlockedDates.length,
-          totalBlockedSlots: processedBlockedSlots.length,
-          rawDates: blockedDates?.map((d) => d.blocked_date),
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-      }
-
-      console.log("📤 Final API response:", response)
-
-      return NextResponse.json(response, {
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-          Expires: "0",
+    if (!supabaseUrl || !supabaseKey) {
+      console.log("⚠️ Supabase credentials not available, returning empty data")
+      return NextResponse.json({
+        blockedDates: [],
+        blockedTimeSlots: [],
+        businessHours: {
+          monday: { start: "09:00", end: "17:00", enabled: true },
+          tuesday: { start: "09:00", end: "17:00", enabled: true },
+          wednesday: { start: "09:00", end: "17:00", enabled: true },
+          thursday: { start: "09:00", end: "17:00", enabled: true },
+          friday: { start: "09:00", end: "17:00", enabled: true },
+          saturday: { start: "10:00", end: "16:00", enabled: true },
+          sunday: { start: "10:00", end: "16:00", enabled: false },
         },
       })
-    } catch (error) {
-      // Graceful fallback so that the booking page doesn't hard-fail
-      console.warn("⚠️  Availability API fallback – returning empty arrays. " + "Original error:", error)
-
-      return NextResponse.json(
-        {
-          success: false,
-          blockedDates: [],
-          blockedSlots: [],
-          message: "Availability temporarily unavailable – using fallback response",
-        },
-        { status: 200 }, // ← still 200 so the client won't treat it as fatal
-      )
     }
-  } catch (error) {
-    console.error("❌ Error fetching availability:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to fetch availability data",
+
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
+    // Get blocked dates
+    const { data: blockedDates, error: datesError } = await supabase
+      .from("blocked_dates")
+      .select("*")
+      .order("date", { ascending: true })
+
+    // Get blocked time slots
+    const { data: blockedTimeSlots, error: slotsError } = await supabase
+      .from("blocked_time_slots")
+      .select("*")
+      .order("date", { ascending: true })
+
+    // Get business hours
+    const { data: businessHours, error: hoursError } = await supabase
+      .from("business_hours")
+      .select("*")
+      .limit(1)
+      .single()
+
+    // If any query fails, return empty data instead of error
+    if (datesError || slotsError || hoursError) {
+      console.log("⚠️ Some queries failed, returning default data")
+      return NextResponse.json({
         blockedDates: [],
-        blockedSlots: [],
-      },
-      { status: 500 },
-    )
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const { type, date, time, reason, action } = body
-
-    console.log("🔄 Availability API: Processing update:", { type, date, time, action })
-
-    // Validate required fields
-    if (!type || !date || !action) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Missing required fields: type, date, and action are required",
+        blockedTimeSlots: [],
+        businessHours: {
+          monday: { start: "09:00", end: "17:00", enabled: true },
+          tuesday: { start: "09:00", end: "17:00", enabled: true },
+          wednesday: { start: "09:00", end: "17:00", enabled: true },
+          thursday: { start: "09:00", end: "17:00", enabled: true },
+          friday: { start: "09:00", end: "17:00", enabled: true },
+          saturday: { start: "10:00", end: "16:00", enabled: true },
+          sunday: { start: "10:00", end: "16:00", enabled: false },
         },
-        { status: 400 },
-      )
+      })
     }
 
-    if (type === "date") {
-      if (action === "block") {
-        console.log("🚫 Blocking date:", date)
-        const result = await addBlockedDate(date, reason || "Blocked by admin")
-        console.log("✅ Date blocked successfully:", result)
-        return NextResponse.json({
-          success: true,
-          message: "Date blocked successfully",
-          data: result,
-        })
-      } else if (action === "unblock") {
-        console.log("✅ Unblocking date:", date)
-        const result = await removeBlockedDate(date)
-        console.log("✅ Date unblocked successfully:", result)
-        return NextResponse.json({
-          success: true,
-          message: "Date unblocked successfully",
-          data: result,
-        })
-      } else {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Invalid action. Use 'block' or 'unblock'",
+    // Format business hours
+    const formattedBusinessHours = businessHours
+      ? {
+          monday: {
+            start: businessHours.monday_start || "09:00",
+            end: businessHours.monday_end || "17:00",
+            enabled: businessHours.monday_enabled ?? true,
           },
-          { status: 400 },
-        )
-      }
-    } else if (type === "slot") {
-      if (!time) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Time is required for slot operations",
+          tuesday: {
+            start: businessHours.tuesday_start || "09:00",
+            end: businessHours.tuesday_end || "17:00",
+            enabled: businessHours.tuesday_enabled ?? true,
           },
-          { status: 400 },
-        )
-      }
+          wednesday: {
+            start: businessHours.wednesday_start || "09:00",
+            end: businessHours.wednesday_end || "17:00",
+            enabled: businessHours.wednesday_enabled ?? true,
+          },
+          thursday: {
+            start: businessHours.thursday_start || "09:00",
+            end: businessHours.thursday_end || "17:00",
+            enabled: businessHours.thursday_enabled ?? true,
+          },
+          friday: {
+            start: businessHours.friday_start || "09:00",
+            end: businessHours.friday_end || "17:00",
+            enabled: businessHours.friday_enabled ?? true,
+          },
+          saturday: {
+            start: businessHours.saturday_start || "10:00",
+            end: businessHours.saturday_end || "16:00",
+            enabled: businessHours.saturday_enabled ?? true,
+          },
+          sunday: {
+            start: businessHours.sunday_start || "10:00",
+            end: businessHours.sunday_end || "16:00",
+            enabled: businessHours.sunday_enabled ?? false,
+          },
+        }
+      : {
+          monday: { start: "09:00", end: "17:00", enabled: true },
+          tuesday: { start: "09:00", end: "17:00", enabled: true },
+          wednesday: { start: "09:00", end: "17:00", enabled: true },
+          thursday: { start: "09:00", end: "17:00", enabled: true },
+          friday: { start: "09:00", end: "17:00", enabled: true },
+          saturday: { start: "10:00", end: "16:00", enabled: true },
+          sunday: { start: "10:00", end: "16:00", enabled: false },
+        }
 
-      if (action === "block") {
-        console.log("🚫 Blocking time slot:", time, "on", date)
-        const result = await addBlockedTimeSlot(date, time, reason || "Blocked by admin")
-        console.log("✅ Time slot blocked successfully:", result)
-        return NextResponse.json({
-          success: true,
-          message: "Time slot blocked successfully",
-          data: result,
-        })
-      } else if (action === "unblock") {
-        console.log("✅ Unblocking time slot:", time, "on", date)
-        const result = await removeBlockedTimeSlot(date, time)
-        console.log("✅ Time slot unblocked successfully:", result)
-        return NextResponse.json({
-          success: true,
-          message: "Time slot unblocked successfully",
-          data: result,
-        })
-      } else {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Invalid action. Use 'block' or 'unblock'",
-          },
-          { status: 400 },
-        )
-      }
-    } else {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid type. Use 'date' or 'slot'",
-        },
-        { status: 400 },
-      )
-    }
+    return NextResponse.json({
+      blockedDates: blockedDates || [],
+      blockedTimeSlots: blockedTimeSlots || [],
+      businessHours: formattedBusinessHours,
+    })
   } catch (error) {
-    console.error("❌ Error updating availability:", error)
-
-    // Handle specific database errors
-    if (error instanceof Error) {
-      if (error.message.includes("duplicate key")) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "This date/time is already blocked",
-          },
-          { status: 409 },
-        )
-      }
-
-      if (error.message.includes("not found")) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Date/time slot not found",
-          },
-          { status: 404 },
-        )
-      }
-    }
-
-    // Graceful fallback so that the booking page doesn't hard-fail
-    console.warn("⚠️  Availability API fallback – returning empty arrays. " + "Original error:", error)
-
-    return NextResponse.json(
-      {
-        success: false,
-        blockedDates: [],
-        blockedSlots: [],
-        message: "Availability temporarily unavailable – using fallback response",
+    console.error("❌ Availability API error:", error)
+    // Return empty data instead of error to prevent 500
+    return NextResponse.json({
+      blockedDates: [],
+      blockedTimeSlots: [],
+      businessHours: {
+        monday: { start: "09:00", end: "17:00", enabled: true },
+        tuesday: { start: "09:00", end: "17:00", enabled: true },
+        wednesday: { start: "09:00", end: "17:00", enabled: true },
+        thursday: { start: "09:00", end: "17:00", enabled: true },
+        friday: { start: "09:00", end: "17:00", enabled: true },
+        saturday: { start: "10:00", end: "16:00", enabled: true },
+        sunday: { start: "10:00", end: "16:00", enabled: false },
       },
-      { status: 200 }, // ← still 200 so the client won't treat it as fatal
-    )
+    })
   }
 }
