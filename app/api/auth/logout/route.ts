@@ -1,20 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { logout } from "@/lib/auth"
+import { createClient } from "@supabase/supabase-js"
+import { cookies } from "next/headers"
+
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 export async function POST(request: NextRequest) {
   try {
-    const sessionToken = request.cookies.get("admin_session")?.value
+    const cookieStore = cookies()
+    const sessionToken = cookieStore.get("admin_session")?.value
 
     if (sessionToken) {
-      await logout(sessionToken)
+      // Delete session from database
+      await supabase.from("admin_sessions").delete().eq("session_token", sessionToken)
     }
 
-    const response = NextResponse.json({ success: true })
-    response.cookies.delete("admin_session")
+    // Clear cookie
+    cookieStore.delete("admin_session")
 
-    return response
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Logout error:", error)
-    return NextResponse.json({ error: "Logout failed" }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

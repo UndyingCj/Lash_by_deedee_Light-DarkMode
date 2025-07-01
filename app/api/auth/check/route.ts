@@ -1,25 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { cookies } from "next/headers"
+
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 export async function GET(request: NextRequest) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Database not configured" }, { status: 503 })
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey)
-
-    // Get session token from cookie
-    const sessionToken = request.cookies.get("admin_session")?.value
+    const cookieStore = cookies()
+    const sessionToken = cookieStore.get("admin_session")?.value
 
     if (!sessionToken) {
-      return NextResponse.json({ error: "No session token" }, { status: 401 })
+      return NextResponse.json({ error: "No session found" }, { status: 401 })
     }
 
-    // Validate session
+    // Get session from database
     const { data: session, error: sessionError } = await supabase
       .from("admin_sessions")
       .select(`
@@ -42,7 +36,13 @@ export async function GET(request: NextRequest) {
     if (new Date(session.expires_at) < new Date()) {
       // Delete expired session
       await supabase.from("admin_sessions").delete().eq("session_token", sessionToken)
+
       return NextResponse.json({ error: "Session expired" }, { status: 401 })
+    }
+
+    // Check if user is still active
+    if (!session.admin_users?.is_active) {
+      return NextResponse.json({ error: "User account is inactive" }, { status: 401 })
     }
 
     // Update last activity
@@ -53,7 +53,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      user: session.admin_users,
+      user: {
+        id: session.admin_users.id,
+        email: session.admin_users.email,
+        name: session.admin_users.name,
+      },
     })
   } catch (error) {
     console.error("Auth check error:", error)

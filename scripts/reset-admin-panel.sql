@@ -1,4 +1,4 @@
--- Drop existing tables if they exist
+-- Complete reset of admin panel tables
 DROP TABLE IF EXISTS admin_sessions CASCADE;
 DROP TABLE IF EXISTS admin_users CASCADE;
 DROP TABLE IF EXISTS bookings CASCADE;
@@ -42,7 +42,7 @@ CREATE TABLE services (
     name VARCHAR(255) NOT NULL,
     description TEXT,
     price DECIMAL(10,2) NOT NULL,
-    duration INTEGER NOT NULL, -- in minutes
+    duration INTEGER NOT NULL,
     deposit_amount DECIMAL(10,2),
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -97,16 +97,6 @@ CREATE TABLE settings (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create notifications table
-CREATE TABLE notifications (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title VARCHAR(255) NOT NULL,
-    message TEXT NOT NULL,
-    type VARCHAR(50) DEFAULT 'info',
-    is_read BOOLEAN DEFAULT false,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
 -- Insert default services
 INSERT INTO services (name, description, price, duration, deposit_amount) VALUES
 ('Classic Lashes', 'Natural-looking individual lash extensions', 150.00, 120, 50.00),
@@ -123,15 +113,14 @@ INSERT INTO settings (key, value, description) VALUES
 ('default_service_duration', '120', 'Default service duration in minutes'),
 ('payment_required', 'true', 'Whether payment is required for bookings');
 
--- Create indexes for better performance
+-- Create indexes
 CREATE INDEX idx_admin_sessions_token ON admin_sessions(session_token);
 CREATE INDEX idx_admin_sessions_user_id ON admin_sessions(user_id);
 CREATE INDEX idx_bookings_date ON bookings(booking_date);
 CREATE INDEX idx_bookings_status ON bookings(status);
 CREATE INDEX idx_blocked_dates_date ON blocked_dates(date);
-CREATE INDEX idx_blocked_time_slots_date ON blocked_time_slots(date);
 
--- Enable Row Level Security (RLS) but allow service role access
+-- Enable RLS
 ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
@@ -139,9 +128,8 @@ ALTER TABLE blocked_dates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE blocked_time_slots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE services ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
--- Create policies that allow service role to access everything
+-- Create policies for service role access
 CREATE POLICY "Service role can access admin_users" ON admin_users FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "Service role can access admin_sessions" ON admin_sessions FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "Service role can access bookings" ON bookings FOR ALL USING (auth.role() = 'service_role');
@@ -149,4 +137,3 @@ CREATE POLICY "Service role can access blocked_dates" ON blocked_dates FOR ALL U
 CREATE POLICY "Service role can access blocked_time_slots" ON blocked_time_slots FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "Service role can access services" ON services FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "Service role can access settings" ON settings FOR ALL USING (auth.role() = 'service_role');
-CREATE POLICY "Service role can access notifications" ON notifications FOR ALL USING (auth.role() = 'service_role');

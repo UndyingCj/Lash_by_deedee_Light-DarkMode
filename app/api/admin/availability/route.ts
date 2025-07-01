@@ -1,109 +1,116 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
-export async function GET() {
-  try {
-    // Check if we have the required environment variables
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-    if (!supabaseUrl || !supabaseKey) {
-      console.log("⚠️ Supabase credentials not available, returning empty data")
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const date = searchParams.get("date")
+
+    if (!date) {
+      return NextResponse.json({ error: "Date parameter is required" }, { status: 400 })
+    }
+
+    // Check if date is blocked
+    const { data: blockedDate } = await supabase.from("blocked_dates").select("*").eq("date", date).single()
+
+    if (blockedDate) {
       return NextResponse.json({
-        blockedDates: [],
-        bookedSlots: [],
-        settings: {
-          businessHoursStart: "09:00",
-          businessHoursEnd: "18:00",
-          bookingAdvanceDays: 30,
-        },
+        available: false,
+        reason: blockedDate.reason || "Date is not available",
+        timeSlots: [],
       })
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    // Get blocked time slots for this date
+    const { data: blockedSlots } = await supabase.from("blocked_time_slots").select("time_slot").eq("date", date)
 
-    // Get blocked dates
-    const { data: blockedDates, error: blockedError } = await supabase
-      .from("blocked_dates")
-      .select("date, reason")
-      .order("date")
-
-    if (blockedError) {
-      console.error("Error fetching blocked dates:", blockedError)
-    }
-
-    // Get booked slots
-    const { data: bookedSlots, error: bookedError } = await supabase
+    // Get existing bookings for this date
+    const { data: bookings } = await supabase
       .from("bookings")
-      .select("appointment_date, appointment_time")
-      .eq("status", "confirmed")
-      .order("appointment_date")
+      .select("booking_time")
+      .eq("booking_date", date)
+      .neq("status", "cancelled")
 
-    if (bookedError) {
-      console.error("Error fetching booked slots:", bookedError)
+    // Generate available time slots (9 AM to 6 PM)
+    const allTimeSlots = []
+    for (let hour = 9; hour < 18; hour++) {
+      allTimeSlots.push(`${hour.toString().padStart(2, "0")}:00`)
+      allTimeSlots.push(`${hour.toString().padStart(2, "0")}:30`)
     }
 
-    // Get settings
-    const { data: settings, error: settingsError } = await supabase.from("settings").select("key, value")
+    // Filter out blocked and booked slots
+    const blockedTimes = new Set([
+      ...(blockedSlots?.map((slot) => slot.time_slot) || []),
+      ...(bookings?.map((booking) => booking.booking_time) || []),
+    ])
 
-    if (settingsError) {
-      console.error("Error fetching settings:", settingsError)
-    }
-
-    // Convert settings array to object
-    const settingsObj =
-      settings?.reduce((acc, setting) => {
-        acc[setting.key] = setting.value
-        return acc
-      }, {}) || {}
+    const availableSlots = allTimeSlots.filter((slot) => !blockedTimes.has(slot))
 
     return NextResponse.json({
-      blockedDates: blockedDates || [],
-      bookedSlots: bookedSlots || [],
-      settings: {
-        businessHoursStart: settingsObj.business_hours_start || "09:00",
-        businessHoursEnd: settingsObj.business_hours_end || "18:00",
-        bookingAdvanceDays: Number.parseInt(settingsObj.booking_advance_days) || 30,
-      },
+      available: true,
+      timeSlots: availableSlots,
+      date,
     })
   } catch (error) {
-    console.error("Availability API error:", error)
-
-    // Return empty data instead of error to prevent 500 errors
-    return NextResponse.json({
-      blockedDates: [],
-      bookedSlots: [],
-      settings: {
-        businessHoursStart: "09:00",
-        businessHoursEnd: "18:00",
-        bookingAdvanceDays: 30,
-      },
-    })
+    console.error("Availability check error:", error)
+    return NextResponse.json({ error: "Failed to check availability" }, { status: 500 })
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const { date, timeSlot, reason, action } = await request.json()
 
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Database not configured" }, { status: 503 })
+    if (action === "block") {
+      if (timeSlot) {
+        // Block specific time slot
+        const { error } = await supabase.from("blocked_time_slots").insert({
+          date,
+          time_slot: timeSlot,
+          reason: reason || "Blocked by admin",
+        })
+
+        if (error) {
+          return NextResponse.json({ error: "Failed to block time slot" }, { status: 500 })
+        }
+      } else {
+        // Block entire date
+        const { error } = await supabase.from("blocked_dates").insert({
+          date,
+          reason: reason || "Blocked by admin",
+        })
+
+        if (error) {
+          return NextResponse.json({ error: "Failed to block date" }, { status: 500 })
+        }
+      }
+
+      return NextResponse.json({ success: true, message: "Successfully blocked" })
+    } else if (action === "unblock") {
+      if (timeSlot) {
+        // Unblock specific time slot
+        const { error } = await supabase.from("blocked_time_slots").delete().eq("date", date).eq("time_slot", timeSlot)
+
+        if (error) {
+          return NextResponse.json({ error: "Failed to unblock time slot" }, { status: 500 })
+        }
+      } else {
+        // Unblock entire date
+        const { error } = await supabase.from("blocked_dates").delete().eq("date", date)
+
+        if (error) {
+          return NextResponse.json({ error: "Failed to unblock date" }, { status: 500 })
+        }
+      }
+
+      return NextResponse.json({ success: true, message: "Successfully unblocked" })
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey)
-    const { date, reason } = await request.json()
-
-    const { data, error } = await supabase.from("blocked_dates").insert({ date, reason }).select().single()
-
-    if (error) {
-      console.error("Error blocking date:", error)
-      return NextResponse.json({ error: "Failed to block date" }, { status: 500 })
-    }
-
-    return NextResponse.json({ success: true, data })
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 })
   } catch (error) {
-    console.error("Block date API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Availability update error:", error)
+    return NextResponse.json({ error: "Failed to update availability" }, { status: 500 })
   }
 }

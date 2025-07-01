@@ -9,10 +9,9 @@ async function setupDatabase() {
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!supabaseUrl || !supabaseKey) {
-    console.error("❌ Missing Supabase environment variables")
-    console.log("Required variables:")
-    console.log("- NEXT_PUBLIC_SUPABASE_URL")
-    console.log("- SUPABASE_SERVICE_ROLE_KEY")
+    console.error("❌ Missing environment variables:")
+    console.error("NEXT_PUBLIC_SUPABASE_URL:", supabaseUrl ? "✅" : "❌")
+    console.error("SUPABASE_SERVICE_ROLE_KEY:", supabaseKey ? "✅" : "❌")
     return
   }
 
@@ -39,7 +38,7 @@ async function setupDatabase() {
       .single()
 
     if (existingUser) {
-      console.log("👤 Admin user already exists")
+      console.log("✅ Admin user already exists")
     } else {
       // Create admin user
       console.log("👤 Creating admin user...")
@@ -50,11 +49,9 @@ async function setupDatabase() {
         .insert({
           email: "lashedbydeedeee@gmail.com",
           name: "Deedee Admin",
-          username: "deedee_admin",
           password_hash: hashedPassword,
           is_active: true,
           two_factor_enabled: false,
-          auth_provider: "email",
           failed_attempts: 0,
         })
         .select()
@@ -68,11 +65,23 @@ async function setupDatabase() {
       console.log("✅ Admin user created successfully")
     }
 
-    // Clean up old sessions
-    console.log("🧹 Cleaning up old sessions...")
-    await supabase.from("admin_sessions").delete().lt("expires_at", new Date().toISOString())
+    // Test services table
+    const { data: services, error: servicesError } = await supabase.from("services").select("*").limit(1)
 
-    console.log("✅ Old sessions cleaned up")
+    if (servicesError) {
+      console.error("❌ Services table error:", servicesError.message)
+    } else {
+      console.log("✅ Services table accessible")
+    }
+
+    // Test bookings table
+    const { data: bookings, error: bookingsError } = await supabase.from("bookings").select("*").limit(1)
+
+    if (bookingsError) {
+      console.error("❌ Bookings table error:", bookingsError.message)
+    } else {
+      console.log("✅ Bookings table accessible")
+    }
 
     console.log("🎉 Database setup completed!")
     console.log("")
