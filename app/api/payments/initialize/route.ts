@@ -1,61 +1,46 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializePayment, generateReference } from "@/lib/paystack"
-import { supabaseAdmin } from "@/lib/supabase-admin"
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, amount, service, date, time, clientName, clientPhone } = await request.json()
+    const { email, amount, reference, metadata } = await request.json()
 
-    if (!email || !amount || !service || !date || !time) {
+    if (!email || !amount || !reference) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Generate unique reference
-    const reference = generateReference()
+    const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY
+    if (!paystackSecretKey) {
+      return NextResponse.json({ error: "Payment configuration error" }, { status: 500 })
+    }
 
-    // Initialize payment with Paystack
-    const paymentData = await initializePayment({
-      email,
-      amount,
-      reference,
-      callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/book/success`,
-      metadata: {
-        service,
-        date,
-        time,
-        clientName,
-        clientPhone,
+    const response = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${paystackSecretKey}`,
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({
+        email,
+        amount: Math.round(amount * 100), // Convert to kobo
+        reference,
+        metadata,
+        callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/book/success`,
+      }),
     })
 
-    // Store booking in database with pending status
-    const { error: bookingError } = await supabaseAdmin.from("bookings").insert({
-      client_name: clientName,
-      client_email: email,
-      client_phone: clientPhone,
-      service_type: service,
-      appointment_date: date,
-      appointment_time: time,
-      status: "pending_payment",
-      payment_reference: reference,
-      payment_amount: amount,
-      created_at: new Date().toISOString(),
-    })
+    const data = await response.json()
 
-    if (bookingError) {
-      console.error("Booking creation error:", bookingError)
-      return NextResponse.json({ error: "Failed to create booking" }, { status: 500 })
+    if (!response.ok) {
+      console.error("Paystack initialization error:", data)
+      return NextResponse.json({ error: data.message || "Payment initialization failed" }, { status: response.status })
     }
 
     return NextResponse.json({
       success: true,
-      data: {
-        authorization_url: paymentData.data.authorization_url,
-        reference: paymentData.data.reference,
-      },
+      data: data.data,
     })
   } catch (error) {
     console.error("Payment initialization error:", error)
-    return NextResponse.json({ error: "Failed to initialize payment" }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

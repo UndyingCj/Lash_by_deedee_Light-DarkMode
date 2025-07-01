@@ -1,273 +1,409 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Textarea } from "@/components/ui/textarea"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Loader2, Save, Settings, Bell, CreditCard, Building } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { Settings, Shield, Bell, Clock, Users, Save, Loader2, CheckCircle, AlertCircle } from "lucide-react"
+
+interface BusinessHours {
+  open: string
+  close: string
+  closed: boolean
+}
 
 interface BusinessSettings {
-  id: string
   businessName: string
   businessEmail: string
   businessPhone: string
   businessAddress: string
-  businessHours: any
-  timezone: string
-  currency: string
-  bookingBuffer: number
-  maxAdvanceBooking: number
-  cancellationPolicy: string
+  businessHours: {
+    monday: BusinessHours
+    tuesday: BusinessHours
+    wednesday: BusinessHours
+    thursday: BusinessHours
+    friday: BusinessHours
+    saturday: BusinessHours
+    sunday: BusinessHours
+  }
 }
 
 interface NotificationSettings {
-  id: string
   emailNotifications: boolean
   smsNotifications: boolean
   bookingConfirmations: boolean
-  bookingReminders: boolean
+  reminderNotifications: boolean
+  cancelationNotifications: boolean
   reminderHours: number
-  cancellationNotifications: boolean
-  paymentNotifications: boolean
-  adminNotifications: boolean
 }
 
-interface PaymentSettings {
-  id: string
-  paystackPublicKey: string
-  paystackSecretKey: string
-  requirePayment: boolean
-  depositPercentage: number
-  refundPolicy: string
-  acceptedPaymentMethods: string[]
-}
-
-interface SettingsData {
-  business: BusinessSettings
-  notifications: NotificationSettings
-  payments: PaymentSettings
+interface SecuritySettings {
+  twoFactorEnabled: boolean
+  sessionTimeout: number
+  passwordExpiry: number
+  loginAttempts: number
 }
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<SettingsData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const { toast } = useToast()
+  const [isLoading, setIsLoading] = useState(true)
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [error, setError] = useState<string | null>(null)
 
+  const [businessSettings, setBusinessSettings] = useState<BusinessSettings>({
+    businessName: "Lashed by Deedee",
+    businessEmail: "lashedbydeedeee@gmail.com",
+    businessPhone: "+234 XXX XXX XXXX",
+    businessAddress: "Rumigbo, Port Harcourt, Rivers State",
+    businessHours: {
+      monday: { open: "09:00", close: "18:00", closed: false },
+      tuesday: { open: "09:00", close: "18:00", closed: false },
+      wednesday: { open: "09:00", close: "18:00", closed: false },
+      thursday: { open: "09:00", close: "18:00", closed: false },
+      friday: { open: "09:00", close: "18:00", closed: false },
+      saturday: { open: "10:00", close: "16:00", closed: false },
+      sunday: { open: "12:00", close: "16:00", closed: true },
+    },
+  })
+
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
+    emailNotifications: true,
+    smsNotifications: false,
+    bookingConfirmations: true,
+    reminderNotifications: true,
+    cancelationNotifications: true,
+    reminderHours: 24,
+  })
+
+  const [securitySettings, setSecuritySettings] = useState<SecuritySettings>({
+    twoFactorEnabled: false,
+    sessionTimeout: 24,
+    passwordExpiry: 90,
+    loginAttempts: 5,
+  })
+
+  // Fetch settings on component mount
   useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        setIsLoading(true)
+        setError(null)
+
+        const response = await fetch("/api/admin/settings")
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch settings: ${response.status}`)
+        }
+
+        const data = await response.json()
+
+        if (data.businessName) {
+          setBusinessSettings({
+            businessName: data.businessName || businessSettings.businessName,
+            businessEmail: data.businessEmail || businessSettings.businessEmail,
+            businessPhone: data.businessPhone || businessSettings.businessPhone,
+            businessAddress: data.businessAddress || businessSettings.businessAddress,
+            businessHours: data.businessHours || businessSettings.businessHours,
+          })
+        }
+
+        if (data.notificationSettings) {
+          setNotificationSettings(data.notificationSettings)
+        }
+
+        if (data.securitySettings) {
+          setSecuritySettings(data.securitySettings)
+        }
+      } catch (err) {
+        console.error("Error fetching settings:", err)
+        setError("Failed to load settings. Please try refreshing the page.")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
     fetchSettings()
   }, [])
 
-  const fetchSettings = async () => {
-    try {
-      setLoading(true)
-      const response = await fetch("/api/admin/settings")
-      const data = await response.json()
+  const handleSaveSettings = async (settingsType: string) => {
+    setIsLoading(true)
+    setSaveStatus("saving")
 
-      if (data.success) {
-        setSettings(data.data)
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to load settings",
-          variant: "destructive",
-        })
+    try {
+      let settingsData = {}
+
+      if (settingsType === "business") {
+        settingsData = {
+          businessName: businessSettings.businessName,
+          businessEmail: businessSettings.businessEmail,
+          businessPhone: businessSettings.businessPhone,
+          businessAddress: businessSettings.businessAddress,
+          businessHours: businessSettings.businessHours,
+        }
+      } else if (settingsType === "notifications") {
+        settingsData = {
+          notificationSettings,
+        }
+      } else if (settingsType === "security") {
+        settingsData = {
+          securitySettings,
+        }
       }
-    } catch (error) {
-      console.error("Error fetching settings:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load settings",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
 
-  const saveSettings = async (type: "business" | "notifications" | "payments", data: any) => {
-    try {
-      setSaving(true)
       const response = await fetch("/api/admin/settings", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ type, data }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settingsData),
       })
 
-      const result = await response.json()
-
-      if (result.success) {
-        toast({
-          title: "Success",
-          description: "Settings saved successfully",
-        })
-        fetchSettings() // Refresh settings
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to save settings",
-          variant: "destructive",
-        })
+      if (!response.ok) {
+        throw new Error(`Failed to save settings: ${response.status}`)
       }
-    } catch (error) {
-      console.error("Error saving settings:", error)
-      toast({
-        title: "Error",
-        description: "Failed to save settings",
-        variant: "destructive",
-      })
+
+      setSaveStatus("saved")
+      setTimeout(() => setSaveStatus("idle"), 2000)
+    } catch (err) {
+      console.error("Error saving settings:", err)
+      setSaveStatus("error")
+      setTimeout(() => setSaveStatus("idle"), 3000)
     } finally {
-      setSaving(false)
+      setIsLoading(false)
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    )
-  }
+  const renderSaveButton = (settingsType: string) => (
+    <Button
+      onClick={() => handleSaveSettings(settingsType)}
+      disabled={isLoading || saveStatus === "saving"}
+      className="bg-pink-500 hover:bg-pink-600"
+    >
+      {saveStatus === "saving" ? (
+        <>
+          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          Saving...
+        </>
+      ) : saveStatus === "saved" ? (
+        <>
+          <CheckCircle className="w-4 h-4 mr-2" />
+          Saved!
+        </>
+      ) : saveStatus === "error" ? (
+        <>
+          <AlertCircle className="w-4 h-4 mr-2" />
+          Error
+        </>
+      ) : (
+        <>
+          <Save className="w-4 h-4 mr-2" />
+          Save Changes
+        </>
+      )}
+    </Button>
+  )
 
-  if (!settings) {
+  if (isLoading && error === null) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-2">Failed to load settings</h2>
-          <Button onClick={fetchSettings}>Try Again</Button>
+      <div className="container mx-auto p-6 max-w-4xl">
+        <div className="flex items-center gap-3 mb-6">
+          <Settings className="w-8 h-8 text-pink-500" />
+          <div>
+            <h1 className="text-3xl font-bold">Settings</h1>
+            <p className="text-gray-600">Loading settings...</p>
+          </div>
+        </div>
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
         </div>
       </div>
     )
   }
 
+  if (error) {
+    return (
+      <div className="container mx-auto p-6 max-w-4xl">
+        <div className="flex items-center gap-3 mb-6">
+          <Settings className="w-8 h-8 text-pink-500" />
+          <div>
+            <h1 className="text-3xl font-bold">Settings</h1>
+            <p className="text-gray-600">Manage your business settings and preferences</p>
+          </div>
+        </div>
+        <Card className="bg-red-50 border-red-200">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3 text-red-600">
+              <AlertCircle className="w-6 h-6" />
+              <p>{error}</p>
+            </div>
+            <Button onClick={() => window.location.reload()} className="mt-4 bg-pink-500 hover:bg-pink-600">
+              Refresh Page
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
-    <div className="container mx-auto py-6">
-      <div className="flex items-center gap-2 mb-6">
-        <Settings className="h-6 w-6" />
-        <h1 className="text-3xl font-bold">Settings</h1>
+    <div className="container mx-auto p-6 max-w-4xl">
+      <div className="flex items-center gap-3 mb-6">
+        <Settings className="w-8 h-8 text-pink-500" />
+        <div>
+          <h1 className="text-3xl font-bold">Settings</h1>
+          <p className="text-gray-600">Manage your business settings and preferences</p>
+        </div>
       </div>
 
       <Tabs defaultValue="business" className="space-y-6">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="business" className="flex items-center gap-2">
-            <Building className="h-4 w-4" />
+            <Users className="w-4 h-4" />
             Business
           </TabsTrigger>
           <TabsTrigger value="notifications" className="flex items-center gap-2">
-            <Bell className="h-4 w-4" />
+            <Bell className="w-4 h-4" />
             Notifications
           </TabsTrigger>
-          <TabsTrigger value="payments" className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4" />
-            Payments
+          <TabsTrigger value="security" className="flex items-center gap-2">
+            <Shield className="w-4 h-4" />
+            Security
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="business">
           <Card>
             <CardHeader>
-              <CardTitle>Business Information</CardTitle>
-              <CardDescription>Manage your business details and operating hours</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                Business Information
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div>
                   <Label htmlFor="businessName">Business Name</Label>
                   <Input
                     id="businessName"
-                    value={settings.business.businessName}
+                    value={businessSettings.businessName}
                     onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        business: { ...settings.business, businessName: e.target.value },
+                      setBusinessSettings({
+                        ...businessSettings,
+                        businessName: e.target.value,
                       })
                     }
                   />
                 </div>
-                <div className="space-y-2">
+                <div>
                   <Label htmlFor="businessEmail">Business Email</Label>
                   <Input
                     id="businessEmail"
                     type="email"
-                    value={settings.business.businessEmail}
+                    value={businessSettings.businessEmail}
                     onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        business: { ...settings.business, businessEmail: e.target.value },
+                      setBusinessSettings({
+                        ...businessSettings,
+                        businessEmail: e.target.value,
                       })
                     }
                   />
                 </div>
-                <div className="space-y-2">
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
                   <Label htmlFor="businessPhone">Business Phone</Label>
                   <Input
                     id="businessPhone"
-                    value={settings.business.businessPhone}
+                    value={businessSettings.businessPhone}
                     onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        business: { ...settings.business, businessPhone: e.target.value },
+                      setBusinessSettings({
+                        ...businessSettings,
+                        businessPhone: e.target.value,
                       })
                     }
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="timezone">Timezone</Label>
+                <div>
+                  <Label htmlFor="businessAddress">Business Address</Label>
                   <Input
-                    id="timezone"
-                    value={settings.business.timezone}
+                    id="businessAddress"
+                    value={businessSettings.businessAddress}
                     onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        business: { ...settings.business, timezone: e.target.value },
+                      setBusinessSettings({
+                        ...businessSettings,
+                        businessAddress: e.target.value,
                       })
                     }
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="businessAddress">Business Address</Label>
-                <Textarea
-                  id="businessAddress"
-                  value={settings.business.businessAddress}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      business: { ...settings.business, businessAddress: e.target.value },
-                    })
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="cancellationPolicy">Cancellation Policy</Label>
-                <Textarea
-                  id="cancellationPolicy"
-                  value={settings.business.cancellationPolicy}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      business: { ...settings.business, cancellationPolicy: e.target.value },
-                    })
-                  }
-                />
               </div>
 
               <Separator />
 
-              <Button onClick={() => saveSettings("business", settings.business)} disabled={saving}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                Save Business Settings
-              </Button>
+              <div>
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Clock className="w-5 h-5" />
+                  Business Hours
+                </h3>
+                <div className="space-y-3">
+                  {Object.entries(businessSettings.businessHours).map(([day, hours]) => (
+                    <div key={day} className="flex items-center gap-4 p-3 border rounded-lg">
+                      <div className="w-20 font-medium capitalize">{day}</div>
+                      <Switch
+                        checked={!hours.closed}
+                        onCheckedChange={(checked) =>
+                          setBusinessSettings({
+                            ...businessSettings,
+                            businessHours: {
+                              ...businessSettings.businessHours,
+                              [day]: { ...hours, closed: !checked },
+                            },
+                          })
+                        }
+                      />
+                      {!hours.closed && (
+                        <>
+                          <Input
+                            type="time"
+                            value={hours.open}
+                            onChange={(e) =>
+                              setBusinessSettings({
+                                ...businessSettings,
+                                businessHours: {
+                                  ...businessSettings.businessHours,
+                                  [day]: { ...hours, open: e.target.value },
+                                },
+                              })
+                            }
+                            className="w-32"
+                          />
+                          <span>to</span>
+                          <Input
+                            type="time"
+                            value={hours.close}
+                            onChange={(e) =>
+                              setBusinessSettings({
+                                ...businessSettings,
+                                businessHours: {
+                                  ...businessSettings.businessHours,
+                                  [day]: { ...hours, close: e.target.value },
+                                },
+                              })
+                            }
+                            className="w-32"
+                          />
+                        </>
+                      )}
+                      {hours.closed && <Badge variant="secondary">Closed</Badge>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end">{renderSaveButton("business")}</div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -275,193 +411,212 @@ export default function SettingsPage() {
         <TabsContent value="notifications">
           <Card>
             <CardHeader>
-              <CardTitle>Notification Settings</CardTitle>
-              <CardDescription>Configure how and when you receive notifications</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="w-5 h-5" />
+                Notification Preferences
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Email Notifications</Label>
-                    <p className="text-sm text-muted-foreground">Receive notifications via email</p>
+                  <div>
+                    <Label htmlFor="emailNotifications">Email Notifications</Label>
+                    <p className="text-sm text-gray-600">Receive notifications via email</p>
                   </div>
                   <Switch
-                    checked={settings.notifications.emailNotifications}
+                    id="emailNotifications"
+                    checked={notificationSettings.emailNotifications}
                     onCheckedChange={(checked) =>
-                      setSettings({
-                        ...settings,
-                        notifications: { ...settings.notifications, emailNotifications: checked },
+                      setNotificationSettings({
+                        ...notificationSettings,
+                        emailNotifications: checked,
                       })
                     }
                   />
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>SMS Notifications</Label>
-                    <p className="text-sm text-muted-foreground">Receive notifications via SMS</p>
+                  <div>
+                    <Label htmlFor="smsNotifications">SMS Notifications</Label>
+                    <p className="text-sm text-gray-600">Receive notifications via SMS</p>
                   </div>
                   <Switch
-                    checked={settings.notifications.smsNotifications}
+                    id="smsNotifications"
+                    checked={notificationSettings.smsNotifications}
                     onCheckedChange={(checked) =>
-                      setSettings({
-                        ...settings,
-                        notifications: { ...settings.notifications, smsNotifications: checked },
+                      setNotificationSettings({
+                        ...notificationSettings,
+                        smsNotifications: checked,
+                      })
+                    }
+                  />
+                </div>
+
+                <Separator />
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="bookingConfirmations">Booking Confirmations</Label>
+                    <p className="text-sm text-gray-600">Get notified when bookings are made</p>
+                  </div>
+                  <Switch
+                    id="bookingConfirmations"
+                    checked={notificationSettings.bookingConfirmations}
+                    onCheckedChange={(checked) =>
+                      setNotificationSettings({
+                        ...notificationSettings,
+                        bookingConfirmations: checked,
                       })
                     }
                   />
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Booking Confirmations</Label>
-                    <p className="text-sm text-muted-foreground">Send confirmation emails for new bookings</p>
+                  <div>
+                    <Label htmlFor="reminderNotifications">Appointment Reminders</Label>
+                    <p className="text-sm text-gray-600">Send reminders to clients</p>
                   </div>
                   <Switch
-                    checked={settings.notifications.bookingConfirmations}
+                    id="reminderNotifications"
+                    checked={notificationSettings.reminderNotifications}
                     onCheckedChange={(checked) =>
-                      setSettings({
-                        ...settings,
-                        notifications: { ...settings.notifications, bookingConfirmations: checked },
+                      setNotificationSettings({
+                        ...notificationSettings,
+                        reminderNotifications: checked,
                       })
                     }
                   />
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Booking Reminders</Label>
-                    <p className="text-sm text-muted-foreground">Send reminder emails before appointments</p>
+                  <div>
+                    <Label htmlFor="cancelationNotifications">Cancellation Notifications</Label>
+                    <p className="text-sm text-gray-600">Get notified when bookings are cancelled</p>
                   </div>
                   <Switch
-                    checked={settings.notifications.bookingReminders}
+                    id="cancelationNotifications"
+                    checked={notificationSettings.cancelationNotifications}
                     onCheckedChange={(checked) =>
-                      setSettings({
-                        ...settings,
-                        notifications: { ...settings.notifications, bookingReminders: checked },
+                      setNotificationSettings({
+                        ...notificationSettings,
+                        cancelationNotifications: checked,
                       })
                     }
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="reminderHours">Reminder Hours Before Appointment</Label>
+                <div>
+                  <Label htmlFor="reminderHours">Reminder Time (hours before appointment)</Label>
                   <Input
                     id="reminderHours"
                     type="number"
-                    value={settings.notifications.reminderHours}
+                    min="1"
+                    max="168"
+                    value={notificationSettings.reminderHours}
                     onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        notifications: { ...settings.notifications, reminderHours: Number.parseInt(e.target.value) },
+                      setNotificationSettings({
+                        ...notificationSettings,
+                        reminderHours: Number.parseInt(e.target.value) || 24,
                       })
                     }
+                    className="w-32 mt-2"
                   />
                 </div>
               </div>
 
-              <Separator />
-
-              <Button onClick={() => saveSettings("notifications", settings.notifications)} disabled={saving}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                Save Notification Settings
-              </Button>
+              <div className="flex justify-end">{renderSaveButton("notifications")}</div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="payments">
+        <TabsContent value="security">
           <Card>
             <CardHeader>
-              <CardTitle>Payment Settings</CardTitle>
-              <CardDescription>Configure payment processing and policies</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="w-5 h-5" />
+                Security Settings
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="paystackPublicKey">Paystack Public Key</Label>
-                  <Input
-                    id="paystackPublicKey"
-                    value={settings.payments.paystackPublicKey}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        payments: { ...settings.payments, paystackPublicKey: e.target.value },
-                      })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="paystackSecretKey">Paystack Secret Key</Label>
-                  <Input
-                    id="paystackSecretKey"
-                    type="password"
-                    value={settings.payments.paystackSecretKey}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        payments: { ...settings.payments, paystackSecretKey: e.target.value },
-                      })
-                    }
-                  />
-                </div>
-              </div>
-
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Require Payment</Label>
-                    <p className="text-sm text-muted-foreground">Require payment to confirm bookings</p>
+                  <div>
+                    <Label htmlFor="twoFactorEnabled">Two-Factor Authentication</Label>
+                    <p className="text-sm text-gray-600">Add an extra layer of security to your account</p>
                   </div>
                   <Switch
-                    checked={settings.payments.requirePayment}
+                    id="twoFactorEnabled"
+                    checked={securitySettings.twoFactorEnabled}
                     onCheckedChange={(checked) =>
-                      setSettings({
-                        ...settings,
-                        payments: { ...settings.payments, requirePayment: checked },
+                      setSecuritySettings({
+                        ...securitySettings,
+                        twoFactorEnabled: checked,
                       })
                     }
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="depositPercentage">Deposit Percentage</Label>
+                <Separator />
+
+                <div>
+                  <Label htmlFor="sessionTimeout">Session Timeout (hours)</Label>
+                  <p className="text-sm text-gray-600 mb-2">How long before you're automatically logged out</p>
                   <Input
-                    id="depositPercentage"
+                    id="sessionTimeout"
                     type="number"
-                    min="0"
-                    max="100"
-                    value={settings.payments.depositPercentage}
+                    min="1"
+                    max="168"
+                    value={securitySettings.sessionTimeout}
                     onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        payments: { ...settings.payments, depositPercentage: Number.parseInt(e.target.value) },
+                      setSecuritySettings({
+                        ...securitySettings,
+                        sessionTimeout: Number.parseInt(e.target.value) || 24,
                       })
                     }
+                    className="w-32"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="refundPolicy">Refund Policy</Label>
-                  <Textarea
-                    id="refundPolicy"
-                    value={settings.payments.refundPolicy}
+                <div>
+                  <Label htmlFor="passwordExpiry">Password Expiry (days)</Label>
+                  <p className="text-sm text-gray-600 mb-2">How often you need to change your password</p>
+                  <Input
+                    id="passwordExpiry"
+                    type="number"
+                    min="30"
+                    max="365"
+                    value={securitySettings.passwordExpiry}
                     onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        payments: { ...settings.payments, refundPolicy: e.target.value },
+                      setSecuritySettings({
+                        ...securitySettings,
+                        passwordExpiry: Number.parseInt(e.target.value) || 90,
                       })
                     }
+                    className="w-32"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="loginAttempts">Maximum Login Attempts</Label>
+                  <p className="text-sm text-gray-600 mb-2">Account locks after this many failed attempts</p>
+                  <Input
+                    id="loginAttempts"
+                    type="number"
+                    min="3"
+                    max="10"
+                    value={securitySettings.loginAttempts}
+                    onChange={(e) =>
+                      setSecuritySettings({
+                        ...securitySettings,
+                        loginAttempts: Number.parseInt(e.target.value) || 5,
+                      })
+                    }
+                    className="w-32"
                   />
                 </div>
               </div>
 
-              <Separator />
-
-              <Button onClick={() => saveSettings("payments", settings.payments)} disabled={saving}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                Save Payment Settings
-              </Button>
+              <div className="flex justify-end">{renderSaveButton("security")}</div>
             </CardContent>
           </Card>
         </TabsContent>

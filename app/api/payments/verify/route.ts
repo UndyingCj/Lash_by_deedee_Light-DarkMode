@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyPayment } from "@/lib/paystack"
-import { supabaseAdmin } from "@/lib/supabase-admin"
+import { createClient } from "@supabase/supabase-js"
+
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,51 +11,51 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Payment reference is required" }, { status: 400 })
     }
 
+    const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY
+    if (!paystackSecretKey) {
+      return NextResponse.json({ error: "Payment configuration error" }, { status: 500 })
+    }
+
     // Verify payment with Paystack
-    const verification = await verifyPayment(reference)
-
-    if (!verification.status || verification.data.status !== "success") {
-      return NextResponse.json({ error: "Payment verification failed" }, { status: 400 })
-    }
-
-    // Update booking status
-    const { data: booking, error: updateError } = await supabaseAdmin
-      .from("bookings")
-      .update({
-        status: "confirmed",
-        payment_status: "paid",
-        payment_verified_at: new Date().toISOString(),
-      })
-      .eq("payment_reference", reference)
-      .select()
-      .single()
-
-    if (updateError) {
-      console.error("Booking update error:", updateError)
-      return NextResponse.json({ error: "Failed to update booking" }, { status: 500 })
-    }
-
-    // Send confirmation email (optional)
-    try {
-      await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/emails/booking-confirmation`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ booking }),
-      })
-    } catch (emailError) {
-      console.error("Email sending error:", emailError)
-      // Don't fail the request if email fails
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        booking,
-        payment: verification.data,
+    const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${paystackSecretKey}`,
       },
     })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      console.error("Paystack verification error:", data)
+      return NextResponse.json({ error: data.message || "Payment verification failed" }, { status: response.status })
+    }
+
+    if (data.data.status === "success") {
+      // Update booking payment status
+      const { error: updateError } = await supabase
+        .from("bookings")
+        .update({
+          payment_status: "paid",
+          payment_reference: reference,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("payment_reference", reference)
+
+      if (updateError) {
+        console.error("Booking update error:", updateError)
+        return NextResponse.json({ error: "Failed to update booking status" }, { status: 500 })
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: data.data,
+      })
+    } else {
+      return NextResponse.json({ error: "Payment was not successful" }, { status: 400 })
+    }
   } catch (error) {
     console.error("Payment verification error:", error)
-    return NextResponse.json({ error: "Failed to verify payment" }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
