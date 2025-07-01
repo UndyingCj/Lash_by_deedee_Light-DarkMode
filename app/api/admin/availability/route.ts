@@ -1,116 +1,197 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+import {
+  getBlockedDates,
+  addBlockedDate,
+  removeBlockedDate,
+  getBlockedTimeSlots,
+  addBlockedTimeSlot,
+  removeBlockedTimeSlot,
+} from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const date = searchParams.get("date")
+    console.log("🔍 Availability API: Fetching data from database...")
 
-    if (!date) {
-      return NextResponse.json({ error: "Date parameter is required" }, { status: 400 })
+    const [blockedDates, blockedSlots] = await Promise.all([getBlockedDates(), getBlockedTimeSlots()])
+
+    console.log("📊 Raw blocked dates from DB:", blockedDates)
+
+    // CRITICAL FIX: Return dates exactly as stored, no timezone conversion
+    const processedBlockedDates = (blockedDates || []).map((item) => ({
+      ...item,
+      blocked_date: item.blocked_date, // Keep exact format from database
+    }))
+
+    const processedBlockedSlots = (blockedSlots || []).map((item) => ({
+      ...item,
+      blocked_date: item.blocked_date, // Keep exact format from database
+    }))
+
+    const response = {
+      success: true,
+      blockedDates: processedBlockedDates,
+      blockedSlots: processedBlockedSlots,
+      timestamp: new Date().toISOString(),
+      debug: {
+        totalBlockedDates: processedBlockedDates.length,
+        totalBlockedSlots: processedBlockedSlots.length,
+        rawDates: blockedDates?.map((d) => d.blocked_date),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
     }
 
-    // Check if date is blocked
-    const { data: blockedDate } = await supabase.from("blocked_dates").select("*").eq("date", date).single()
+    console.log("📤 Final API response:", response)
 
-    if (blockedDate) {
-      return NextResponse.json({
-        available: false,
-        reason: blockedDate.reason || "Date is not available",
-        timeSlots: [],
-      })
-    }
-
-    // Get blocked time slots for this date
-    const { data: blockedSlots } = await supabase.from("blocked_time_slots").select("time_slot").eq("date", date)
-
-    // Get existing bookings for this date
-    const { data: bookings } = await supabase
-      .from("bookings")
-      .select("booking_time")
-      .eq("booking_date", date)
-      .neq("status", "cancelled")
-
-    // Generate available time slots (9 AM to 6 PM)
-    const allTimeSlots = []
-    for (let hour = 9; hour < 18; hour++) {
-      allTimeSlots.push(`${hour.toString().padStart(2, "0")}:00`)
-      allTimeSlots.push(`${hour.toString().padStart(2, "0")}:30`)
-    }
-
-    // Filter out blocked and booked slots
-    const blockedTimes = new Set([
-      ...(blockedSlots?.map((slot) => slot.time_slot) || []),
-      ...(bookings?.map((booking) => booking.booking_time) || []),
-    ])
-
-    const availableSlots = allTimeSlots.filter((slot) => !blockedTimes.has(slot))
-
-    return NextResponse.json({
-      available: true,
-      timeSlots: availableSlots,
-      date,
+    return NextResponse.json(response, {
+      headers: {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      },
     })
   } catch (error) {
-    console.error("Availability check error:", error)
-    return NextResponse.json({ error: "Failed to check availability" }, { status: 500 })
+    console.error("❌ Error fetching availability:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to fetch availability data",
+        blockedDates: [],
+        blockedSlots: [],
+      },
+      { status: 500 },
+    )
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { date, timeSlot, reason, action } = await request.json()
+    const body = await request.json()
+    const { type, date, time, reason, action } = body
 
-    if (action === "block") {
-      if (timeSlot) {
-        // Block specific time slot
-        const { error } = await supabase.from("blocked_time_slots").insert({
-          date,
-          time_slot: timeSlot,
-          reason: reason || "Blocked by admin",
-        })
+    console.log("🔄 Availability API: Processing update:", { type, date, time, action })
 
-        if (error) {
-          return NextResponse.json({ error: "Failed to block time slot" }, { status: 500 })
-        }
-      } else {
-        // Block entire date
-        const { error } = await supabase.from("blocked_dates").insert({
-          date,
-          reason: reason || "Blocked by admin",
-        })
-
-        if (error) {
-          return NextResponse.json({ error: "Failed to block date" }, { status: 500 })
-        }
-      }
-
-      return NextResponse.json({ success: true, message: "Successfully blocked" })
-    } else if (action === "unblock") {
-      if (timeSlot) {
-        // Unblock specific time slot
-        const { error } = await supabase.from("blocked_time_slots").delete().eq("date", date).eq("time_slot", timeSlot)
-
-        if (error) {
-          return NextResponse.json({ error: "Failed to unblock time slot" }, { status: 500 })
-        }
-      } else {
-        // Unblock entire date
-        const { error } = await supabase.from("blocked_dates").delete().eq("date", date)
-
-        if (error) {
-          return NextResponse.json({ error: "Failed to unblock date" }, { status: 500 })
-        }
-      }
-
-      return NextResponse.json({ success: true, message: "Successfully unblocked" })
+    // Validate required fields
+    if (!type || !date || !action) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Missing required fields: type, date, and action are required",
+        },
+        { status: 400 },
+      )
     }
 
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 })
+    if (type === "date") {
+      if (action === "block") {
+        console.log("🚫 Blocking date:", date)
+        const result = await addBlockedDate(date, reason || "Blocked by admin")
+        console.log("✅ Date blocked successfully:", result)
+        return NextResponse.json({
+          success: true,
+          message: "Date blocked successfully",
+          data: result,
+        })
+      } else if (action === "unblock") {
+        console.log("✅ Unblocking date:", date)
+        const result = await removeBlockedDate(date)
+        console.log("✅ Date unblocked successfully:", result)
+        return NextResponse.json({
+          success: true,
+          message: "Date unblocked successfully",
+          data: result,
+        })
+      } else {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Invalid action. Use 'block' or 'unblock'",
+          },
+          { status: 400 },
+        )
+      }
+    } else if (type === "slot") {
+      if (!time) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Time is required for slot operations",
+          },
+          { status: 400 },
+        )
+      }
+
+      if (action === "block") {
+        console.log("🚫 Blocking time slot:", time, "on", date)
+        const result = await addBlockedTimeSlot(date, time, reason || "Blocked by admin")
+        console.log("✅ Time slot blocked successfully:", result)
+        return NextResponse.json({
+          success: true,
+          message: "Time slot blocked successfully",
+          data: result,
+        })
+      } else if (action === "unblock") {
+        console.log("✅ Unblocking time slot:", time, "on", date)
+        const result = await removeBlockedTimeSlot(date, time)
+        console.log("✅ Time slot unblocked successfully:", result)
+        return NextResponse.json({
+          success: true,
+          message: "Time slot unblocked successfully",
+          data: result,
+        })
+      } else {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Invalid action. Use 'block' or 'unblock'",
+          },
+          { status: 400 },
+        )
+      }
+    } else {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid type. Use 'date' or 'slot'",
+        },
+        { status: 400 },
+      )
+    }
   } catch (error) {
-    console.error("Availability update error:", error)
-    return NextResponse.json({ error: "Failed to update availability" }, { status: 500 })
+    console.error("❌ Error updating availability:", error)
+
+    // Handle specific database errors
+    if (error instanceof Error) {
+      if (error.message.includes("duplicate key")) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "This date/time is already blocked",
+          },
+          { status: 409 },
+        )
+      }
+
+      if (error.message.includes("not found")) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Date/time slot not found",
+          },
+          { status: 404 },
+        )
+      }
+    }
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to update availability. Please try again.",
+        debug: {
+          error: error instanceof Error ? error.message : "Unknown error",
+          timestamp: new Date().toISOString(),
+        },
+      },
+      { status: 500 },
+    )
   }
 }

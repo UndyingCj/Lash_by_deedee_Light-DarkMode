@@ -1,66 +1,70 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { NextResponse } from "next/server"
+import { createBooking } from "@/lib/supabase"
+import { sendBookingConfirmation, sendBookingNotificationToAdmin } from "@/lib/email"
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-
-export async function GET(request: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const limit = Number.parseInt(searchParams.get("limit") || "10")
-    const offset = Number.parseInt(searchParams.get("offset") || "0")
-    const status = searchParams.get("status")
-    const date = searchParams.get("date")
+    const body = await req.json()
+    const { firstName, lastName, email, phone, date, time, selectedServices, totalPrice, notes } = body
 
-    let query = supabase.from("bookings").select("*").order("created_at", { ascending: false })
-
-    if (status) {
-      query = query.eq("status", status)
+    if (!firstName || !lastName || !email || !phone || !date || !time || !selectedServices || !totalPrice) {
+      return new NextResponse("Missing fields", { status: 400 })
     }
 
-    if (date) {
-      query = query.eq("booking_date", date)
-    }
+    // Convert selectedServices array of objects to array of IDs
+    const serviceIds = selectedServices.map((service: { id: string }) => service.id)
 
-    if (limit > 0) {
-      query = query.range(offset, offset + limit - 1)
-    }
-
-    const { data: bookings, error } = await query
-
-    if (error) {
-      console.error("Bookings fetch error:", error)
-      return NextResponse.json({ error: "Failed to fetch bookings" }, { status: 500 })
-    }
-
-    // Get total count for pagination
-    const { count: totalCount } = await supabase.from("bookings").select("*", { count: "exact", head: true })
-
-    return NextResponse.json({
-      bookings: bookings || [],
-      total: totalCount || 0,
-      limit,
-      offset,
+    const { data: booking, error } = await createBooking({
+      firstName,
+      lastName,
+      email,
+      phone,
+      date,
+      time,
+      service_ids: serviceIds, // Use service_ids here
+      totalPrice,
+      notes,
     })
-  } catch (error) {
-    console.error("Bookings API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const bookingData = await request.json()
-
-    const { data: booking, error } = await supabase.from("bookings").insert(bookingData).select().single()
 
     if (error) {
-      console.error("Booking creation error:", error)
-      return NextResponse.json({ error: "Failed to create booking" }, { status: 500 })
+      console.error("Supabase error creating booking:", error)
+      return new NextResponse("Failed to create booking", { status: 500 })
     }
 
-    return NextResponse.json({ booking })
+    if (!booking) {
+      return new NextResponse("Failed to create booking, no data returned", { status: 500 })
+    }
+
+    // Send confirmation emails
+    try {
+      const emailBookingDetails = {
+        customerName: `${firstName} ${lastName}`,
+        customerEmail: email,
+        services: selectedServices.map((s) => s.name),
+        date: date,
+        time: time,
+        totalAmount: totalPrice,
+        depositAmount: Math.round(totalPrice * 0.5), // 50% deposit
+      }
+
+      // Send customer confirmation
+      const customerEmailResult = await sendBookingConfirmation(emailBookingDetails)
+
+      // Send admin notification
+      const adminEmailResult = await sendBookingNotificationToAdmin(emailBookingDetails)
+
+      console.log("📧 Email results:", {
+        customer: customerEmailResult.success ? "✅ Sent" : "❌ Failed",
+        admin: adminEmailResult.success ? "✅ Sent" : "❌ Failed",
+      })
+    } catch (emailError) {
+      console.error("📧 Email sending failed:", emailError)
+      // Don't fail the booking if emails fail - booking is still created
+    }
+
+    return NextResponse.json(booking)
   } catch (error) {
-    console.error("Booking creation API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.log("[BOOKING_POST]", error)
+    return new NextResponse("Internal error", { status: 500 })
   }
 }
