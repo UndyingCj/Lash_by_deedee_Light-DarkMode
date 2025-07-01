@@ -1,12 +1,6 @@
 export const PAYSTACK_CONFIG = {
-  publicKey:
-    process.env.NODE_ENV === "production"
-      ? "pk_live_edddbd4959b95ee7d1eebe12b71b68f8ce5ff0a7"
-      : "pk_test_your_test_key_here",
-  secretKey:
-    process.env.NODE_ENV === "production"
-      ? "sk_live_f3437bf92100d5b73c6aa72e78d7db300d9029bb"
-      : "sk_test_your_test_key_here",
+  publicKey: "pk_live_edddbd4959b95ee7d1eebe12b71b68f8ce5ff0a7",
+  secretKey: "sk_live_f3437bf92100d5b73c6aa72e78d7db300d9029bb",
   baseUrl: "https://api.paystack.co",
 }
 
@@ -78,12 +72,13 @@ export interface PaystackVerifyResponse {
   }
 }
 
-export async function initializePayment(
-  email: string,
-  amount: number,
-  reference: string,
-  metadata?: any,
-): Promise<PaystackInitializeResponse> {
+export async function initializePayment(data: {
+  email: string
+  amount: number
+  reference: string
+  callback_url?: string
+  metadata?: any
+}): Promise<PaystackInitializeResponse> {
   const response = await fetch(`${PAYSTACK_CONFIG.baseUrl}/transaction/initialize`, {
     method: "POST",
     headers: {
@@ -91,16 +86,13 @@ export async function initializePayment(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      email,
-      amount: amount * 100, // Convert to kobo
-      reference,
-      metadata,
-      callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/book/success`,
+      ...data,
+      amount: data.amount * 100, // Convert to kobo
     }),
   })
 
   if (!response.ok) {
-    throw new Error(`Paystack API error: ${response.status}`)
+    throw new Error(`Paystack API error: ${response.statusText}`)
   }
 
   return response.json()
@@ -116,12 +108,12 @@ export async function verifyPayment(reference: string): Promise<PaystackVerifyRe
   })
 
   if (!response.ok) {
-    throw new Error(`Paystack verification error: ${response.status}`)
+    throw new Error(`Paystack API error: ${response.statusText}`)
   }
 
   return response.json()
 }
 
 export function generateReference(): string {
-  return `lbd_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
+  return `lbd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }

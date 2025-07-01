@@ -1,15 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyPayment } from "@/lib/paystack"
-import { createClient } from "@supabase/supabase-js"
-
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || ""
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+import { supabaseAdmin } from "@/lib/supabase-admin"
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { reference } = body
+    const { reference } = await request.json()
 
     if (!reference) {
       return NextResponse.json({ error: "Payment reference is required" }, { status: 400 })
@@ -22,23 +17,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Payment verification failed" }, { status: 400 })
     }
 
-    // Update booking status in database
-    const { error: updateError } = await supabase
+    // Update booking status
+    const { data: booking, error: updateError } = await supabaseAdmin
       .from("bookings")
       .update({
+        status: "confirmed",
         payment_status: "paid",
-        payment_reference: reference,
-        updated_at: new Date().toISOString(),
+        payment_verified_at: new Date().toISOString(),
       })
       .eq("payment_reference", reference)
+      .select()
+      .single()
 
     if (updateError) {
-      console.error("Error updating booking:", updateError)
+      console.error("Booking update error:", updateError)
+      return NextResponse.json({ error: "Failed to update booking" }, { status: 500 })
+    }
+
+    // Send confirmation email (optional)
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/emails/booking-confirmation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking }),
+      })
+    } catch (emailError) {
+      console.error("Email sending error:", emailError)
+      // Don't fail the request if email fails
     }
 
     return NextResponse.json({
       success: true,
-      data: verification.data,
+      data: {
+        booking,
+        payment: verification.data,
+      },
     })
   } catch (error) {
     console.error("Payment verification error:", error)

@@ -1,122 +1,101 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-
-// Create a Supabase client with service role key for admin operations
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || ""
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+import { supabaseAdmin } from "@/lib/supabase-admin"
 
 export async function GET() {
   try {
-    console.log("Fetching settings from database...")
-
-    // Get settings from the database
-    const { data: settings, error } = await supabase
+    // Get business settings
+    const { data: businessSettings, error: businessError } = await supabaseAdmin
       .from("business_settings")
       .select("*")
-      .order("id", { ascending: false })
-      .limit(1)
       .single()
 
-    if (error) {
-      console.error("Error fetching settings:", error)
+    // Get notification settings
+    const { data: notificationSettings, error: notificationError } = await supabaseAdmin
+      .from("notification_settings")
+      .select("*")
+      .single()
 
-      // If no settings exist yet, return default settings
-      const defaultSettings = {
-        businessName: "Lashed by Deedee",
-        businessEmail: "lashedbydeedeee@gmail.com",
-        businessPhone: "+234 XXX XXX XXXX",
-        businessAddress: "Rumigbo, Port Harcourt, Rivers State",
-        businessHours: {
-          monday: { open: "09:00", close: "18:00", closed: false },
-          tuesday: { open: "09:00", close: "18:00", closed: false },
-          wednesday: { open: "09:00", close: "18:00", closed: false },
-          thursday: { open: "09:00", close: "18:00", closed: false },
-          friday: { open: "09:00", close: "18:00", closed: false },
-          saturday: { open: "10:00", close: "16:00", closed: false },
-          sunday: { open: "12:00", close: "16:00", closed: true },
-        },
-        notificationSettings: {
-          emailNotifications: true,
-          smsNotifications: false,
-          bookingConfirmations: true,
-          reminderNotifications: true,
-          cancelationNotifications: true,
-          reminderHours: 24,
-        },
-        securitySettings: {
-          twoFactorEnabled: false,
-          sessionTimeout: 24,
-          passwordExpiry: 90,
-          loginAttempts: 5,
-        },
-      }
+    // Get payment settings
+    const { data: paymentSettings, error: paymentError } = await supabaseAdmin
+      .from("payment_settings")
+      .select("*")
+      .single()
 
-      console.log("Returning default settings")
-      return NextResponse.json(defaultSettings)
+    // If no settings exist, create default ones
+    if (businessError || !businessSettings) {
+      const { data: newBusinessSettings } = await supabaseAdmin
+        .from("business_settings")
+        .insert({
+          businessName: "Lashed by Deedee",
+          businessEmail: "lashedbydeedeee@gmail.com",
+          businessPhone: "+234 123 456 7890",
+          businessAddress: "Lagos, Nigeria",
+        })
+        .select()
+        .single()
     }
 
-    console.log("Settings fetched successfully:", settings)
-    return NextResponse.json(settings)
+    if (notificationError || !notificationSettings) {
+      await supabaseAdmin.from("notification_settings").insert({}).select().single()
+    }
+
+    if (paymentError || !paymentSettings) {
+      await supabaseAdmin
+        .from("payment_settings")
+        .insert({
+          paystackPublicKey: "pk_live_edddbd4959b95ee7d1eebe12b71b68f8ce5ff0a7",
+          paystackSecretKey: "sk_live_f3437bf92100d5b73c6aa72e78d7db300d9029bb",
+        })
+        .select()
+        .single()
+    }
+
+    // Fetch again after creating defaults
+    const { data: finalBusinessSettings } = await supabaseAdmin.from("business_settings").select("*").single()
+    const { data: finalNotificationSettings } = await supabaseAdmin.from("notification_settings").select("*").single()
+    const { data: finalPaymentSettings } = await supabaseAdmin.from("payment_settings").select("*").single()
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        business: finalBusinessSettings,
+        notifications: finalNotificationSettings,
+        payments: finalPaymentSettings,
+      },
+    })
   } catch (error) {
-    console.error("Error in settings GET API:", error)
-    return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 })
+    console.error("Settings fetch error:", error)
+    return NextResponse.json({ success: false, error: "Failed to fetch settings" }, { status: 500 })
   }
 }
 
 export async function PUT(request: NextRequest) {
   try {
-    console.log("Updating settings...")
-    const settings = await request.json()
-    console.log("Received settings:", settings)
-
-    // Check if settings already exist
-    const { data: existingSettings, error: fetchError } = await supabase
-      .from("business_settings")
-      .select("id")
-      .limit(1)
-      .single()
-
-    if (fetchError && fetchError.code !== "PGRST116") {
-      console.error("Error checking existing settings:", fetchError)
-    }
+    const { type, data } = await request.json()
 
     let result
-    if (existingSettings?.id) {
-      console.log("Updating existing settings with ID:", existingSettings.id)
-      // Update existing settings
-      result = await supabase
-        .from("business_settings")
-        .update({
-          ...settings,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", existingSettings.id)
-    } else {
-      console.log("Inserting new settings")
-      // Insert new settings
-      result = await supabase.from("business_settings").insert([
-        {
-          ...settings,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ])
+    switch (type) {
+      case "business":
+        result = await supabaseAdmin.from("business_settings").update(data).eq("id", data.id).select().single()
+        break
+      case "notifications":
+        result = await supabaseAdmin.from("notification_settings").update(data).eq("id", data.id).select().single()
+        break
+      case "payments":
+        result = await supabaseAdmin.from("payment_settings").update(data).eq("id", data.id).select().single()
+        break
+      default:
+        return NextResponse.json({ success: false, error: "Invalid settings type" }, { status: 400 })
     }
 
     if (result.error) {
-      console.error("Error updating settings:", result.error)
-      return NextResponse.json({ error: "Failed to update settings" }, { status: 500 })
+      console.error("Settings update error:", result.error)
+      return NextResponse.json({ success: false, error: "Failed to update settings" }, { status: 500 })
     }
 
-    console.log("Settings updated successfully")
-    return NextResponse.json({
-      success: true,
-      message: "Settings updated successfully",
-    })
+    return NextResponse.json({ success: true, data: result.data })
   } catch (error) {
-    console.error("Error updating settings:", error)
-    return NextResponse.json({ error: "Failed to update settings" }, { status: 500 })
+    console.error("Settings update error:", error)
+    return NextResponse.json({ success: false, error: "Failed to update settings" }, { status: 500 })
   }
 }
