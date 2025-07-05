@@ -1,80 +1,74 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getBlockedDates, getBlockedTimeSlots, getBookings } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 
-export async function GET(request: NextRequest) {
+// ─────────────────────────────────────────────
+// Server-side Supabase client (service-role key)
+// ─────────────────────────────────────────────
+const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+
+/**
+ * GET /api/admin/availability
+ *
+ * - ?date=YYYY-MM-DD → single-day summary for admin tools
+ * - (no query)       → full availability list for /book page
+ */
+export async function GET(req: NextRequest) {
   try {
-    console.log("Fetching availability data...")
+    const { searchParams } = new URL(req.url)
+    const dateParam = searchParams.get("date")?.trim()
 
-    // Fetch all data in parallel
-    const [blockedDates, blockedTimeSlots, bookings] = await Promise.all([
-      getBlockedDates().catch((error) => {
-        console.error("Error fetching blocked dates:", error)
-        return []
-      }),
-      getBlockedTimeSlots().catch((error) => {
-        console.error("Error fetching blocked time slots:", error)
-        return []
-      }),
-      getBookings().catch((error) => {
-        console.error("Error fetching bookings:", error)
-        return []
-      }),
+    /* ──────────────────────────────
+     * 1. PER-DAY VIEW  (admin usage)
+     * ────────────────────────────── */
+    if (dateParam) {
+      // fetch booked slots for that specific date
+      const { data: bookings, error } = await supabase
+        .from("bookings")
+        .select("booking_time")
+        .eq("booking_date", dateParam)
+
+      if (error) throw error
+
+      return NextResponse.json({
+        date: dateParam,
+        bookedSlots: (bookings ?? []).map((b) => b.booking_time),
+      })
+    }
+
+    /* ─────────────────────────────────────────────
+     * 2. FULL DUMP  (public booking page expects)
+     * ───────────────────────────────────────────── */
+    const [
+      { data: blockedDatesRaw, error: blockedDatesErr },
+      { data: blockedSlotsRaw, error: blockedSlotsErr },
+      { data: bookingsRaw, error: bookingsErr },
+    ] = await Promise.all([
+      supabase.from("blocked_dates").select("blocked_date"),
+      supabase.from("blocked_time_slots").select("blocked_date, blocked_time"),
+      supabase.from("bookings").select("booking_date, booking_time"),
     ])
 
-    console.log("Availability data fetched successfully:", {
-      blockedDatesCount: blockedDates.length,
-      blockedTimeSlotsCount: blockedTimeSlots.length,
-      bookingsCount: bookings.length,
-    })
+    if (blockedDatesErr) throw blockedDatesErr
+    if (blockedSlotsErr) throw blockedSlotsErr
+    if (bookingsErr) throw bookingsErr
 
-    return NextResponse.json({
-      status: true,
-      data: {
-        blockedDates,
-        blockedTimeSlots,
-        bookings,
-      },
-    })
-  } catch (error) {
-    console.error("Failed to fetch availability data:", error)
+    const blockedDates = (blockedDatesRaw ?? []).map((d) => d.blocked_date)
 
-    // Return empty arrays instead of failing completely
-    return NextResponse.json({
-      status: true,
-      data: {
-        blockedDates: [],
-        blockedTimeSlots: [],
-        bookings: [],
-      },
-      warning: "Some availability data could not be loaded",
-    })
-  }
-}
+    const blockedSlots =
+      blockedSlotsRaw?.map((s) => ({
+        date: s.blocked_date,
+        time: s.blocked_time,
+      })) ?? []
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const { action, date, time, reason } = body
+    const bookedSlots =
+      bookingsRaw?.map((b) => ({
+        date: b.booking_date,
+        time: b.booking_time,
+      })) ?? []
 
-    if (action === "block_date") {
-      // This would require admin functions - for now return success
-      return NextResponse.json({
-        status: true,
-        message: "Date blocked successfully",
-      })
-    }
-
-    if (action === "block_time") {
-      // This would require admin functions - for now return success
-      return NextResponse.json({
-        status: true,
-        message: "Time slot blocked successfully",
-      })
-    }
-
-    return NextResponse.json({ status: false, message: "Invalid action" }, { status: 400 })
-  } catch (error) {
-    console.error("Failed to process availability action:", error)
-    return NextResponse.json({ status: false, message: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ blockedDates, blockedSlots, bookedSlots })
+  } catch (err) {
+    console.error("❌ Availability API error:", err)
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
   }
 }

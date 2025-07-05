@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { X, CreditCard, Shield, AlertCircle } from "lucide-react"
+import { X, CreditCard, Shield, AlertCircle, Loader2 } from "lucide-react"
 
 interface PaystackPaymentProps {
   bookingData: {
@@ -34,29 +34,43 @@ declare global {
 
 export default function PaystackPayment({ bookingData, onSuccess, onError, onClose }: PaystackPaymentProps) {
   const [isLoading, setIsLoading] = useState(false)
+  const [isInitializing, setIsInitializing] = useState(true)
   const [paymentData, setPaymentData] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+  const [scriptLoaded, setScriptLoaded] = useState(false)
 
   // Load Paystack script
   useEffect(() => {
     const script = document.createElement("script")
     script.src = "https://js.paystack.co/v1/inline.js"
     script.async = true
+    script.onload = () => {
+      console.log("✅ Paystack script loaded")
+      setScriptLoaded(true)
+    }
+    script.onerror = () => {
+      console.error("❌ Failed to load Paystack script")
+      setError("Failed to load payment system")
+    }
     document.body.appendChild(script)
 
     return () => {
-      document.body.removeChild(script)
+      if (document.body.contains(script)) {
+        document.body.removeChild(script)
+      }
     }
   }, [])
 
   // Initialize payment when component mounts
   useEffect(() => {
-    initializePayment()
-  }, [])
+    if (scriptLoaded) {
+      initializePayment()
+    }
+  }, [scriptLoaded])
 
   const initializePayment = async () => {
     try {
-      setIsLoading(true)
+      setIsInitializing(true)
       setError(null)
 
       console.log("🚀 Initializing payment for:", bookingData.customerName)
@@ -93,23 +107,25 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
       setError(errorMessage)
       onError(errorMessage)
     } finally {
-      setIsLoading(false)
+      setIsInitializing(false)
     }
   }
 
   const handlePayment = () => {
-    if (!paymentData || !window.PaystackPop) {
+    if (!paymentData || !window.PaystackPop || !scriptLoaded) {
       setError("Payment system not ready. Please try again.")
       return
     }
 
     try {
       console.log("💳 Opening Paystack payment modal")
+      setIsLoading(true)
+      setError(null)
 
       const handler = window.PaystackPop.setup({
-        key: paymentData.public_key || process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
+        key: paymentData.public_key,
         email: bookingData.customerEmail,
-        amount: paymentData.amount,
+        amount: paymentData.amount, // Amount is already in kobo from backend
         currency: "NGN",
         ref: paymentData.reference,
         metadata: {
@@ -125,7 +141,8 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
         },
         onClose: () => {
           console.log("❌ Payment modal closed")
-          setError("Payment was cancelled")
+          setIsLoading(false)
+          setError("Payment was cancelled by user")
         },
       })
 
@@ -133,12 +150,12 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
     } catch (error) {
       console.error("❌ Payment modal error:", error)
       setError("Failed to open payment modal")
+      setIsLoading(false)
     }
   }
 
   const verifyPayment = async (reference: string) => {
     try {
-      setIsLoading(true)
       console.log("🔍 Verifying payment:", reference)
 
       const response = await fetch("/api/payments/verify", {
@@ -167,6 +184,19 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
     }
   }
 
+  if (isInitializing) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <Card className="w-full max-w-md bg-white dark:bg-gray-800">
+          <CardContent className="flex flex-col items-center justify-center py-8">
+            <Loader2 className="w-8 h-8 animate-spin text-pink-500 mb-4" />
+            <p className="text-gray-600 dark:text-gray-300">Preparing payment...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <Card className="w-full max-w-md bg-white dark:bg-gray-800">
@@ -175,7 +205,7 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
             <CreditCard className="w-5 h-5 text-pink-500" />
             <span>Secure Payment</span>
           </CardTitle>
-          <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
+          <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0" disabled={isLoading}>
             <X className="w-4 h-4" />
           </Button>
         </CardHeader>
@@ -228,11 +258,18 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
           {/* Payment Button */}
           <Button
             onClick={handlePayment}
-            disabled={isLoading || !paymentData || !!error}
+            disabled={isLoading || !paymentData || !!error || !scriptLoaded}
             className="w-full bg-green-600 hover:bg-green-700 text-white"
             size="lg"
           >
-            {isLoading ? "Processing..." : `Pay ₦${bookingData.depositAmount.toLocaleString()} Now`}
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              `Pay ₦${bookingData.depositAmount.toLocaleString()} Now`
+            )}
           </Button>
 
           {/* Retry Button */}
@@ -241,9 +278,16 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
               onClick={initializePayment}
               variant="outline"
               className="w-full bg-transparent"
-              disabled={isLoading}
+              disabled={isLoading || isInitializing}
             >
-              {isLoading ? "Retrying..." : "Retry Payment"}
+              {isInitializing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Retrying...
+                </>
+              ) : (
+                "Retry Payment"
+              )}
             </Button>
           )}
 

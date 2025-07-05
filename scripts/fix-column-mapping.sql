@@ -1,70 +1,60 @@
--- Fix column mapping to match what the code expects
--- The database has client_phone, client_email, service_name, etc.
--- But our code expects phone, email, service, etc.
+-- Fix column mapping to match code expectations
+-- First, let's rename columns to match what the code expects
 
--- Create aliases/views or rename columns to match the expected schema
--- Let's rename the columns to match our code expectations
-
+-- Add the 'phone' column if it doesn't exist (it should exist based on your schema output)
 DO $$ 
 BEGIN
-    -- Rename client_phone to phone if phone doesn't exist
-    IF EXISTS (SELECT 1 FROM information_schema.columns 
-               WHERE table_name = 'bookings' AND column_name = 'client_phone')
-       AND NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                       WHERE table_name = 'bookings' AND column_name = 'phone') THEN
-        ALTER TABLE bookings RENAME COLUMN client_phone TO phone;
-        RAISE NOTICE 'Renamed client_phone to phone';
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bookings' AND column_name = 'phone') THEN
+        ALTER TABLE bookings ADD COLUMN phone TEXT;
     END IF;
-
-    -- Rename client_email to email if email doesn't exist
-    IF EXISTS (SELECT 1 FROM information_schema.columns 
-               WHERE table_name = 'bookings' AND column_name = 'client_email')
-       AND NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                       WHERE table_name = 'bookings' AND column_name = 'email') THEN
-        ALTER TABLE bookings RENAME COLUMN client_email TO email;
-        RAISE NOTICE 'Renamed client_email to email';
-    END IF;
-
-    -- Rename service_name to service if service doesn't exist
-    IF EXISTS (SELECT 1 FROM information_schema.columns 
-               WHERE table_name = 'bookings' AND column_name = 'service_name')
-       AND NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                       WHERE table_name = 'bookings' AND column_name = 'service') THEN
-        ALTER TABLE bookings RENAME COLUMN service_name TO service;
-        RAISE NOTICE 'Renamed service_name to service';
-    END IF;
-
-    -- Rename total_amount to amount if needed (keep both for compatibility)
-    IF EXISTS (SELECT 1 FROM information_schema.columns 
-               WHERE table_name = 'bookings' AND column_name = 'total_amount')
-       AND NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                       WHERE table_name = 'bookings' AND column_name = 'amount') THEN
-        ALTER TABLE bookings RENAME COLUMN total_amount TO amount;
-        RAISE NOTICE 'Renamed total_amount to amount';
-    END IF;
-
-    -- Rename special_notes to notes if needed
-    IF EXISTS (SELECT 1 FROM information_schema.columns 
-               WHERE table_name = 'bookings' AND column_name = 'special_notes')
-       AND NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                       WHERE table_name = 'bookings' AND column_name = 'notes') THEN
-        ALTER TABLE bookings RENAME COLUMN special_notes TO notes;
-        RAISE NOTICE 'Renamed special_notes to notes';
-    END IF;
-
-    -- Make phone column not null with default empty string
-    IF EXISTS (SELECT 1 FROM information_schema.columns 
-               WHERE table_name = 'bookings' AND column_name = 'phone' AND is_nullable = 'YES') THEN
-        UPDATE bookings SET phone = '' WHERE phone IS NULL;
-        ALTER TABLE bookings ALTER COLUMN phone SET NOT NULL;
-        ALTER TABLE bookings ALTER COLUMN phone SET DEFAULT '';
-        RAISE NOTICE 'Made phone column NOT NULL with default';
-    END IF;
-
 END $$;
 
--- Show the final schema
-SELECT column_name, data_type, is_nullable, column_default
-FROM information_schema.columns
-WHERE table_name = 'bookings'
+-- Update existing data to populate the phone column from client_phone
+UPDATE bookings SET phone = client_phone WHERE phone IS NULL OR phone = '';
+
+-- Add the 'email' column and populate it
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bookings' AND column_name = 'email') THEN
+        ALTER TABLE bookings ADD COLUMN email VARCHAR;
+    END IF;
+END $$;
+
+UPDATE bookings SET email = client_email WHERE email IS NULL OR email = '';
+
+-- Add the 'service' column for service name
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bookings' AND column_name = 'service') THEN
+        ALTER TABLE bookings ADD COLUMN service VARCHAR;
+    END IF;
+END $$;
+
+UPDATE bookings SET service = service_name WHERE service IS NULL OR service = '';
+
+-- Add the 'amount' column and sync with total_amount
+UPDATE bookings SET amount = total_amount WHERE amount IS NULL OR amount = 0;
+
+-- Add the 'notes' column and sync with special_notes
+UPDATE bookings SET notes = special_notes WHERE notes IS NULL OR notes = '';
+
+-- Ensure all columns have proper defaults
+ALTER TABLE bookings ALTER COLUMN phone SET DEFAULT '';
+ALTER TABLE bookings ALTER COLUMN email SET DEFAULT '';
+ALTER TABLE bookings ALTER COLUMN service SET DEFAULT '';
+ALTER TABLE bookings ALTER COLUMN amount SET DEFAULT 0;
+ALTER TABLE bookings ALTER COLUMN payment_status SET DEFAULT 'pending';
+ALTER TABLE bookings ALTER COLUMN status SET DEFAULT 'confirmed';
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_bookings_email ON bookings(email);
+CREATE INDEX IF NOT EXISTS idx_bookings_phone ON bookings(phone);
+CREATE INDEX IF NOT EXISTS idx_bookings_payment_reference ON bookings(payment_reference);
+CREATE INDEX IF NOT EXISTS idx_bookings_booking_date ON bookings(booking_date);
+CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
+
+-- Display final schema to verify
+SELECT column_name, data_type, is_nullable, column_default 
+FROM information_schema.columns 
+WHERE table_name = 'bookings' 
 ORDER BY ordinal_position;

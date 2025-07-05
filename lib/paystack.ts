@@ -1,14 +1,6 @@
-// Paystack integration utilities
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY
-const PAYSTACK_PUBLIC_KEY = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY
-
-if (!PAYSTACK_SECRET_KEY) {
-  console.error("❌ PAYSTACK_SECRET_KEY is not set")
-}
-
-if (!PAYSTACK_PUBLIC_KEY) {
-  console.error("❌ NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY is not set")
-}
+// Paystack integration utilities with LIVE API keys
+const PAYSTACK_SECRET_KEY = "sk_live_f3437bf92100d5b73c6aa72e78d7db300d9029bb"
+const PAYSTACK_PUBLIC_KEY = "pk_live_edddbd4959b95ee7d1eebe12b71b68f8ce5ff0a7"
 
 export interface PaymentInitializationData {
   customerName: string
@@ -48,10 +40,6 @@ export function generatePaymentReference(): string {
 // Initialize payment with Paystack
 export async function initializePaystackPayment(data: PaymentInitializationData): Promise<PaystackResponse> {
   try {
-    if (!PAYSTACK_SECRET_KEY) {
-      throw new Error("Paystack secret key is not configured")
-    }
-
     const reference = generatePaymentReference()
     const amountInKobo = convertToKobo(data.depositAmount)
 
@@ -60,6 +48,7 @@ export async function initializePaystackPayment(data: PaymentInitializationData)
       amountInKobo,
       reference,
       email: data.customerEmail,
+      customer: data.customerName,
     })
 
     const response = await fetch("https://api.paystack.co/transaction/initialize", {
@@ -104,7 +93,10 @@ export async function initializePaystackPayment(data: PaymentInitializationData)
     return {
       status: true,
       message: "Payment initialized successfully",
-      data: result.data,
+      data: {
+        ...result.data,
+        public_key: PAYSTACK_PUBLIC_KEY, // Include public key for frontend
+      },
     }
   } catch (error) {
     console.error("❌ Payment initialization error:", error)
@@ -118,10 +110,6 @@ export async function initializePaystackPayment(data: PaymentInitializationData)
 // Verify payment with Paystack
 export async function verifyPaystackPayment(reference: string): Promise<PaystackResponse> {
   try {
-    if (!PAYSTACK_SECRET_KEY) {
-      throw new Error("Paystack secret key is not configured")
-    }
-
     console.log("🔍 Verifying payment:", reference)
 
     const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
@@ -172,5 +160,5 @@ export async function verifyPaystackPayment(reference: string): Promise<Paystack
 
 // Get Paystack public key (safe for client-side)
 export function getPaystackPublicKey(): string {
-  return PAYSTACK_PUBLIC_KEY || ""
+  return PAYSTACK_PUBLIC_KEY
 }

@@ -3,6 +3,8 @@ import { initializePaystackPayment } from "@/lib/paystack"
 
 export async function POST(request: NextRequest) {
   try {
+    const body = await request.json()
+
     const {
       customerName,
       customerEmail,
@@ -13,18 +15,7 @@ export async function POST(request: NextRequest) {
       totalAmount,
       depositAmount,
       notes,
-    } = await request.json()
-
-    console.log("🚀 Initializing payment:", {
-      customerName,
-      customerEmail,
-      customerPhone,
-      services,
-      bookingDate,
-      bookingTime,
-      totalAmount,
-      depositAmount,
-    })
+    } = body
 
     // Validate required fields
     if (
@@ -39,49 +30,51 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           status: false,
-          message: "Missing required fields for payment initialization",
+          message: "Missing required booking information",
         },
         { status: 400 },
       )
     }
 
+    console.log("🚀 Initializing payment for:", customerName)
+
     // Initialize payment with Paystack
-    const paymentData = await initializePaystackPayment({
+    const result = await initializePaystackPayment({
       customerName,
       customerEmail,
       customerPhone,
-      services,
+      services: Array.isArray(services) ? services : [services],
       bookingDate,
       bookingTime,
-      totalAmount,
-      depositAmount,
-      notes,
+      totalAmount: Number.parseFloat(totalAmount) || 0,
+      depositAmount: Number.parseFloat(depositAmount) || 0,
+      notes: notes || "",
     })
 
-    if (!paymentData.status) {
-      console.error("❌ Payment initialization failed:", paymentData.message)
+    if (!result.status) {
+      console.error("❌ Payment initialization failed:", result.message)
       return NextResponse.json(
         {
           status: false,
-          message: paymentData.message || "Payment initialization failed",
+          message: result.message,
         },
         { status: 400 },
       )
     }
 
-    console.log("✅ Payment initialized successfully:", paymentData.data.reference)
+    console.log("✅ Payment initialized successfully:", result.data.reference)
 
     return NextResponse.json({
       status: true,
       message: "Payment initialized successfully",
-      data: paymentData.data,
+      data: result.data,
     })
   } catch (error) {
     console.error("❌ Payment initialization error:", error)
     return NextResponse.json(
       {
         status: false,
-        message: `Payment initialization failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+        message: error instanceof Error ? error.message : "Payment initialization failed",
       },
       { status: 500 },
     )
