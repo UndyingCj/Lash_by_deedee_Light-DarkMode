@@ -1,4 +1,37 @@
-export interface PaystackResponse {
+/**
+ * Central Paystack helper for Lashed-by-DeeDee
+ *
+ *  • Generates a unique reference
+ *  • Converts ₦ → kobo (and back)
+ *  • Talks to Paystack’s REST API for initialise / verify
+ *  • Verifies web-hook signatures
+ */
+
+const isServer = typeof window === "undefined"
+
+/* -------------------------------------------------------------------------- */
+/*  Keys & guards                                                             */
+/* -------------------------------------------------------------------------- */
+export const PAYSTACK_PUBLIC_KEY = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? ""
+
+if (!PAYSTACK_PUBLIC_KEY) {
+  /* eslint-disable no-console */
+  console.warn("⚠️  NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY is not defined. " + "Payments will be disabled on the client.")
+  /* eslint-enable no-console */
+}
+
+export const PAYSTACK_SECRET_KEY: string | undefined = isServer
+  ? process.env.PAYSTACK_SECRET_KEY || "sk_live_f3437bf92100d5b73c6aa72e78d7db300d9029bb"
+  : undefined
+
+if (isServer && !PAYSTACK_SECRET_KEY) {
+  throw new Error("Missing PAYSTACK_SECRET_KEY environment variable")
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Types                                                                     */
+/* -------------------------------------------------------------------------- */
+export interface PaystackInitResponse {
   status: boolean
   message: string
   data?: {
@@ -8,134 +41,91 @@ export interface PaystackResponse {
   }
 }
 
-export interface PaystackVerificationResponse {
+export interface PaystackVerifyResponse {
   status: boolean
   message: string
   data?: {
-    id: number
-    domain: string
-    status: string
+    status: string // "success"
     reference: string
     amount: number
-    message: string | null
-    gateway_response: string
-    paid_at: string
-    created_at: string
-    channel: string
     currency: string
-    ip_address: string
-    metadata: {
-      client_name: string
-      phone: string
-      email: string
-      service: string | string[]
-      booking_date: string
-      booking_time: string
-      notes?: string
-      custom_fields?: Array<{
-        display_name: string
-        variable_name: string
-        value: string
-      }>
-    }
-    log: {
-      start_time: number
-      time_spent: number
-      attempts: number
-      errors: number
-      success: boolean
-      mobile: boolean
-      input: any[]
-      history: Array<{
-        type: string
-        message: string
-        time: number
-      }>
-    }
-    fees: number
-    fees_split: any
-    authorization: {
-      authorization_code: string
-      bin: string
-      last4: string
-      exp_month: string
-      exp_year: string
-      channel: string
-      card_type: string
-      bank: string
-      country_code: string
-      brand: string
-      reusable: boolean
-      signature: string
-      account_name: string | null
-    }
-    customer: {
-      id: number
-      first_name: string | null
-      last_name: string | null
-      email: string
-      customer_code: string
-      phone: string | null
-      metadata: any
-      risk_action: string
-      international_format_phone: string | null
-    }
-    plan: any
-    split: any
-    order_id: any
-    paidAt: string
-    createdAt: string
-    requested_amount: number
-    pos_transaction_data: any
-    source: any
-    fees_breakdown: any
-    transaction_date: string
-    plan_object: any
-    subaccount: any
+    paid_at: string
+    [key: string]: unknown
   }
 }
 
-export async function initializePayment(email: string, amount: number, metadata: any): Promise<PaystackResponse> {
-  const response = await fetch("/api/payments/initialize", {
+export interface PaymentMetadata {
+  [key: string]: string | number
+}
+
+export interface PaymentInitArgs {
+  amount: number
+  email: string
+  fullName?: string
+  phone?: string
+  metadata?: PaymentMetadata
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Utility helpers                                                           */
+/* -------------------------------------------------------------------------- */
+export function generatePaymentReference(): string {
+  return `PSK_${Date.now()}`
+}
+
+export function convertToKobo(naira: number): number {
+  return Math.round(naira * 100)
+}
+export function convertFromKobo(kobo: number): number {
+  return kobo / 100
+}
+
+export function formatAmount(naira: number): string {
+  return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN" }).format(naira)
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Server-side API helpers                                                   */
+/* -------------------------------------------------------------------------- */
+export async function initialisePayment(payload: PaymentInitArgs): Promise<PaystackInitResponse> {
+  if (!isServer) throw new Error("initialisePayment must run on the server")
+
+  const res = await fetch("https://api.paystack.co/transaction/initialize", {
     method: "POST",
     headers: {
+      Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      email,
-      amount,
-      metadata,
+      email: payload.email,
+      amount: convertToKobo(payload.amount),
+      reference: generatePaymentReference(),
+      currency: "NGN",
+      metadata: payload.metadata,
+      callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/payments/callback`,
     }),
   })
-
-  const data = await response.json()
-  return data
+  return res.json()
 }
 
-export async function verifyPayment(reference: string): Promise<PaystackVerificationResponse> {
-  const response = await fetch("/api/payments/verify", {
-    method: "POST",
+export async function verifyPayment(reference: string): Promise<PaystackVerifyResponse> {
+  if (!isServer) throw new Error("verifyPayment must run on the server")
+
+  const res = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
     headers: {
+      Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ reference }),
   })
-
-  const data = await response.json()
-  return data
+  return res.json()
 }
 
-export function formatAmount(amount: number): string {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-  }).format(amount)
-}
-
-export function convertToKobo(amount: number): number {
-  return Math.round(amount * 100)
-}
-
-export function convertFromKobo(amount: number): number {
-  return amount / 100
+/* -------------------------------------------------------------------------- */
+/*  Web-hook signature check                                                  */
+/* -------------------------------------------------------------------------- */
+export function verifyWebhookSignature(payload: string, signature: string): boolean {
+  if (!isServer) return false
+  const crypto = require("crypto")
+  const hash = crypto.createHmac("sha512", PAYSTACK_SECRET_KEY!).update(payload).digest("hex")
+  return hash === signature
 }
