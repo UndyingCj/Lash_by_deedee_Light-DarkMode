@@ -1,204 +1,83 @@
-// lib/paystack.ts
-
-// Determine execution environment
-const isServer = typeof window === "undefined"
-
-/**
- * Public key is safe to expose in the browser; if it isn’t set we fall back to an
- * empty string so that client bundles don’t crash at build time.
- */
-export const PAYSTACK_PUBLIC_KEY = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || ""
-
-/**
- * Secret key must ONLY be accessed on the server.  It is therefore undefined in
- * the browser bundle to avoid leaking credentials or throwing errors there.
- */
-export const PAYSTACK_SECRET_KEY: string | undefined = isServer ? process.env.PAYSTACK_SECRET_KEY : undefined
-
-// Validate the secret key strictly on the server.  Client bundles will skip this.
-if (isServer && !PAYSTACK_SECRET_KEY) {
-  throw new Error("Missing PAYSTACK_SECRET_KEY environment variable")
-}
-
-// Paystack configuration and utilities
-if (!PAYSTACK_PUBLIC_KEY) {
-  throw new Error("Missing NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY environment variable")
-}
-
-export interface PaystackPaymentData {
-  email: string
-  amount: number // Amount in kobo (multiply by 100)
-  reference: string
-  currency?: string
-  channels?: string[]
-  metadata?: {
-    customerName: string
-    customerPhone: string
-    services: string[]
-    bookingDate: string
-    bookingTime: string
-    totalAmount: number
-    depositAmount: number
-    notes?: string
-  }
-}
-
-export interface PaystackResponse {
-  status: boolean
-  message: string
-  data?: {
-    authorization_url: string
-    access_code: string
-    reference: string
-  }
-}
-
-export interface PaystackVerificationResponse {
-  status: boolean
-  message: string
-  data?: {
-    id: number
-    domain: string
-    status: string
-    reference: string
-    amount: number
-    message: string | null
-    gateway_response: string
-    paid_at: string
-    created_at: string
-    channel: string
-    currency: string
-    ip_address: string
-    metadata: any
-    log: any
-    fees: number
-    fees_split: any
-    authorization: {
-      authorization_code: string
-      bin: string
-      last4: string
-      exp_month: string
-      exp_year: string
-      channel: string
-      card_type: string
-      bank: string
-      country_code: string
-      brand: string
-      reusable: boolean
-      signature: string
-      account_name: string | null
-    }
-    customer: {
-      id: number
-      first_name: string | null
-      last_name: string | null
-      email: string
-      customer_code: string
-      phone: string | null
-      metadata: any
-      risk_action: string
-      international_format_phone: string | null
-    }
-    plan: any
-    split: any
-    order_id: any
-    paidAt: string
-    createdAt: string
-    requested_amount: number
-    pos_transaction_data: any
-    source: any
-    fees_breakdown: any
-  }
-}
-
-// Generate unique payment reference
 export function generatePaymentReference(): string {
   const timestamp = Date.now()
-  const random = Math.random().toString(36).substring(2, 8)
-  return `LBD_${timestamp}_${random}`.toUpperCase()
+  const random = Math.random().toString(36).substring(2, 8).toUpperCase()
+  return `LBD_${timestamp}_${random}`
 }
 
-// Initialize payment with Paystack
-export async function initializePayment(paymentData: PaystackPaymentData): Promise<PaystackResponse> {
+export function convertToKobo(amount: number): number {
+  return Math.round(amount * 100)
+}
+
+export async function initializePayment(data: {
+  email: string
+  amount: number
+  reference: string
+  metadata?: any
+}) {
+  const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY
+
+  if (!paystackSecretKey) {
+    throw new Error("Paystack secret key is not configured")
+  }
+
   try {
-    const secret = PAYSTACK_SECRET_KEY
-    if (!secret) {
-      throw new Error("PAYSTACK_SECRET_KEY unavailable on server")
-    }
     const response = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${secret}`,
+        Authorization: `Bearer ${paystackSecretKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        email: paymentData.email,
-        amount: paymentData.amount,
-        reference: paymentData.reference,
-        currency: paymentData.currency || "NGN",
-        channels: paymentData.channels || ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
-        metadata: paymentData.metadata,
-        callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/payments/callback`,
-      }),
+      body: JSON.stringify(data),
     })
 
-    const data = await response.json()
-    return data
+    const result = await response.json()
+
+    if (!response.ok) {
+      throw new Error(result.message || "Failed to initialize payment")
+    }
+
+    return result
   } catch (error) {
-    console.error("Error initializing payment:", error)
-    throw new Error("Failed to initialize payment")
+    console.error("Paystack initialization error:", error)
+    throw error
   }
 }
 
-// Verify payment with Paystack
-export async function verifyPayment(reference: string): Promise<PaystackVerificationResponse> {
+export async function verifyPayment(reference: string) {
+  const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY
+
+  if (!paystackSecretKey) {
+    throw new Error("Paystack secret key is not configured")
+  }
+
   try {
-    const secret = PAYSTACK_SECRET_KEY
-    if (!secret) {
-      throw new Error("PAYSTACK_SECRET_KEY unavailable on server")
-    }
+    console.log("🔍 Verifying payment with Paystack API:", reference)
+
     const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${secret}`,
+        Authorization: `Bearer ${paystackSecretKey}`,
         "Content-Type": "application/json",
       },
     })
 
-    const data = await response.json()
-    return data
-  } catch (error) {
-    console.error("Error verifying payment:", error)
-    throw new Error("Failed to verify payment")
-  }
-}
+    const result = await response.json()
 
-// Verify webhook signature
-export function verifyWebhookSignature(payload: string, signature: string): boolean {
-  try {
-    const crypto = require("crypto")
-    const secret = PAYSTACK_SECRET_KEY
-    if (!secret) {
-      throw new Error("PAYSTACK_SECRET_KEY unavailable on server")
+    console.log("📊 Paystack verification response:", {
+      status: result.status,
+      message: result.message,
+      dataStatus: result.data?.status,
+      amount: result.data?.amount,
+    })
+
+    if (!response.ok) {
+      console.error("❌ Paystack API error:", result)
+      throw new Error(result.message || "Failed to verify payment")
     }
-    const hash = crypto.createHmac("sha512", secret).update(payload).digest("hex")
-    return hash === signature
+
+    return result
   } catch (error) {
-    console.error("Error verifying webhook signature:", error)
-    return false
+    console.error("💥 Paystack verification error:", error)
+    throw error
   }
-}
-
-// Format amount for display (convert from kobo to naira)
-export function formatAmount(amountInKobo: number): string {
-  const amountInNaira = amountInKobo / 100
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-  }).format(amountInNaira)
-}
-
-// Convert naira to kobo for Paystack
-export function convertToKobo(amountInNaira: number): number {
-  return Math.round(amountInNaira * 100)
 }
