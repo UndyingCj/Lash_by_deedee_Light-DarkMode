@@ -1,101 +1,68 @@
 import { type NextRequest, NextResponse } from "next/server"
-
-const paystackSecret = process.env.PAYSTACK_SECRET_KEY!
+import { initializePayment, type PaystackPaymentData } from "@/lib/paystack"
 
 export async function POST(request: NextRequest) {
-  console.log("🚀 Payment initialization started")
-
   try {
     const body = await request.json()
-    console.log("📋 Payment request:", body)
+    const { email, amount, reference, metadata } = body
 
-    const { email, amount, metadata } = body
-
-    if (!email || !amount) {
-      console.error("❌ Missing required fields:", { email: !!email, amount: !!amount })
+    // Validate required fields
+    if (!email || !amount || !reference) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Email and amount are required",
-        },
+        { status: false, message: "Missing required fields: email, amount, or reference" },
         { status: 400 },
       )
     }
 
-    // Generate unique reference
-    const reference = `LBD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    console.log("🔑 Generated reference:", reference)
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return NextResponse.json({ status: false, message: "Invalid email format" }, { status: 400 })
+    }
 
-    const paystackData = {
+    // Validate amount (should be positive and in kobo)
+    if (typeof amount !== "number" || amount <= 0) {
+      return NextResponse.json(
+        { status: false, message: "Invalid amount. Amount must be a positive number in kobo." },
+        { status: 400 },
+      )
+    }
+
+    const paymentData: PaystackPaymentData = {
       email,
-      amount: Math.round(amount * 100), // Convert to kobo
+      amount,
       reference,
-      metadata: {
-        ...metadata,
-        custom_fields: [
-          {
-            display_name: "Service",
-            variable_name: "service",
-            value: Array.isArray(metadata?.service) ? metadata.service.join(", ") : metadata?.service || "Unknown",
-          },
-          {
-            display_name: "Date",
-            variable_name: "booking_date",
-            value: metadata?.booking_date || "Unknown",
-          },
-          {
-            display_name: "Time",
-            variable_name: "booking_time",
-            value: metadata?.booking_time || "Unknown",
-          },
-        ],
-      },
-      callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/book?payment=success`,
+      currency: "NGN",
       channels: ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
+      metadata,
     }
 
-    console.log("📋 Paystack request data:", paystackData)
-
-    const response = await fetch("https://api.paystack.co/transaction/initialize", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${paystackSecret}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(paystackData),
+    console.log("Initializing payment with data:", {
+      email,
+      amount,
+      reference,
+      metadata: metadata ? "present" : "not provided",
     })
 
-    const data = await response.json()
-    console.log("📋 Paystack response:", {
-      status: response.status,
-      ok: response.ok,
-      data: data,
-    })
+    const response = await initializePayment(paymentData)
 
-    if (!response.ok) {
-      console.error("❌ Paystack initialization failed:", data)
+    if (!response.status) {
+      console.error("Paystack initialization failed:", response.message)
       return NextResponse.json(
-        {
-          success: false,
-          message: data.message || "Payment initialization failed",
-        },
+        { status: false, message: response.message || "Failed to initialize payment" },
         { status: 400 },
       )
     }
 
-    console.log("✅ Payment initialized successfully")
+    console.log("Payment initialized successfully:", response.data?.reference)
+
     return NextResponse.json({
-      success: true,
-      data: data.data,
+      status: true,
+      message: "Payment initialized successfully",
+      data: response.data,
     })
   } catch (error) {
-    console.error("❌ Payment initialization error:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        message: "Internal server error",
-      },
-      { status: 500 },
-    )
+    console.error("Payment initialization error:", error)
+    return NextResponse.json({ status: false, message: "Internal server error" }, { status: 500 })
   }
 }

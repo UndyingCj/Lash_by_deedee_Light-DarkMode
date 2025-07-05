@@ -1,50 +1,39 @@
 import { createClient } from "@supabase/supabase-js"
-import { testConnection } from "./supabase-admin"
+import { supabaseAdmin } from "./supabase-admin"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+/* -------------------------------------------------------------------------- */
+/*  ENV & PUBLIC CLIENT (for browser code)                                    */
+/* -------------------------------------------------------------------------- */
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-if (!supabaseUrl) {
-  throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL environment variable")
-}
+if (!SUPABASE_URL) throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL")
+if (!SUPABASE_ANON_KEY) throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY")
 
-if (!supabaseServiceKey) {
-  throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY environment variable")
-}
-
-if (!supabaseAnonKey) {
-  throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable")
-}
-
-// Client-side Supabase client (public operations only)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-// Admin client for server-side operations
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
-
-// Client-side hook for browser usage
+/** Public client – use only in browser */
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 export function createClientSupabase() {
-  return createClient(supabaseUrl, supabaseAnonKey)
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 }
 
-// Booking interface
+/* -------------------------------------------------------------------------- */
+/*  TYPES                                                                     */
+/* -------------------------------------------------------------------------- */
 export interface Booking {
-  id?: number
+  id: number
   client_name: string
   phone: string
   email: string
   service: string
   booking_date: string
   booking_time: string
-  status: string
+  status: "pending" | "confirmed" | "completed" | "cancelled"
   amount: number
   notes?: string
-  created_at?: string
+  created_at: string
   updated_at?: string
 }
 
-// BlockedDate interface
 export interface BlockedDate {
   id: number
   blocked_date: string
@@ -52,7 +41,6 @@ export interface BlockedDate {
   created_at: string
 }
 
-// BlockedTimeSlot interface
 export interface BlockedTimeSlot {
   id: number
   blocked_date: string
@@ -61,347 +49,127 @@ export interface BlockedTimeSlot {
   created_at: string
 }
 
-// CRITICAL FIX: UTC-safe date formatting that prevents timezone shifts
-const formatDateForDatabase = (dateInput: string | Date): string => {
+/* -------------------------------------------------------------------------- */
+/*  UTILITIES                                                                 */
+/* -------------------------------------------------------------------------- */
+const formatDateForDatabase = (input: string | Date) => {
   try {
-    if (typeof dateInput === "string") {
-      // If already in YYYY-MM-DD format, return as-is
-      if (/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
-        return dateInput
-      }
-
-      // If it's an ISO string, extract just the date part
-      if (dateInput.includes("T")) {
-        return dateInput.split("T")[0]
-      }
-
-      // Parse date components manually to avoid timezone conversion
-      const parts = dateInput.split("-")
-      if (parts.length === 3) {
-        const year = parts[0].padStart(4, "0")
-        const month = parts[1].padStart(2, "0")
-        const day = parts[2].padStart(2, "0")
-        return `${year}-${month}-${day}`
-      }
+    if (typeof input === "string") {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(input)) return input
+      if (input.includes("T")) return input.split("T")[0]
+      const [y, m, d] = input.split("-")
+      return `${y.padStart(4, "0")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`
     }
-
-    if (dateInput instanceof Date) {
-      // CRITICAL: Use UTC methods to prevent timezone conversion
-      const year = dateInput.getUTCFullYear()
-      const month = String(dateInput.getUTCMonth() + 1).padStart(2, "0")
-      const day = String(dateInput.getUTCDate()).padStart(2, "0")
-      return `${year}-${month}-${day}`
-    }
-
-    return String(dateInput)
-  } catch (error) {
-    console.error("Error formatting date for database:", dateInput, error)
-    return String(dateInput)
+    const date = input as Date
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(
+      date.getUTCDate(),
+    ).padStart(2, "0")}`
+  } catch {
+    return String(input)
   }
 }
 
-// Booking operations
-export async function createBooking(bookingData: Omit<Booking, "id" | "created_at" | "updated_at">): Promise<Booking> {
-  const { data, error } = await supabase
+/* -------------------------------------------------------------------------- */
+/*  BOOKINGS                                                                  */
+/* -------------------------------------------------------------------------- */
+export async function getBookings(filters?: { status?: string; date?: string }) {
+  let q = supabaseAdmin.from("bookings").select("*")
+
+  if (filters?.status && filters.status !== "all") q = q.eq("status", filters.status)
+  if (filters?.date) q = q.eq("booking_date", formatDateForDatabase(filters.date))
+
+  q = q.order("booking_date", { ascending: false }).order("booking_time", { ascending: false })
+
+  const { data, error } = await q
+  if (error) throw error
+  return data as Booking[]
+}
+
+export async function createBooking(payload: Omit<Booking, "id" | "created_at" | "updated_at">) {
+  const { data, error } = await supabaseAdmin
     .from("bookings")
-    .insert([
-      {
-        ...bookingData,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-    ])
+    .insert([{ ...payload, booking_date: formatDateForDatabase(payload.booking_date) }])
     .select()
     .single()
-
-  if (error) {
-    console.error("Error creating booking:", error)
-    throw new Error(`Failed to create booking: ${error.message}`)
-  }
-
-  return data
+  if (error) throw error
+  return data as Booking
 }
 
-export async function getBookings(): Promise<Booking[]> {
-  const { data, error } = await supabase.from("bookings").select("*").order("created_at", { ascending: false })
-
-  if (error) {
-    console.error("Error fetching bookings:", error)
-    throw new Error(`Failed to fetch bookings: ${error.message}`)
-  }
-
-  return data || []
-}
-
-export async function getBookingById(id: number): Promise<Booking | null> {
-  const { data, error } = await supabase.from("bookings").select("*").eq("id", id).single()
-
-  if (error) {
-    console.error("Error fetching booking:", error)
-    return null
-  }
-
-  return data
-}
-
-export async function updateBooking(id: number, updates: Partial<Booking>): Promise<Booking> {
-  const { data, error } = await supabase
-    .from("bookings")
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .select()
-    .single()
-
-  if (error) {
-    console.error("Error updating booking:", error)
-    throw new Error(`Failed to update booking: ${error.message}`)
-  }
-
-  return data
-}
-
-export async function deleteBooking(id: number): Promise<void> {
-  const { error } = await supabase.from("bookings").delete().eq("id", id)
-
-  if (error) {
-    console.error("Error deleting booking:", error)
-    throw new Error(`Failed to delete booking: ${error.message}`)
-  }
-}
-
-// FIXED: Enhanced blocked dates operations with timezone-safe handling
+/* -------------------------------------------------------------------------- */
+/*  AVAILABILITY – BLOCKED DATES                                              */
+/* -------------------------------------------------------------------------- */
 export async function getBlockedDates() {
-  try {
-    console.log("🔍 Fetching blocked dates from database...")
-
-    const { data, error } = await supabaseAdmin.from("blocked_dates").select("*").order("blocked_date")
-
-    if (error) {
-      console.error("❌ Supabase error in getBlockedDates:", error)
-      throw new Error(`Database error: ${error.message}`)
-    }
-
-    console.log("📊 Raw blocked dates from DB:", data)
-
-    // Process dates to ensure consistent format
-    const processedData = (data || []).map((item) => ({
-      ...item,
-      blocked_date: formatDateForDatabase(item.blocked_date),
-    }))
-
-    console.log("📋 Processed blocked dates:", processedData)
-    return processedData as BlockedDate[]
-  } catch (error) {
-    console.error("❌ Error in getBlockedDates:", error)
-    throw error
-  }
+  const { data, error } = await supabaseAdmin.from("blocked_dates").select("*")
+  if (error) throw error
+  data?.sort((a, b) => (a.blocked_date ?? "").localeCompare(b.blocked_date ?? ""))
+  return (data ?? []).map((d) => ({
+    ...d,
+    blocked_date: formatDateForDatabase(d.blocked_date),
+  })) as BlockedDate[]
 }
 
 export async function addBlockedDate(date: string, reason?: string) {
-  try {
-    const formattedDate = formatDateForDatabase(date)
-    console.log("🚫 Adding blocked date:", date, "→ Formatted:", formattedDate, "with reason:", reason)
-
-    const { data, error } = await supabaseAdmin
-      .from("blocked_dates")
-      .upsert([{ blocked_date: formattedDate, reason }], {
-        onConflict: "blocked_date",
-        ignoreDuplicates: false,
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.error("❌ Supabase error in addBlockedDate:", error)
-      throw new Error(`Database error: ${error.message}`)
-    }
-
-    console.log("✅ Blocked date added successfully:", data)
-    return data as BlockedDate
-  } catch (error) {
-    console.error("❌ Error in addBlockedDate:", error)
-    throw error
-  }
+  const formatted = formatDateForDatabase(date)
+  const { data, error } = await supabaseAdmin
+    .from("blocked_dates")
+    .upsert([{ blocked_date: formatted, reason }], { onConflict: "blocked_date", ignoreDuplicates: false })
+    .select()
+    .single()
+  if (error) throw error
+  return data as BlockedDate
 }
 
 export async function removeBlockedDate(date: string) {
-  try {
-    const formattedDate = formatDateForDatabase(date)
-    console.log("✅ Removing blocked date:", date, "→ Formatted:", formattedDate)
-
-    const { data, error } = await supabaseAdmin
-      .from("blocked_dates")
-      .delete()
-      .eq("blocked_date", formattedDate)
-      .select()
-      .single()
-
-    if (error) {
-      console.error("❌ Supabase error in removeBlockedDate:", error)
-      throw new Error(`Database error: ${error.message}`)
-    }
-
-    console.log("✅ Blocked date removed successfully:", data)
-    return data as BlockedDate
-  } catch (error) {
-    console.error("❌ Error in removeBlockedDate:", error)
-    throw error
-  }
+  const formatted = formatDateForDatabase(date)
+  const { data, error } = await supabaseAdmin
+    .from("blocked_dates")
+    .delete()
+    .eq("blocked_date", formatted)
+    .select()
+    .single()
+  if (error) throw error
+  return data as BlockedDate
 }
 
-// FIXED: Enhanced blocked time slots operations with timezone-safe handling
+/* -------------------------------------------------------------------------- */
+/*  AVAILABILITY – BLOCKED TIME-SLOTS                                         */
+/* -------------------------------------------------------------------------- */
 export async function getBlockedTimeSlots() {
-  try {
-    console.log("🔍 Fetching blocked time slots from database...")
-
-    const { data, error } = await supabaseAdmin
-      .from("blocked_time_slots")
-      .select("*")
-      .order("blocked_date")
-      .order("blocked_time")
-
-    if (error) {
-      console.error("❌ Supabase error in getBlockedTimeSlots:", error)
-      throw new Error(`Database error: ${error.message}`)
-    }
-
-    console.log("📊 Raw blocked time slots from DB:", data)
-
-    // Process dates to ensure consistent format
-    const processedData = (data || []).map((item) => ({
-      ...item,
-      blocked_date: formatDateForDatabase(item.blocked_date),
-    }))
-
-    console.log("📋 Processed blocked time slots:", processedData)
-    return processedData as BlockedTimeSlot[]
-  } catch (error) {
-    console.error("❌ Error in getBlockedTimeSlots:", error)
-    throw error
-  }
+  const { data, error } = await supabaseAdmin.from("blocked_time_slots").select("*")
+  if (error) throw error
+  data?.sort((a, b) => {
+    const d = (a.blocked_date ?? "").localeCompare(b.blocked_date ?? "")
+    return d !== 0 ? d : (a.blocked_time ?? "").localeCompare(b.blocked_time ?? "")
+  })
+  return (data ?? []).map((d) => ({
+    ...d,
+    blocked_date: formatDateForDatabase(d.blocked_date),
+  })) as BlockedTimeSlot[]
 }
 
 export async function addBlockedTimeSlot(date: string, time: string, reason?: string) {
-  try {
-    const formattedDate = formatDateForDatabase(date)
-    console.log("🚫 Adding blocked time slot:", time, "on", date, "→ Formatted:", formattedDate, "with reason:", reason)
-
-    const { data, error } = await supabaseAdmin
-      .from("blocked_time_slots")
-      .upsert([{ blocked_date: formattedDate, blocked_time: time, reason }], {
-        onConflict: "blocked_date,blocked_time",
-        ignoreDuplicates: false,
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.error("❌ Supabase error in addBlockedTimeSlot:", error)
-      throw new Error(`Database error: ${error.message}`)
-    }
-
-    console.log("✅ Blocked time slot added successfully:", data)
-    return data as BlockedTimeSlot
-  } catch (error) {
-    console.error("❌ Error in addBlockedTimeSlot:", error)
-    throw error
-  }
+  const formatted = formatDateForDatabase(date)
+  const { data, error } = await supabaseAdmin
+    .from("blocked_time_slots")
+    .upsert([{ blocked_date: formatted, blocked_time: time, reason }], {
+      onConflict: "blocked_date,blocked_time",
+      ignoreDuplicates: false,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data as BlockedTimeSlot
 }
 
 export async function removeBlockedTimeSlot(date: string, time: string) {
-  try {
-    const formattedDate = formatDateForDatabase(date)
-    console.log("✅ Removing blocked time slot:", time, "on", date, "→ Formatted:", formattedDate)
-
-    const { data, error } = await supabaseAdmin
-      .from("blocked_time_slots")
-      .delete()
-      .eq("blocked_date", formattedDate)
-      .eq("blocked_time", time)
-      .select()
-      .single()
-
-    if (error) {
-      console.error("❌ Supabase error in removeBlockedTimeSlot:", error)
-      throw new Error(`Database error: ${error.message}`)
-    }
-
-    console.log("✅ Blocked time slot removed successfully:", data)
-    return data as BlockedTimeSlot
-  } catch (error) {
-    console.error("❌ Error in removeBlockedTimeSlot:", error)
-    throw error
-  }
+  const formatted = formatDateForDatabase(date)
+  const { data, error } = await supabaseAdmin
+    .from("blocked_time_slots")
+    .delete()
+    .eq("blocked_date", formatted)
+    .eq("blocked_time", time)
+    .select()
+    .single()
+  if (error) throw error
+  return data as BlockedTimeSlot
 }
-
-// Dashboard stats
-export async function getDashboardStats() {
-  try {
-    const today = formatDateForDatabase(new Date())
-    const weekStart = new Date()
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-    const weekStartStr = formatDateForDatabase(weekStart)
-
-    const monthStart = new Date()
-    monthStart.setDate(1)
-    const monthStartStr = formatDateForDatabase(monthStart)
-
-    // Today's bookings
-    const { count: todayBookings, error: todayError } = await supabaseAdmin
-      .from("bookings")
-      .select("*", { count: "exact", head: true })
-      .eq("booking_date", today)
-
-    if (todayError) {
-      console.error("Error fetching today's bookings:", todayError)
-    }
-
-    // Weekly bookings
-    const { count: weeklyBookings, error: weeklyError } = await supabaseAdmin
-      .from("bookings")
-      .select("*", { count: "exact", head: true })
-      .gte("booking_date", weekStartStr)
-
-    if (weeklyError) {
-      console.error("Error fetching weekly bookings:", weeklyError)
-    }
-
-    // Monthly revenue
-    const { data: monthlyData, error: monthlyError } = await supabaseAdmin
-      .from("bookings")
-      .select("amount")
-      .gte("booking_date", monthStartStr)
-      .neq("status", "cancelled")
-
-    if (monthlyError) {
-      console.error("Error fetching monthly revenue:", monthlyError)
-    }
-
-    const monthlyRevenue = monthlyData?.reduce((sum, booking) => sum + booking.amount, 0) || 0
-
-    // Pending bookings
-    const { count: pendingBookings, error: pendingError } = await supabaseAdmin
-      .from("bookings")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending")
-
-    if (pendingError) {
-      console.error("Error fetching pending bookings:", pendingError)
-    }
-
-    return {
-      todayBookings: todayBookings || 0,
-      weeklyBookings: weeklyBookings || 0,
-      monthlyRevenue,
-      pendingBookings: pendingBookings || 0,
-    }
-  } catch (error) {
-    console.error("Error in getDashboardStats:", error)
-    throw error
-  }
-}
-
-export { testConnection }
