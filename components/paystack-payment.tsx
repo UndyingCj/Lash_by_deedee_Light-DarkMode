@@ -72,7 +72,7 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
         },
         body: JSON.stringify({
           email: bookingData.customerEmail,
-          amount: convertToKobo(bookingData.depositAmount),
+          amount: bookingData.depositAmount, // <-- send NAIRA, not kobo
           reference,
           metadata: {
             customerName: bookingData.customerName,
