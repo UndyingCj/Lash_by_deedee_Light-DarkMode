@@ -1,7 +1,8 @@
-import { Body, Container, Head, Heading, Html, Preview, Section, Text } from "@react-email/components"
+import { Body, Container, Head, Heading, Html, Preview, Section, Text, Hr } from "@react-email/components"
 
 interface BookingConfirmationEmailProps {
   customerName: string
+  customerEmail: string
   services: string[]
   bookingDate: string
   bookingTime: string
@@ -25,40 +26,63 @@ export function BookingConfirmationEmail({
       <Preview>Your booking with Lashed by Deedee has been confirmed!</Preview>
       <Body style={main}>
         <Container style={container}>
-          <Heading style={h1}>Booking Confirmed!</Heading>
+          <Heading style={h1}>Booking Confirmed! ✨</Heading>
 
           <Text style={text}>Hi {customerName},</Text>
 
-          <Text style={text}>Thank you for booking with Lashed by Deedee! Your appointment has been confirmed.</Text>
+          <Text style={text}>
+            Thank you for booking with Lashed by Deedee! Your appointment has been confirmed and we can't wait to see
+            you.
+          </Text>
 
-          <Section style={section}>
+          <Section style={bookingDetails}>
             <Heading style={h2}>Booking Details</Heading>
-            <Text style={text}>
+
+            <Text style={detailText}>
               <strong>Services:</strong> {services.join(", ")}
             </Text>
-            <Text style={text}>
+
+            <Text style={detailText}>
               <strong>Date:</strong> {bookingDate}
             </Text>
-            <Text style={text}>
+
+            <Text style={detailText}>
               <strong>Time:</strong> {bookingTime}
             </Text>
-            <Text style={text}>
+
+            <Text style={detailText}>
               <strong>Total Amount:</strong> ₦{totalAmount.toLocaleString()}
             </Text>
-            <Text style={text}>
+
+            <Text style={detailText}>
               <strong>Deposit Paid:</strong> ₦{depositAmount.toLocaleString()}
             </Text>
-            <Text style={text}>
+
+            <Text style={detailText}>
               <strong>Payment Reference:</strong> {paymentReference}
             </Text>
           </Section>
 
-          <Text style={text}>
-            We look forward to seeing you! If you need to reschedule or have any questions, please contact us as soon as
-            possible.
-          </Text>
+          <Hr style={hr} />
+
+          <Section>
+            <Heading style={h2}>What to Expect</Heading>
+            <Text style={text}>• Please arrive 10 minutes before your appointment time</Text>
+            <Text style={text}>• Come with clean lashes (no makeup or mascara)</Text>
+            <Text style={text}>• Bring a valid ID for verification</Text>
+            <Text style={text}>• The remaining balance will be collected at the appointment</Text>
+          </Section>
+
+          <Hr style={hr} />
 
           <Text style={text}>
+            If you need to reschedule or have any questions, please contact us at least 24 hours before your
+            appointment.
+          </Text>
+
+          <Text style={text}>Looking forward to enhancing your natural beauty!</Text>
+
+          <Text style={signature}>
             Best regards,
             <br />
             Deedee
@@ -72,25 +96,20 @@ export function BookingConfirmationEmail({
 }
 
 const main = {
-  backgroundColor: "#ffffff",
-  fontFamily: "HelveticaNeue,Helvetica,Arial,sans-serif",
+  backgroundColor: "#f6f9fc",
+  fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Ubuntu,sans-serif',
 }
 
 const container = {
   backgroundColor: "#ffffff",
-  border: "1px solid #eee",
-  borderRadius: "5px",
-  boxShadow: "0 5px 10px rgba(20,50,70,.2)",
-  marginTop: "20px",
-  maxWidth: "360px",
   margin: "0 auto",
-  padding: "68px 0 130px",
+  padding: "20px 0 48px",
+  marginBottom: "64px",
 }
 
 const h1 = {
-  color: "#000",
-  fontFamily: "HelveticaNeue,Helvetica,Arial,sans-serif",
-  fontSize: "28px",
+  color: "#333",
+  fontSize: "24px",
   fontWeight: "bold",
   margin: "40px 0",
   padding: "0",
@@ -98,25 +117,43 @@ const h1 = {
 }
 
 const h2 = {
-  color: "#000",
-  fontFamily: "HelveticaNeue,Helvetica,Arial,sans-serif",
-  fontSize: "20px",
+  color: "#333",
+  fontSize: "18px",
   fontWeight: "bold",
-  margin: "20px 0 10px",
-  padding: "0",
+  margin: "30px 0 15px",
 }
 
 const text = {
-  color: "#000",
-  fontFamily: "HelveticaNeue,Helvetica,Arial,sans-serif",
-  fontSize: "14px",
+  color: "#333",
+  fontSize: "16px",
   lineHeight: "26px",
-  textAlign: "left" as const,
-  margin: "16px 40px",
+  margin: "16px 0",
 }
 
-const section = {
-  padding: "20px 40px",
+const detailText = {
+  color: "#333",
+  fontSize: "16px",
+  lineHeight: "24px",
+  margin: "8px 0",
+}
+
+const bookingDetails = {
+  backgroundColor: "#f8f9fa",
+  borderRadius: "8px",
+  padding: "20px",
+  margin: "20px 0",
+}
+
+const hr = {
+  borderColor: "#e6ebf1",
+  margin: "20px 0",
+}
+
+const signature = {
+  color: "#666",
+  fontSize: "16px",
+  lineHeight: "26px",
+  margin: "16px 0",
 }
 
 export default BookingConfirmationEmail

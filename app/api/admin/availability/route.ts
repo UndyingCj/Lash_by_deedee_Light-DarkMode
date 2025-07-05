@@ -5,7 +5,7 @@ export async function GET() {
   try {
     console.log("Fetching availability data...")
 
-    // Fetch all data with error handling for each
+    // Fetch all availability data with error handling
     let blockedDates: any[] = []
     let blockedTimeSlots: any[] = []
     let bookings: any[] = []
@@ -34,19 +34,38 @@ export async function GET() {
       // Continue with empty array
     }
 
-    return NextResponse.json({
-      blockedDates,
-      blockedTimeSlots,
-      bookings,
-    })
+    // Process the data to return availability information
+    const response = {
+      blockedDates: blockedDates.map((date) => ({
+        id: date.id,
+        date: date.blocked_date,
+        reason: date.reason,
+      })),
+      blockedTimeSlots: blockedTimeSlots.map((slot) => ({
+        id: slot.id,
+        date: slot.blocked_date,
+        time: slot.blocked_time,
+        reason: slot.reason,
+      })),
+      bookedSlots: bookings
+        .filter((booking) => booking.status !== "cancelled")
+        .map((booking) => ({
+          date: booking.booking_date,
+          time: booking.booking_time,
+          status: booking.status,
+        })),
+    }
+
+    console.log("Availability data processed successfully")
+    return NextResponse.json(response)
   } catch (error) {
-    console.error("Availability API error:", error)
+    console.error("Error in availability API:", error)
 
     // Return empty data instead of failing
     return NextResponse.json({
       blockedDates: [],
       blockedTimeSlots: [],
-      bookings: [],
+      bookedSlots: [],
       error: error instanceof Error ? error.message : "Unknown error",
     })
   }

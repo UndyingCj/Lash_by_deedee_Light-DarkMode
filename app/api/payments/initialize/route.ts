@@ -1,69 +1,71 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializePaystackPayment } from "@/lib/paystack"
+import { initializePayment, generatePaymentReference, validatePaymentAmount } from "@/lib/paystack"
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, amount, reference, metadata } = await request.json()
+    const body = await request.json()
+    const { email, amount, customerName, customerPhone, services, bookingDate, bookingTime, notes } = body
 
     // Validate required fields
-    if (!email || !amount || !reference) {
-      return NextResponse.json(
-        {
-          status: false,
-          message: "Email, amount, and reference are required",
-        },
-        { status: 400 },
-      )
+    if (!email || !amount || !customerName || !services || !bookingDate || !bookingTime) {
+      return NextResponse.json({ status: false, message: "Missing required fields" }, { status: 400 })
     }
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        {
-          status: false,
-          message: "Invalid email format",
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({ status: false, message: "Invalid email format" }, { status: 400 })
     }
 
     // Validate amount
-    if (typeof amount !== "number" || amount <= 0) {
-      return NextResponse.json(
-        {
-          status: false,
-          message: "Amount must be a positive number",
-        },
-        { status: 400 },
-      )
+    if (!validatePaymentAmount(amount)) {
+      return NextResponse.json({ status: false, message: "Invalid payment amount" }, { status: 400 })
     }
 
-    console.log("Initializing payment:", { email, amount, reference })
+    // Generate unique reference
+    const reference = generatePaymentReference()
+
+    // Prepare metadata
+    const metadata = {
+      customerName,
+      customerPhone,
+      services: Array.isArray(services) ? services : [services],
+      bookingDate,
+      bookingTime,
+      totalAmount: amount,
+      depositAmount: amount, // For now, deposit equals total amount
+      notes: notes || "",
+      bookingType: "lash_service",
+    }
+
+    console.log("Initializing payment:", { email, amount, reference, metadata })
 
     // Initialize payment with Paystack
-    const paymentData = await initializePaystackPayment({
+    const paymentResponse = await initializePayment({
       email,
       amount,
       reference,
       metadata,
     })
 
-    console.log("Payment initialized successfully:", paymentData.data?.reference)
+    if (!paymentResponse.status) {
+      console.error("Payment initialization failed:", paymentResponse.message)
+      return NextResponse.json({ status: false, message: paymentResponse.message }, { status: 400 })
+    }
+
+    console.log("Payment initialized successfully:", paymentResponse.data)
 
     return NextResponse.json({
       status: true,
       message: "Payment initialized successfully",
-      data: paymentData.data,
+      data: {
+        authorization_url: paymentResponse.data.authorization_url,
+        access_code: paymentResponse.data.access_code,
+        reference: paymentResponse.data.reference,
+      },
     })
   } catch (error) {
     console.error("Payment initialization error:", error)
-    return NextResponse.json(
-      {
-        status: false,
-        message: error instanceof Error ? error.message : "Failed to initialize payment",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ status: false, message: "Internal server error" }, { status: 500 })
   }
 }

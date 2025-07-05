@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      // Create booking in database with safe data handling
+      // Create booking in database with all required fields
       const bookingData = {
         client_name: String(metadata.customerName || ""),
         phone: String(metadata.customerPhone || ""),
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
       console.log("Creating booking with data:", bookingData)
 
-      // Validate required fields
+      // Validate required fields before creating booking
       if (
         !bookingData.client_name ||
         !bookingData.email ||
