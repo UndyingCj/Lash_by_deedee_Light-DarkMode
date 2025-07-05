@@ -43,34 +43,45 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      // Create booking in database
+      // Create booking in database with safe data handling
       const bookingData = {
-        client_name: metadata.customerName,
-        phone: metadata.customerPhone,
-        email: paymentData.data.customer.email,
-        service: Array.isArray(metadata.services) ? metadata.services.join(", ") : metadata.services,
-        booking_date: metadata.bookingDate,
-        booking_time: metadata.bookingTime,
+        client_name: String(metadata.customerName || ""),
+        phone: String(metadata.customerPhone || ""),
+        email: String(paymentData.data.customer?.email || ""),
+        service: Array.isArray(metadata.services) ? metadata.services.join(", ") : String(metadata.services || ""),
+        booking_date: String(metadata.bookingDate || ""),
+        booking_time: String(metadata.bookingTime || ""),
         status: "confirmed" as const,
-        amount: metadata.totalAmount || paymentData.data.amount / 100,
-        notes: `Payment Reference: ${reference} | Deposit Paid: ₦${(paymentData.data.amount / 100).toLocaleString()} | ${metadata.notes || ""}`,
+        amount: Number(metadata.totalAmount) || Math.floor(paymentData.data.amount / 100),
+        notes: `Payment Reference: ${reference} | Deposit Paid: ₦${Math.floor(paymentData.data.amount / 100).toLocaleString()}${metadata.notes ? ` | ${metadata.notes}` : ""}`,
       }
 
       console.log("Creating booking with data:", bookingData)
 
+      // Validate required fields
+      if (
+        !bookingData.client_name ||
+        !bookingData.email ||
+        !bookingData.service ||
+        !bookingData.booking_date ||
+        !bookingData.booking_time
+      ) {
+        throw new Error("Missing required booking data fields")
+      }
+
       const booking = await createBooking(bookingData)
       console.log("Booking created successfully:", booking.id)
 
-      // Send confirmation email
+      // Send confirmation email (don't fail if this fails)
       try {
         await sendBookingConfirmation({
           customerName: bookingData.client_name,
           customerEmail: bookingData.email,
-          services: Array.isArray(metadata.services) ? metadata.services : [metadata.services],
+          services: Array.isArray(metadata.services) ? metadata.services : [String(metadata.services)],
           bookingDate: bookingData.booking_date,
           bookingTime: bookingData.booking_time,
           totalAmount: bookingData.amount,
-          depositAmount: paymentData.data.amount / 100,
+          depositAmount: Math.floor(paymentData.data.amount / 100),
           paymentReference: reference,
         })
         console.log("Confirmation email sent successfully")
@@ -85,7 +96,7 @@ export async function POST(request: NextRequest) {
         data: {
           booking_id: booking.id,
           payment_reference: reference,
-          amount_paid: paymentData.data.amount / 100,
+          amount_paid: Math.floor(paymentData.data.amount / 100),
         },
       })
     } catch (bookingError) {

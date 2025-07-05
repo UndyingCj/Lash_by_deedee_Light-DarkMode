@@ -18,10 +18,10 @@ export interface Booking {
   booking_date: string
   booking_time: string
   status: "pending" | "confirmed" | "cancelled" | "completed"
-  amount: number
+  amount?: number
   notes?: string
   created_at: string
-  updated_at: string
+  updated_at?: string
 }
 
 export interface BlockedDate {
@@ -39,38 +39,49 @@ export interface BlockedTimeSlot {
   created_at: string
 }
 
-// ——— helpers to reconcile prod-db column names ———
-function mapBlockedDate(row: any) {
+// Helper functions to map database columns
+function mapBlockedDate(row: any): BlockedDate {
   return {
     ...row,
-    // tolerate either column name
     blocked_date: row.blocked_date ?? row.date,
-  } as BlockedDate
+  }
 }
 
-function mapBlockedSlot(row: any) {
+function mapBlockedSlot(row: any): BlockedTimeSlot {
   return {
     ...row,
     blocked_date: row.blocked_date ?? row.date,
     blocked_time: row.blocked_time ?? row.time,
-  } as BlockedTimeSlot
+  }
 }
 
 // Booking operations
 export async function createBooking(bookingData: Omit<Booking, "id" | "created_at" | "updated_at">): Promise<Booking> {
   console.log("Creating booking with data:", bookingData)
 
-  const { data, error } = await supabaseAdmin
-    .from("bookings")
-    .insert([
-      {
-        ...bookingData,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-    ])
-    .select()
-    .single()
+  // Prepare the data, excluding amount if it's undefined or null
+  const insertData: any = {
+    client_name: bookingData.client_name,
+    phone: bookingData.phone,
+    email: bookingData.email,
+    service: bookingData.service,
+    booking_date: bookingData.booking_date,
+    booking_time: bookingData.booking_time,
+    status: bookingData.status,
+    created_at: new Date().toISOString(),
+  }
+
+  // Only include amount if it's a valid number
+  if (typeof bookingData.amount === "number" && !isNaN(bookingData.amount)) {
+    insertData.amount = bookingData.amount
+  }
+
+  // Only include notes if provided
+  if (bookingData.notes) {
+    insertData.notes = bookingData.notes
+  }
+
+  const { data, error } = await supabaseAdmin.from("bookings").insert([insertData]).select().single()
 
   if (error) {
     console.error("Error creating booking:", error)
@@ -93,15 +104,16 @@ export async function getBookings(): Promise<Booking[]> {
 }
 
 export async function updateBooking(id: number, updates: Partial<Booking>): Promise<Booking> {
-  const { data, error } = await supabaseAdmin
-    .from("bookings")
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .select()
-    .single()
+  const updateData: any = { ...updates }
+
+  // Remove undefined values
+  Object.keys(updateData).forEach((key) => {
+    if (updateData[key] === undefined) {
+      delete updateData[key]
+    }
+  })
+
+  const { data, error } = await supabaseAdmin.from("bookings").update(updateData).eq("id", id).select().single()
 
   if (error) {
     console.error("Error updating booking:", error)
@@ -121,7 +133,6 @@ export async function deleteBooking(id: number): Promise<void> {
 }
 
 // Blocked dates operations
-// ── BLOCKED DATES ────────────────────────────────────────────────────────────
 export async function getBlockedDates(): Promise<BlockedDate[]> {
   const { data, error } = await supabaseAdmin.from("blocked_dates").select("*")
 
@@ -134,12 +145,7 @@ export async function getBlockedDates(): Promise<BlockedDate[]> {
 }
 
 export async function addBlockedDate(date: string, reason?: string): Promise<BlockedDate> {
-  const { data, error } = await supabaseAdmin
-    .from("blocked_dates")
-    // live DB uses "date" not "blocked_date"
-    .insert([{ date, reason }])
-    .select()
-    .single()
+  const { data, error } = await supabaseAdmin.from("blocked_dates").insert([{ date, reason }]).select().single()
 
   if (error) {
     console.error("Error adding blocked date:", error)
@@ -159,7 +165,6 @@ export async function removeBlockedDate(id: number): Promise<void> {
 }
 
 // Blocked time slots operations
-// ── BLOCKED TIME SLOTS ───────────────────────────────────────────────────────
 export async function getBlockedTimeSlots(): Promise<BlockedTimeSlot[]> {
   const { data, error } = await supabaseAdmin.from("blocked_time_slots").select("*")
 
@@ -174,7 +179,6 @@ export async function getBlockedTimeSlots(): Promise<BlockedTimeSlot[]> {
 export async function addBlockedTimeSlot(date: string, time: string, reason?: string): Promise<BlockedTimeSlot> {
   const { data, error } = await supabaseAdmin
     .from("blocked_time_slots")
-    // live DB uses "date" and "time"
     .insert([{ date, time, reason }])
     .select()
     .single()
