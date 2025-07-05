@@ -72,37 +72,30 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
         },
         body: JSON.stringify({
           email: bookingData.customerEmail,
-          amount: bookingData.depositAmount, // <-- send NAIRA, not kobo
-          reference,
-          metadata: {
-            customerName: bookingData.customerName,
-            customerPhone: bookingData.customerPhone,
-            services: bookingData.services,
-            bookingDate: bookingData.date,
-            bookingTime: bookingData.time,
-            totalAmount: bookingData.totalAmount,
-            depositAmount: bookingData.depositAmount,
-            notes: bookingData.notes,
-          },
+          amount: bookingData.depositAmount, // Send amount in naira
+          customerName: bookingData.customerName,
+          customerPhone: bookingData.customerPhone,
+          services: bookingData.services,
+          bookingDate: bookingData.date,
+          bookingTime: bookingData.time,
+          notes: bookingData.notes,
         }),
       })
 
-      if (!initResponse.ok) {
-        throw new Error("Failed to initialize payment")
-      }
-
       const initData = await initResponse.json()
 
-      if (!initData.status) {
+      if (!initResponse.ok || !initData.status) {
         throw new Error(initData.message || "Failed to initialize payment")
       }
+
+      console.log("Payment initialization successful:", initData)
 
       // Open Paystack popup
       const handler = window.PaystackPop.setup({
         key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
         email: bookingData.customerEmail,
-        amount: convertToKobo(bookingData.depositAmount),
-        reference: reference,
+        amount: convertToKobo(bookingData.depositAmount), // Convert to kobo for popup
+        reference: initData.data.reference,
         currency: "NGN",
         channels: ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
         metadata: {
@@ -115,7 +108,7 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
         callback: (response: any) => {
           console.log("Payment callback received:", response)
           // Always verify payment regardless of callback status
-          verifyPayment(response.reference || reference)
+          verifyPayment(response.reference || initData.data.reference)
         },
         onClose: () => {
           console.log("Payment popup closed")

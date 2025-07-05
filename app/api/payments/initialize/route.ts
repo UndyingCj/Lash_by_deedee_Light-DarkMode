@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializePayment, generatePaymentReference, validatePaymentAmount } from "@/lib/paystack"
+import { initializePaystackPayment, generatePaymentReference, convertToKobo } from "@/lib/paystack"
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,8 +17,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: false, message: "Invalid email format" }, { status: 400 })
     }
 
-    // Validate amount
-    if (!validatePaymentAmount(amount)) {
+    // Validate amount (should be positive)
+    if (typeof amount !== "number" || amount <= 0) {
       return NextResponse.json({ status: false, message: "Invalid payment amount" }, { status: 400 })
     }
 
@@ -38,12 +38,12 @@ export async function POST(request: NextRequest) {
       bookingType: "lash_service",
     }
 
-    console.log("Initializing payment:", { email, amount, reference, metadata })
+    console.log("Initializing payment:", { email, amount, reference })
 
-    // Initialize payment with Paystack
-    const paymentResponse = await initializePayment({
+    // Initialize payment with Paystack (convert to kobo here)
+    const paymentResponse = await initializePaystackPayment({
       email,
-      amount,
+      amount: convertToKobo(amount), // Convert naira to kobo for Paystack
       reference,
       metadata,
     })

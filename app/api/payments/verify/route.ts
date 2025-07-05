@@ -59,13 +59,7 @@ export async function POST(request: NextRequest) {
       console.log("Creating booking with data:", bookingData)
 
       // Validate required fields before creating booking
-      if (
-        !bookingData.client_name ||
-        !bookingData.email ||
-        !bookingData.service ||
-        !bookingData.booking_date ||
-        !bookingData.booking_time
-      ) {
+      if (!bookingData.client_name || !bookingData.service || !bookingData.booking_date || !bookingData.booking_time) {
         throw new Error("Missing required booking data fields")
       }
 
@@ -74,17 +68,19 @@ export async function POST(request: NextRequest) {
 
       // Send confirmation email (don't fail if this fails)
       try {
-        await sendBookingConfirmation({
-          customerName: bookingData.client_name,
-          customerEmail: bookingData.email,
-          services: Array.isArray(metadata.services) ? metadata.services : [String(metadata.services)],
-          bookingDate: bookingData.booking_date,
-          bookingTime: bookingData.booking_time,
-          totalAmount: bookingData.amount,
-          depositAmount: Math.floor(paymentData.data.amount / 100),
-          paymentReference: reference,
-        })
-        console.log("Confirmation email sent successfully")
+        if (bookingData.email) {
+          await sendBookingConfirmation({
+            customerName: bookingData.client_name,
+            customerEmail: bookingData.email,
+            services: Array.isArray(metadata.services) ? metadata.services : [String(metadata.services)],
+            bookingDate: bookingData.booking_date,
+            bookingTime: bookingData.booking_time,
+            totalAmount: bookingData.amount,
+            depositAmount: Math.floor(paymentData.data.amount / 100),
+            paymentReference: reference,
+          })
+          console.log("Confirmation email sent successfully")
+        }
       } catch (emailError) {
         console.error("Failed to send confirmation email:", emailError)
         // Don't fail the entire process if email fails
