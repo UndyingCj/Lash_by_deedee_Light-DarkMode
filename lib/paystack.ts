@@ -4,16 +4,18 @@
 const isServer = typeof window === "undefined"
 
 /**
- * Public key is safe to expose in the browser; if it isn’t set we fall back to an
- * empty string so that client bundles don’t crash at build time.
+ * Public key is safe to expose in the browser; using live keys for production
  */
-export const PAYSTACK_PUBLIC_KEY = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || ""
+export const PAYSTACK_PUBLIC_KEY =
+  process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || "pk_live_edddbd4959b95ee7d1eebe12b71b68f8ce5ff0a7"
 
 /**
  * Secret key must ONLY be accessed on the server.  It is therefore undefined in
  * the browser bundle to avoid leaking credentials or throwing errors there.
  */
-export const PAYSTACK_SECRET_KEY: string | undefined = isServer ? process.env.PAYSTACK_SECRET_KEY : undefined
+export const PAYSTACK_SECRET_KEY: string | undefined = isServer
+  ? process.env.PAYSTACK_SECRET_KEY || "sk_live_f3437bf92100d5b73c6aa72e78d7db300d9029bb"
+  : undefined
 
 // Validate the secret key strictly on the server.  Client bundles will skip this.
 if (isServer && !PAYSTACK_SECRET_KEY) {
