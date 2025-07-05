@@ -552,13 +552,40 @@ export default function BookingPage() {
   const handlePaymentSuccess = (reference: string) => {
     console.log("Payment successful:", reference)
     setShowPayment(false)
-    // Redirect to success page or show success message
-    alert("Payment successful! You will receive a confirmation email shortly.")
+
+    // Show success message with booking details
+    const successMessage = `🎉 Payment Successful! 
+
+Your booking has been confirmed with reference: ${reference}
+
+📧 You will receive a confirmation email shortly with all the details.
+
+📱 We'll also send you a WhatsApp message with your appointment details.
+
+Thank you for choosing Lashed by Deedee! ✨`
+
+    alert(successMessage)
+
+    // Reset form
+    setSelectedServices([])
+    setSelectedDate("")
+    setSelectedTime("")
+    setFormData({
+      name: "",
+      phone: "",
+      email: "",
+      notes: "",
+    })
+
+    // Refresh availability to show updated blocked slots
+    setTimeout(() => {
+      loadAvailability(true)
+    }, 1000)
   }
 
   const handlePaymentError = (error: string) => {
     console.error("Payment failed:", error)
-    alert("Payment failed. Please try again.")
+    alert(`Payment failed: ${error}`)
   }
 
   const handleWhatsAppBooking = () => {
@@ -995,7 +1022,7 @@ Please confirm this appointment and send payment instructions for the deposit. T
 
                   <Button
                     variant="outline"
-                    className="w-full border-pink-300 dark:border-pink-700 text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-900/20"
+                    className="w-full border-pink-300 dark:border-pink-700 text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-900/20 bg-transparent"
                     disabled={
                       selectedServices.length === 0 ||
                       !selectedDate ||
@@ -1033,7 +1060,7 @@ Please confirm this appointment and send payment instructions for the deposit. T
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full border-pink-300 dark:border-pink-700 text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-900/20"
+                    className="w-full border-pink-300 dark:border-pink-700 text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-900/20 bg-transparent"
                   >
                     WhatsApp Us
                   </Button>

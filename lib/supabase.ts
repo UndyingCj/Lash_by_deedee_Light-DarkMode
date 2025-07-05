@@ -1,24 +1,14 @@
 import { createClient } from "@supabase/supabase-js"
-import { supabaseAdmin } from "./supabase-admin"
 
-/* -------------------------------------------------------------------------- */
-/*  ENV & PUBLIC CLIENT (for browser code)                                    */
-/* -------------------------------------------------------------------------- */
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-if (!SUPABASE_URL) throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL")
-if (!SUPABASE_ANON_KEY) throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY")
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-/** Public client – use only in browser */
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-export function createClientSupabase() {
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-}
+// Admin client for server-side operations
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
 
-/* -------------------------------------------------------------------------- */
-/*  TYPES                                                                     */
-/* -------------------------------------------------------------------------- */
 export interface Booking {
   id: number
   client_name: string
@@ -27,11 +17,11 @@ export interface Booking {
   service: string
   booking_date: string
   booking_time: string
-  status: "pending" | "confirmed" | "completed" | "cancelled"
+  status: "pending" | "confirmed" | "cancelled" | "completed"
   amount: number
   notes?: string
   created_at: string
-  updated_at?: string
+  updated_at: string
 }
 
 export interface BlockedDate {
@@ -49,127 +39,170 @@ export interface BlockedTimeSlot {
   created_at: string
 }
 
-/* -------------------------------------------------------------------------- */
-/*  UTILITIES                                                                 */
-/* -------------------------------------------------------------------------- */
-const formatDateForDatabase = (input: string | Date) => {
-  try {
-    if (typeof input === "string") {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(input)) return input
-      if (input.includes("T")) return input.split("T")[0]
-      const [y, m, d] = input.split("-")
-      return `${y.padStart(4, "0")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`
-    }
-    const date = input as Date
-    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(
-      date.getUTCDate(),
-    ).padStart(2, "0")}`
-  } catch {
-    return String(input)
+// Booking operations
+export async function createBooking(bookingData: Omit<Booking, "id" | "created_at" | "updated_at">): Promise<Booking> {
+  const { data, error } = await supabaseAdmin.from("bookings").insert([bookingData]).select().single()
+
+  if (error) {
+    console.error("Error creating booking:", error)
+    throw new Error(`Failed to create booking: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function getBookings(): Promise<Booking[]> {
+  const { data, error } = await supabaseAdmin.from("bookings").select("*")
+
+  if (error) {
+    console.error("Error fetching bookings:", error)
+    throw new Error(`Failed to fetch bookings: ${error.message}`)
+  }
+
+  return data || []
+}
+
+export async function updateBooking(id: number, updates: Partial<Booking>): Promise<Booking> {
+  const { data, error } = await supabaseAdmin.from("bookings").update(updates).eq("id", id).select().single()
+
+  if (error) {
+    console.error("Error updating booking:", error)
+    throw new Error(`Failed to update booking: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function deleteBooking(id: number): Promise<void> {
+  const { error } = await supabaseAdmin.from("bookings").delete().eq("id", id)
+
+  if (error) {
+    console.error("Error deleting booking:", error)
+    throw new Error(`Failed to delete booking: ${error.message}`)
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/*  BOOKINGS                                                                  */
-/* -------------------------------------------------------------------------- */
-export async function getBookings(filters?: { status?: string; date?: string }) {
-  let q = supabaseAdmin.from("bookings").select("*")
-
-  if (filters?.status && filters.status !== "all") q = q.eq("status", filters.status)
-  if (filters?.date) q = q.eq("booking_date", formatDateForDatabase(filters.date))
-
-  q = q.order("booking_date", { ascending: false }).order("booking_time", { ascending: false })
-
-  const { data, error } = await q
-  if (error) throw error
-  return data as Booking[]
-}
-
-export async function createBooking(payload: Omit<Booking, "id" | "created_at" | "updated_at">) {
-  const { data, error } = await supabaseAdmin
-    .from("bookings")
-    .insert([{ ...payload, booking_date: formatDateForDatabase(payload.booking_date) }])
-    .select()
-    .single()
-  if (error) throw error
-  return data as Booking
-}
-
-/* -------------------------------------------------------------------------- */
-/*  AVAILABILITY – BLOCKED DATES                                              */
-/* -------------------------------------------------------------------------- */
-export async function getBlockedDates() {
+// Blocked dates operations
+export async function getBlockedDates(): Promise<BlockedDate[]> {
   const { data, error } = await supabaseAdmin.from("blocked_dates").select("*")
-  if (error) throw error
-  data?.sort((a, b) => (a.blocked_date ?? "").localeCompare(b.blocked_date ?? ""))
-  return (data ?? []).map((d) => ({
-    ...d,
-    blocked_date: formatDateForDatabase(d.blocked_date),
-  })) as BlockedDate[]
+
+  if (error) {
+    console.error("Error fetching blocked dates:", error)
+    throw new Error(`Failed to fetch blocked dates: ${error.message}`)
+  }
+
+  return data || []
 }
 
-export async function addBlockedDate(date: string, reason?: string) {
-  const formatted = formatDateForDatabase(date)
+export async function addBlockedDate(date: string, reason?: string): Promise<BlockedDate> {
   const { data, error } = await supabaseAdmin
     .from("blocked_dates")
-    .upsert([{ blocked_date: formatted, reason }], { onConflict: "blocked_date", ignoreDuplicates: false })
+    .insert([{ blocked_date: date, reason }])
     .select()
     .single()
-  if (error) throw error
-  return data as BlockedDate
+
+  if (error) {
+    console.error("Error adding blocked date:", error)
+    throw new Error(`Failed to add blocked date: ${error.message}`)
+  }
+
+  return data
 }
 
-export async function removeBlockedDate(date: string) {
-  const formatted = formatDateForDatabase(date)
-  const { data, error } = await supabaseAdmin
-    .from("blocked_dates")
-    .delete()
-    .eq("blocked_date", formatted)
-    .select()
-    .single()
-  if (error) throw error
-  return data as BlockedDate
+export async function removeBlockedDate(id: number): Promise<void> {
+  const { error } = await supabaseAdmin.from("blocked_dates").delete().eq("id", id)
+
+  if (error) {
+    console.error("Error removing blocked date:", error)
+    throw new Error(`Failed to remove blocked date: ${error.message}`)
+  }
 }
 
-/* -------------------------------------------------------------------------- */
-/*  AVAILABILITY – BLOCKED TIME-SLOTS                                         */
-/* -------------------------------------------------------------------------- */
-export async function getBlockedTimeSlots() {
+// Blocked time slots operations
+export async function getBlockedTimeSlots(): Promise<BlockedTimeSlot[]> {
   const { data, error } = await supabaseAdmin.from("blocked_time_slots").select("*")
-  if (error) throw error
-  data?.sort((a, b) => {
-    const d = (a.blocked_date ?? "").localeCompare(b.blocked_date ?? "")
-    return d !== 0 ? d : (a.blocked_time ?? "").localeCompare(b.blocked_time ?? "")
+
+  if (error) {
+    console.error("Error fetching blocked time slots:", error)
+    throw new Error(`Failed to fetch blocked time slots: ${error.message}`)
+  }
+
+  return data || []
+}
+
+export async function addBlockedTimeSlot(date: string, time: string, reason?: string): Promise<BlockedTimeSlot> {
+  const { data, error } = await supabaseAdmin
+    .from("blocked_time_slots")
+    .insert([{ blocked_date: date, blocked_time: time, reason }])
+    .select()
+    .single()
+
+  if (error) {
+    console.error("Error adding blocked time slot:", error)
+    throw new Error(`Failed to add blocked time slot: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function removeBlockedTimeSlot(id: number): Promise<void> {
+  const { error } = await supabaseAdmin.from("blocked_time_slots").delete().eq("id", id)
+
+  if (error) {
+    console.error("Error removing blocked time slot:", error)
+    throw new Error(`Failed to remove blocked time slot: ${error.message}`)
+  }
+}
+
+// Analytics and stats
+export async function getBookingStats() {
+  const { data: bookings, error } = await supabaseAdmin.from("bookings").select("*")
+
+  if (error) {
+    console.error("Error fetching booking stats:", error)
+    throw new Error(`Failed to fetch booking stats: ${error.message}`)
+  }
+
+  const total = bookings?.length || 0
+  const confirmed = bookings?.filter((b) => b.status === "confirmed").length || 0
+  const pending = bookings?.filter((b) => b.status === "pending").length || 0
+  const cancelled = bookings?.filter((b) => b.status === "cancelled").length || 0
+  const completed = bookings?.filter((b) => b.status === "completed").length || 0
+
+  const totalRevenue = bookings?.reduce((sum, booking) => sum + (booking.amount || 0), 0) || 0
+
+  return {
+    total,
+    confirmed,
+    pending,
+    cancelled,
+    completed,
+    totalRevenue,
+  }
+}
+
+// Client operations
+export async function getClients() {
+  const { data: bookings, error } = await supabaseAdmin.from("bookings").select("client_name, email, phone, created_at")
+
+  if (error) {
+    console.error("Error fetching clients:", error)
+    throw new Error(`Failed to fetch clients: ${error.message}`)
+  }
+
+  // Group by email to get unique clients
+  const clientMap = new Map()
+  bookings?.forEach((booking) => {
+    const key = booking.email || booking.phone
+    if (!clientMap.has(key)) {
+      clientMap.set(key, {
+        name: booking.client_name,
+        email: booking.email,
+        phone: booking.phone,
+        firstBooking: booking.created_at,
+      })
+    }
   })
-  return (data ?? []).map((d) => ({
-    ...d,
-    blocked_date: formatDateForDatabase(d.blocked_date),
-  })) as BlockedTimeSlot[]
-}
 
-export async function addBlockedTimeSlot(date: string, time: string, reason?: string) {
-  const formatted = formatDateForDatabase(date)
-  const { data, error } = await supabaseAdmin
-    .from("blocked_time_slots")
-    .upsert([{ blocked_date: formatted, blocked_time: time, reason }], {
-      onConflict: "blocked_date,blocked_time",
-      ignoreDuplicates: false,
-    })
-    .select()
-    .single()
-  if (error) throw error
-  return data as BlockedTimeSlot
-}
-
-export async function removeBlockedTimeSlot(date: string, time: string) {
-  const formatted = formatDateForDatabase(date)
-  const { data, error } = await supabaseAdmin
-    .from("blocked_time_slots")
-    .delete()
-    .eq("blocked_date", formatted)
-    .eq("blocked_time", time)
-    .select()
-    .single()
-  if (error) throw error
-  return data as BlockedTimeSlot
+  return Array.from(clientMap.values())
 }

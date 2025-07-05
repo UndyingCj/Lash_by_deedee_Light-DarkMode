@@ -113,8 +113,14 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
           bookingTime: bookingData.time,
         },
         callback: (response: any) => {
-          console.log("Payment successful:", response)
-          verifyPayment(response.reference)
+          console.log("Payment callback received:", response)
+          if (response.status === "success") {
+            verifyPayment(response.reference)
+          } else {
+            console.error("Payment callback failed:", response)
+            onError("Payment was not completed successfully. Please try again.")
+            setIsLoading(false)
+          }
         },
         onClose: () => {
           console.log("Payment popup closed")
@@ -132,6 +138,8 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
 
   const verifyPayment = async (reference: string) => {
     try {
+      console.log("Verifying payment with reference:", reference)
+
       const verifyResponse = await fetch("/api/payments/verify", {
         method: "POST",
         headers: {
@@ -141,15 +149,22 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
       })
 
       const verifyData = await verifyResponse.json()
+      console.log("Verification response:", verifyData)
 
-      if (verifyData.status && verifyData.data?.status === "success") {
+      if (verifyResponse.ok && verifyData.status) {
+        // Payment verification successful
+        console.log("Payment verified successfully")
         onSuccess(reference)
       } else {
-        onError("Payment verification failed. Please contact support.")
+        // Payment verification failed
+        console.error("Payment verification failed:", verifyData)
+        onError(
+          verifyData.message || "Payment verification failed. Please contact support with reference: " + reference,
+        )
       }
     } catch (error) {
       console.error("Payment verification error:", error)
-      onError("Failed to verify payment. Please contact support.")
+      onError("Failed to verify payment. Please contact support with reference: " + reference)
     } finally {
       setIsLoading(false)
     }
@@ -270,7 +285,7 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
             </Button>
 
             <div className="text-center">
-              <Button variant="outline" onClick={onClose} disabled={isLoading} className="text-gray-600">
+              <Button variant="outline" onClick={onClose} disabled={isLoading} className="text-gray-600 bg-transparent">
                 Cancel Payment
               </Button>
             </div>
