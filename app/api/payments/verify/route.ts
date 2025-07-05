@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     // Check if payment was successful
     if (paymentData.status !== "success") {
       return NextResponse.json(
-        { status: false, message: `Payment ${paymentData.status}. ${paymentData.gateway_response}` },
+        { status: false, message: `Payment ${paymentData.status}. ${paymentData.gateway_response || ""}` },
         { status: 400 },
       )
     }
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       const bookingData = {
         client_name: String(metadata.customerName || ""),
         phone: String(metadata.customerPhone || ""),
-        email: String(paymentData.customer?.email || metadata.customerEmail || ""),
+        email: String(paymentData.customer?.email || ""),
         service: Array.isArray(metadata.services) ? metadata.services.join(", ") : String(metadata.services || ""),
         booking_date: String(metadata.bookingDate || ""),
         booking_time: String(metadata.bookingTime || ""),

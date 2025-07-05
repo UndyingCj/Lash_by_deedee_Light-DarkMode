@@ -1,8 +1,7 @@
-import { Body, Container, Head, Heading, Html, Preview, Section, Text } from "@react-email/components"
+import { Body, Container, Head, Heading, Html, Preview, Section, Text, Hr } from "@react-email/components"
 
 interface BookingConfirmationEmailProps {
   customerName: string
-  customerEmail: string
   services: string[]
   date: string
   time: string
@@ -20,7 +19,12 @@ export default function BookingConfirmationEmail({
   depositAmount,
   paymentReference,
 }: BookingConfirmationEmailProps) {
-  const balanceDue = totalAmount - depositAmount
+  const formattedDate = new Date(date + "T12:00:00Z").toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  })
 
   return (
     <Html>
@@ -28,61 +32,60 @@ export default function BookingConfirmationEmail({
       <Preview>Your booking with Lashed by Deedee has been confirmed!</Preview>
       <Body style={main}>
         <Container style={container}>
-          <Heading style={h1}>Booking Confirmed! 💕</Heading>
+          <Heading style={h1}>Booking Confirmed! ✨</Heading>
 
           <Text style={text}>Hi {customerName},</Text>
 
           <Text style={text}>
             Thank you for booking with Lashed by Deedee! Your appointment has been confirmed and your deposit has been
-            received.
+            processed.
           </Text>
 
           <Section style={bookingDetails}>
             <Heading style={h2}>Booking Details</Heading>
-            <Text style={detail}>
+            <Text style={detailText}>
               <strong>Services:</strong> {services.join(", ")}
             </Text>
-            <Text style={detail}>
-              <strong>Date:</strong>{" "}
-              {new Date(date).toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
+            <Text style={detailText}>
+              <strong>Date:</strong> {formattedDate}
             </Text>
-            <Text style={detail}>
+            <Text style={detailText}>
               <strong>Time:</strong> {time}
             </Text>
-            <Text style={detail}>
-              <strong>Total Service Cost:</strong> ₦{totalAmount.toLocaleString()}
+            <Text style={detailText}>
+              <strong>Total Amount:</strong> ₦{totalAmount.toLocaleString()}
             </Text>
-            <Text style={detail}>
+            <Text style={detailText}>
               <strong>Deposit Paid:</strong> ₦{depositAmount.toLocaleString()}
             </Text>
-            <Text style={detail}>
-              <strong>Balance Due at Appointment:</strong> ₦{balanceDue.toLocaleString()}
+            <Text style={detailText}>
+              <strong>Balance Due:</strong> ₦{(totalAmount - depositAmount).toLocaleString()}
             </Text>
-            <Text style={detail}>
+            <Text style={detailText}>
               <strong>Payment Reference:</strong> {paymentReference}
             </Text>
           </Section>
 
-          <Section style={importantInfo}>
-            <Heading style={h3}>Important Information</Heading>
-            <Text style={text}>• Please arrive 10 minutes before your appointment time</Text>
-            <Text style={text}>• Bring the remaining balance of ₦{balanceDue.toLocaleString()} in cash</Text>
-            <Text style={text}>• If you need to reschedule, please contact us at least 24 hours in advance</Text>
+          <Hr style={hr} />
+
+          <Section>
+            <Heading style={h2}>Important Reminders</Heading>
+            <Text style={text}>• Please arrive on time for your appointment</Text>
+            <Text style={text}>• Avoid wearing makeup to ensure the best results</Text>
+            <Text style={text}>• The remaining balance is due at your appointment</Text>
+            <Text style={text}>• Contact us if you need to reschedule (24 hours notice required)</Text>
           </Section>
 
-          <Text style={text}>We're excited to see you soon! If you have any questions, feel free to reach out.</Text>
+          <Hr style={hr} />
 
-          <Text style={signature}>
+          <Text style={text}>
+            If you have any questions, please don't hesitate to contact us via WhatsApp or email.
+          </Text>
+
+          <Text style={footer}>
             Best regards,
             <br />
-            Deedee
-            <br />
-            Lashed by Deedee
+            The Lashed by Deedee Team
           </Text>
         </Container>
       </Body>
@@ -124,53 +127,39 @@ const h2 = {
   margin: "20px 0 10px",
 }
 
-const h3 = {
-  color: "#333",
-  fontFamily: "HelveticaNeue-Medium,Helvetica,Arial,sans-serif",
-  fontSize: "16px",
-  fontWeight: "500",
-  lineHeight: "1.3",
-  margin: "20px 0 10px",
-}
-
 const text = {
   color: "#333",
   fontFamily: "HelveticaNeue,Helvetica,Arial,sans-serif",
   fontSize: "14px",
   lineHeight: "1.4",
-  margin: "16px 0",
-  padding: "0 40px",
+  margin: "16px 68px",
+}
+
+const detailText = {
+  color: "#333",
+  fontFamily: "HelveticaNeue,Helvetica,Arial,sans-serif",
+  fontSize: "14px",
+  lineHeight: "1.4",
+  margin: "8px 68px",
 }
 
 const bookingDetails = {
   backgroundColor: "#f9f9f9",
   border: "1px solid #eee",
   borderRadius: "5px",
-  margin: "20px 40px",
+  margin: "20px 68px",
   padding: "20px",
 }
 
-const importantInfo = {
-  backgroundColor: "#fff3cd",
-  border: "1px solid #ffeaa7",
-  borderRadius: "5px",
-  margin: "20px 40px",
-  padding: "20px",
+const hr = {
+  borderColor: "#cccccc",
+  margin: "20px 0",
 }
 
-const detail = {
-  color: "#333",
+const footer = {
+  color: "#8898aa",
   fontFamily: "HelveticaNeue,Helvetica,Arial,sans-serif",
-  fontSize: "14px",
+  fontSize: "12px",
   lineHeight: "1.4",
-  margin: "8px 0",
-}
-
-const signature = {
-  color: "#333",
-  fontFamily: "HelveticaNeue,Helvetica,Arial,sans-serif",
-  fontSize: "14px",
-  lineHeight: "1.4",
-  margin: "30px 0 16px",
-  padding: "0 40px",
+  margin: "16px 68px",
 }

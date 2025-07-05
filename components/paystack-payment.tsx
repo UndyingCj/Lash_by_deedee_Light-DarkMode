@@ -114,13 +114,8 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
         },
         callback: (response: any) => {
           console.log("Payment callback received:", response)
-          if (response.status === "success") {
-            verifyPayment(response.reference)
-          } else {
-            console.error("Payment callback failed:", response)
-            onError("Payment was not completed successfully. Please try again.")
-            setIsLoading(false)
-          }
+          // Always verify payment regardless of callback status
+          verifyPayment(response.reference || reference)
         },
         onClose: () => {
           console.log("Payment popup closed")
@@ -151,7 +146,7 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
       const verifyData = await verifyResponse.json()
       console.log("Verification response:", verifyData)
 
-      if (verifyResponse.ok && verifyData.status) {
+      if (verifyData.status === true) {
         // Payment verification successful
         console.log("Payment verified successfully")
         onSuccess(reference)

@@ -3,7 +3,7 @@ import BookingConfirmationEmail from "@/components/emails/booking-confirmation"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-export interface BookingEmailData {
+interface BookingDetails {
   customerName: string
   customerEmail: string
   services: string[]
@@ -14,13 +14,13 @@ export interface BookingEmailData {
   paymentReference: string
 }
 
-export async function sendBookingConfirmation(data: BookingEmailData) {
+export async function sendBookingConfirmation(bookingDetails: BookingDetails) {
   try {
-    const { data: emailData, error } = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: "Lashed by Deedee <bookings@lashedbydeedee.com>",
-      to: [data.customerEmail],
+      to: [bookingDetails.customerEmail],
       subject: "Booking Confirmation - Lashed by Deedee",
-      react: BookingConfirmationEmail(data),
+      react: BookingConfirmationEmail(bookingDetails),
     })
 
     if (error) {
@@ -28,30 +28,30 @@ export async function sendBookingConfirmation(data: BookingEmailData) {
       return { success: false, error }
     }
 
-    console.log("Email sent successfully:", emailData)
-    return { success: true, data: emailData }
+    console.log("Email sent successfully:", data)
+    return { success: true, data }
   } catch (error) {
-    console.error("Email sending failed:", error)
+    console.error("Email sending exception:", error)
     return { success: false, error }
   }
 }
 
-export async function sendBookingNotificationToAdmin(data: BookingEmailData) {
+export async function sendBookingNotificationToAdmin(bookingDetails: BookingDetails) {
   try {
-    const { data: emailData, error } = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: "Lashed by Deedee <bookings@lashedbydeedee.com>",
       to: ["admin@lashedbydeedee.com"],
-      subject: `New Booking: ${data.customerName} - ${data.date}`,
+      subject: `New Booking: ${bookingDetails.customerName}`,
       html: `
         <h2>New Booking Received</h2>
-        <p><strong>Customer:</strong> ${data.customerName}</p>
-        <p><strong>Email:</strong> ${data.customerEmail}</p>
-        <p><strong>Services:</strong> ${data.services.join(", ")}</p>
-        <p><strong>Date:</strong> ${data.date}</p>
-        <p><strong>Time:</strong> ${data.time}</p>
-        <p><strong>Total Amount:</strong> ₦${data.totalAmount.toLocaleString()}</p>
-        <p><strong>Deposit Paid:</strong> ₦${data.depositAmount.toLocaleString()}</p>
-        <p><strong>Payment Reference:</strong> ${data.paymentReference}</p>
+        <p><strong>Customer:</strong> ${bookingDetails.customerName}</p>
+        <p><strong>Email:</strong> ${bookingDetails.customerEmail}</p>
+        <p><strong>Services:</strong> ${bookingDetails.services.join(", ")}</p>
+        <p><strong>Date:</strong> ${bookingDetails.date}</p>
+        <p><strong>Time:</strong> ${bookingDetails.time}</p>
+        <p><strong>Total Amount:</strong> ₦${bookingDetails.totalAmount.toLocaleString()}</p>
+        <p><strong>Deposit Paid:</strong> ₦${bookingDetails.depositAmount.toLocaleString()}</p>
+        <p><strong>Payment Reference:</strong> ${bookingDetails.paymentReference}</p>
       `,
     })
 
@@ -60,10 +60,10 @@ export async function sendBookingNotificationToAdmin(data: BookingEmailData) {
       return { success: false, error }
     }
 
-    console.log("Admin email sent successfully:", emailData)
-    return { success: true, data: emailData }
+    console.log("Admin email sent successfully:", data)
+    return { success: true, data }
   } catch (error) {
-    console.error("Admin email sending failed:", error)
+    console.error("Admin email sending exception:", error)
     return { success: false, error }
   }
 }
