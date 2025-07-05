@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
-import { supabaseAdmin, testConnection } from "./supabase-admin"
+import { testConnection } from "./supabase-admin"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -19,6 +19,9 @@ if (!supabaseAnonKey) {
 
 // Client-side Supabase client (public operations only)
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+// Admin client for server-side operations
+export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
 
 // Client-side hook for browser usage
 export function createClientSupabase() {
