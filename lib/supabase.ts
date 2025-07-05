@@ -177,7 +177,7 @@ export async function getBlockedDates() {
   try {
     console.log("🔍 Fetching blocked dates from database...")
 
-    const { data, error } = await supabaseAdmin.from("blocked_dates").select("*").order("blocked_date")
+    const { data, error } = await supabaseAdmin.from("blocked_dates").select("*") // <- removed .order("blocked_date")
 
     if (error) {
       console.error("❌ Supabase error in getBlockedDates:", error)
@@ -185,6 +185,14 @@ export async function getBlockedDates() {
     }
 
     console.log("📊 Raw blocked dates from DB:", data)
+
+    // Sort results by date (if the field exists) to keep UI predictable
+    data?.sort((a, b) => {
+      if (a.blocked_date && b.blocked_date) {
+        return a.blocked_date.localeCompare(b.blocked_date)
+      }
+      return 0
+    })
 
     // Process dates to ensure consistent format
     const processedData = (data || []).map((item) => ({
@@ -257,11 +265,7 @@ export async function getBlockedTimeSlots() {
   try {
     console.log("🔍 Fetching blocked time slots from database...")
 
-    const { data, error } = await supabaseAdmin
-      .from("blocked_time_slots")
-      .select("*")
-      .order("blocked_date")
-      .order("blocked_time")
+    const { data, error } = await supabaseAdmin.from("blocked_time_slots").select("*") // <- removed .order("blocked_date").order("blocked_time")
 
     if (error) {
       console.error("❌ Supabase error in getBlockedTimeSlots:", error)
@@ -269,6 +273,13 @@ export async function getBlockedTimeSlots() {
     }
 
     console.log("📊 Raw blocked time slots from DB:", data)
+
+    // Sort first by date, then by time (if fields exist)
+    data?.sort((a, b) => {
+      const dateComp = a.blocked_date?.localeCompare(b.blocked_date ?? "") ?? 0
+      if (dateComp !== 0) return dateComp
+      return (a.blocked_time ?? "").localeCompare(b.blocked_time ?? "")
+    })
 
     // Process dates to ensure consistent format
     const processedData = (data || []).map((item) => ({
