@@ -3,67 +3,64 @@ import BookingConfirmationEmail from "@/components/emails/booking-confirmation"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-interface BookingDetails {
+export interface BookingEmailData {
   customerName: string
   customerEmail: string
   services: string[]
-  date: string
-  time: string
+  bookingDate: string
+  bookingTime: string
   totalAmount: number
   depositAmount: number
   paymentReference: string
 }
 
-export async function sendBookingConfirmation(bookingDetails: BookingDetails) {
+export async function sendBookingConfirmation(data: BookingEmailData) {
   try {
-    const { data, error } = await resend.emails.send({
+    console.log("Sending booking confirmation email to:", data.customerEmail)
+
+    const { data: emailResult, error } = await resend.emails.send({
       from: "Lashed by Deedee <bookings@lashedbydeedee.com>",
-      to: [bookingDetails.customerEmail],
+      to: [data.customerEmail],
       subject: "Booking Confirmation - Lashed by Deedee",
-      react: BookingConfirmationEmail(bookingDetails),
+      react: BookingConfirmationEmail(data),
     })
 
     if (error) {
-      console.error("Email sending error:", error)
-      return { success: false, error }
+      console.error("Failed to send booking confirmation email:", error)
+      throw new Error(`Failed to send email: ${error.message}`)
     }
 
-    console.log("Email sent successfully:", data)
-    return { success: true, data }
+    console.log("Booking confirmation email sent successfully:", emailResult?.id)
+    return emailResult
   } catch (error) {
-    console.error("Email sending exception:", error)
-    return { success: false, error }
+    console.error("Error sending booking confirmation email:", error)
+    throw error
   }
 }
 
-export async function sendBookingNotificationToAdmin(bookingDetails: BookingDetails) {
+export async function sendBookingReminder(data: BookingEmailData) {
   try {
-    const { data, error } = await resend.emails.send({
+    console.log("Sending booking reminder email to:", data.customerEmail)
+
+    const { data: emailResult, error } = await resend.emails.send({
       from: "Lashed by Deedee <bookings@lashedbydeedee.com>",
-      to: ["admin@lashedbydeedee.com"],
-      subject: `New Booking: ${bookingDetails.customerName}`,
-      html: `
-        <h2>New Booking Received</h2>
-        <p><strong>Customer:</strong> ${bookingDetails.customerName}</p>
-        <p><strong>Email:</strong> ${bookingDetails.customerEmail}</p>
-        <p><strong>Services:</strong> ${bookingDetails.services.join(", ")}</p>
-        <p><strong>Date:</strong> ${bookingDetails.date}</p>
-        <p><strong>Time:</strong> ${bookingDetails.time}</p>
-        <p><strong>Total Amount:</strong> ₦${bookingDetails.totalAmount.toLocaleString()}</p>
-        <p><strong>Deposit Paid:</strong> ₦${bookingDetails.depositAmount.toLocaleString()}</p>
-        <p><strong>Payment Reference:</strong> ${bookingDetails.paymentReference}</p>
-      `,
+      to: [data.customerEmail],
+      subject: "Booking Reminder - Lashed by Deedee",
+      react: BookingConfirmationEmail({
+        ...data,
+        isReminder: true,
+      }),
     })
 
     if (error) {
-      console.error("Admin email sending error:", error)
-      return { success: false, error }
+      console.error("Failed to send booking reminder email:", error)
+      throw new Error(`Failed to send reminder email: ${error.message}`)
     }
 
-    console.log("Admin email sent successfully:", data)
-    return { success: true, data }
+    console.log("Booking reminder email sent successfully:", emailResult?.id)
+    return emailResult
   } catch (error) {
-    console.error("Admin email sending exception:", error)
-    return { success: false, error }
+    console.error("Error sending booking reminder email:", error)
+    throw error
   }
 }

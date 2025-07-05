@@ -39,20 +39,50 @@ export interface BlockedTimeSlot {
   created_at: string
 }
 
+// ——— helpers to reconcile prod-db column names ———
+function mapBlockedDate(row: any) {
+  return {
+    ...row,
+    // tolerate either column name
+    blocked_date: row.blocked_date ?? row.date,
+  } as BlockedDate
+}
+
+function mapBlockedSlot(row: any) {
+  return {
+    ...row,
+    blocked_date: row.blocked_date ?? row.date,
+    blocked_time: row.blocked_time ?? row.time,
+  } as BlockedTimeSlot
+}
+
 // Booking operations
 export async function createBooking(bookingData: Omit<Booking, "id" | "created_at" | "updated_at">): Promise<Booking> {
-  const { data, error } = await supabaseAdmin.from("bookings").insert([bookingData]).select().single()
+  console.log("Creating booking with data:", bookingData)
+
+  const { data, error } = await supabaseAdmin
+    .from("bookings")
+    .insert([
+      {
+        ...bookingData,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ])
+    .select()
+    .single()
 
   if (error) {
     console.error("Error creating booking:", error)
     throw new Error(`Failed to create booking: ${error.message}`)
   }
 
+  console.log("Booking created successfully:", data)
   return data
 }
 
 export async function getBookings(): Promise<Booking[]> {
-  const { data, error } = await supabaseAdmin.from("bookings").select("*")
+  const { data, error } = await supabaseAdmin.from("bookings").select("*").order("created_at", { ascending: false })
 
   if (error) {
     console.error("Error fetching bookings:", error)
@@ -63,7 +93,15 @@ export async function getBookings(): Promise<Booking[]> {
 }
 
 export async function updateBooking(id: number, updates: Partial<Booking>): Promise<Booking> {
-  const { data, error } = await supabaseAdmin.from("bookings").update(updates).eq("id", id).select().single()
+  const { data, error } = await supabaseAdmin
+    .from("bookings")
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .single()
 
   if (error) {
     console.error("Error updating booking:", error)
@@ -83,6 +121,7 @@ export async function deleteBooking(id: number): Promise<void> {
 }
 
 // Blocked dates operations
+// ── BLOCKED DATES ────────────────────────────────────────────────────────────
 export async function getBlockedDates(): Promise<BlockedDate[]> {
   const { data, error } = await supabaseAdmin.from("blocked_dates").select("*")
 
@@ -91,13 +130,14 @@ export async function getBlockedDates(): Promise<BlockedDate[]> {
     throw new Error(`Failed to fetch blocked dates: ${error.message}`)
   }
 
-  return data || []
+  return (data || []).map(mapBlockedDate)
 }
 
 export async function addBlockedDate(date: string, reason?: string): Promise<BlockedDate> {
   const { data, error } = await supabaseAdmin
     .from("blocked_dates")
-    .insert([{ blocked_date: date, reason }])
+    // live DB uses "date" not "blocked_date"
+    .insert([{ date, reason }])
     .select()
     .single()
 
@@ -106,7 +146,7 @@ export async function addBlockedDate(date: string, reason?: string): Promise<Blo
     throw new Error(`Failed to add blocked date: ${error.message}`)
   }
 
-  return data
+  return mapBlockedDate(data)
 }
 
 export async function removeBlockedDate(id: number): Promise<void> {
@@ -119,6 +159,7 @@ export async function removeBlockedDate(id: number): Promise<void> {
 }
 
 // Blocked time slots operations
+// ── BLOCKED TIME SLOTS ───────────────────────────────────────────────────────
 export async function getBlockedTimeSlots(): Promise<BlockedTimeSlot[]> {
   const { data, error } = await supabaseAdmin.from("blocked_time_slots").select("*")
 
@@ -127,13 +168,14 @@ export async function getBlockedTimeSlots(): Promise<BlockedTimeSlot[]> {
     throw new Error(`Failed to fetch blocked time slots: ${error.message}`)
   }
 
-  return data || []
+  return (data || []).map(mapBlockedSlot)
 }
 
 export async function addBlockedTimeSlot(date: string, time: string, reason?: string): Promise<BlockedTimeSlot> {
   const { data, error } = await supabaseAdmin
     .from("blocked_time_slots")
-    .insert([{ blocked_date: date, blocked_time: time, reason }])
+    // live DB uses "date" and "time"
+    .insert([{ date, time, reason }])
     .select()
     .single()
 
@@ -142,7 +184,7 @@ export async function addBlockedTimeSlot(date: string, time: string, reason?: st
     throw new Error(`Failed to add blocked time slot: ${error.message}`)
   }
 
-  return data
+  return mapBlockedSlot(data)
 }
 
 export async function removeBlockedTimeSlot(id: number): Promise<void> {
