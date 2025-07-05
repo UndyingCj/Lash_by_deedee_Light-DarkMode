@@ -22,19 +22,22 @@ export const supabaseAdmin: SupabaseClient | undefined =
     : undefined
 
 /* ----------------------------------------------------------
- *  Data types
+ *  Data types matching the actual database schema
  * -------------------------------------------------------- */
 export interface Booking {
-  id: number
+  id: string // UUID in database
   client_name: string
-  phone: string
-  email?: string // email & amount are optional in case the
-  service: string // column is missing until a migration runs
+  phone: string // Renamed from client_phone
+  email?: string // Renamed from client_email
+  service: string // Renamed from service_name
   booking_date: string
   booking_time: string
   status: "pending" | "confirmed" | "cancelled" | "completed"
-  amount?: number
-  notes?: string
+  amount?: number // Renamed from total_amount
+  deposit_amount?: number
+  payment_status?: string
+  payment_reference?: string
+  notes?: string // Renamed from special_notes
   created_at: string
   updated_at?: string
 }
@@ -86,29 +89,41 @@ function requireAdmin() {
 export async function createBooking(bookingData: Omit<Booking, "id" | "created_at" | "updated_at">): Promise<Booking> {
   requireAdmin()
 
+  console.log("📝 Creating booking with data:", bookingData)
+
   const { data, error } = await supabaseAdmin!
     .from("bookings")
     .insert([
       {
         ...bookingData,
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       },
     ])
     .select()
     .single()
 
   if (error) {
-    console.error("Error creating booking:", error)
+    console.error("❌ Error creating booking:", error)
     throw new Error(`Failed to create booking: ${error.message}`)
   }
 
+  console.log("✅ Booking created successfully:", data.id)
   return data
 }
 
-export async function updateBooking(id: number, updates: Partial<Booking>): Promise<Booking> {
+export async function updateBooking(id: string, updates: Partial<Booking>): Promise<Booking> {
   requireAdmin()
 
-  const { data, error } = await supabaseAdmin!.from("bookings").update(updates).eq("id", id).select().single()
+  const { data, error } = await supabaseAdmin!
+    .from("bookings")
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .single()
 
   if (error) {
     console.error("Error updating booking:", error)
@@ -118,7 +133,7 @@ export async function updateBooking(id: number, updates: Partial<Booking>): Prom
   return data
 }
 
-export async function deleteBooking(id: number): Promise<void> {
+export async function deleteBooking(id: string): Promise<void> {
   requireAdmin()
 
   const { error } = await supabaseAdmin!.from("bookings").delete().eq("id", id)

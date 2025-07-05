@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { X, CreditCard, Smartphone, QrCode, Building2, Shield, CheckCircle } from "lucide-react"
-import { generatePaymentReference, convertToKobo } from "@/lib/paystack"
+import { X, CreditCard, Shield, AlertCircle } from "lucide-react"
 
 interface PaystackPaymentProps {
   bookingData: {
@@ -25,110 +24,124 @@ interface PaystackPaymentProps {
 
 declare global {
   interface Window {
-    PaystackPop: any
+    PaystackPop: {
+      setup: (options: any) => {
+        openIframe: () => void
+      }
+    }
   }
 }
 
 export default function PaystackPayment({ bookingData, onSuccess, onError, onClose }: PaystackPaymentProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const [paymentReference, setPaymentReference] = useState<string>("")
-  const [scriptLoaded, setScriptLoaded] = useState(false)
+  const [paymentData, setPaymentData] = useState<any>(null)
+  const [error, setError] = useState<string | null>(null)
 
   // Load Paystack script
   useEffect(() => {
     const script = document.createElement("script")
     script.src = "https://js.paystack.co/v1/inline.js"
     script.async = true
-    script.onload = () => setScriptLoaded(true)
-    script.onerror = () => {
-      console.error("Failed to load Paystack script")
-      onError("Failed to load payment system. Please try again.")
-    }
     document.body.appendChild(script)
 
     return () => {
-      if (document.body.contains(script)) {
-        document.body.removeChild(script)
-      }
+      document.body.removeChild(script)
     }
-  }, [onError])
+  }, [])
 
-  const handlePayment = async () => {
-    if (!scriptLoaded) {
-      onError("Payment system is still loading. Please try again.")
-      return
-    }
+  // Initialize payment when component mounts
+  useEffect(() => {
+    initializePayment()
+  }, [])
 
-    setIsLoading(true)
-    const reference = generatePaymentReference()
-    setPaymentReference(reference)
-
+  const initializePayment = async () => {
     try {
-      // Initialize payment on our backend
-      const initResponse = await fetch("/api/payments/initialize", {
+      setIsLoading(true)
+      setError(null)
+
+      console.log("🚀 Initializing payment for:", bookingData.customerName)
+
+      const response = await fetch("/api/payments/initialize", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          email: bookingData.customerEmail,
-          amount: bookingData.depositAmount, // Send amount in naira
+          customerName: bookingData.customerName,
+          customerEmail: bookingData.customerEmail,
+          customerPhone: bookingData.customerPhone,
+          services: bookingData.services,
+          bookingDate: bookingData.date,
+          bookingTime: bookingData.time,
+          totalAmount: bookingData.totalAmount,
+          depositAmount: bookingData.depositAmount,
+          notes: bookingData.notes,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!result.status) {
+        throw new Error(result.message || "Payment initialization failed")
+      }
+
+      console.log("✅ Payment initialized:", result.data.reference)
+      setPaymentData(result.data)
+    } catch (error) {
+      console.error("❌ Payment initialization error:", error)
+      const errorMessage = error instanceof Error ? error.message : "Payment initialization failed"
+      setError(errorMessage)
+      onError(errorMessage)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handlePayment = () => {
+    if (!paymentData || !window.PaystackPop) {
+      setError("Payment system not ready. Please try again.")
+      return
+    }
+
+    try {
+      console.log("💳 Opening Paystack payment modal")
+
+      const handler = window.PaystackPop.setup({
+        key: paymentData.public_key || process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
+        email: bookingData.customerEmail,
+        amount: paymentData.amount,
+        currency: "NGN",
+        ref: paymentData.reference,
+        metadata: {
           customerName: bookingData.customerName,
           customerPhone: bookingData.customerPhone,
           services: bookingData.services,
           bookingDate: bookingData.date,
           bookingTime: bookingData.time,
-          notes: bookingData.notes,
-        }),
-      })
-
-      const initData = await initResponse.json()
-
-      if (!initResponse.ok || !initData.status) {
-        throw new Error(initData.message || "Failed to initialize payment")
-      }
-
-      console.log("Payment initialization successful:", initData)
-
-      // Open Paystack popup
-      const handler = window.PaystackPop.setup({
-        key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
-        email: bookingData.customerEmail,
-        amount: convertToKobo(bookingData.depositAmount), // Convert to kobo for popup
-        reference: initData.data.reference,
-        currency: "NGN",
-        channels: ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
-        metadata: {
-          customerName: bookingData.customerName,
-          customerPhone: bookingData.customerPhone,
-          services: bookingData.services.join(", "),
-          bookingDate: bookingData.date,
-          bookingTime: bookingData.time,
         },
-        callback: (response: any) => {
-          console.log("Payment callback received:", response)
-          // Always verify payment regardless of callback status
-          verifyPayment(response.reference || initData.data.reference)
+        callback: async (response: any) => {
+          console.log("💰 Payment callback:", response)
+          await verifyPayment(response.reference)
         },
         onClose: () => {
-          console.log("Payment popup closed")
-          setIsLoading(false)
+          console.log("❌ Payment modal closed")
+          setError("Payment was cancelled")
         },
       })
 
       handler.openIframe()
     } catch (error) {
-      console.error("Payment initialization error:", error)
-      onError(error instanceof Error ? error.message : "Failed to start payment process")
-      setIsLoading(false)
+      console.error("❌ Payment modal error:", error)
+      setError("Failed to open payment modal")
     }
   }
 
   const verifyPayment = async (reference: string) => {
     try {
-      console.log("Verifying payment with reference:", reference)
+      setIsLoading(true)
+      console.log("🔍 Verifying payment:", reference)
 
-      const verifyResponse = await fetch("/api/payments/verify", {
+      const response = await fetch("/api/payments/verify", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -136,157 +149,107 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
         body: JSON.stringify({ reference }),
       })
 
-      const verifyData = await verifyResponse.json()
-      console.log("Verification response:", verifyData)
+      const result = await response.json()
 
-      if (verifyData.status === true) {
-        // Payment verification successful
-        console.log("Payment verified successfully")
-        onSuccess(reference)
-      } else {
-        // Payment verification failed
-        console.error("Payment verification failed:", verifyData)
-        onError(
-          verifyData.message || "Payment verification failed. Please contact support with reference: " + reference,
-        )
+      if (!result.status) {
+        throw new Error(result.message || "Payment verification failed")
       }
+
+      console.log("✅ Payment verified successfully")
+      onSuccess(reference)
     } catch (error) {
-      console.error("Payment verification error:", error)
-      onError("Failed to verify payment. Please contact support with reference: " + reference)
+      console.error("❌ Payment verification error:", error)
+      const errorMessage = error instanceof Error ? error.message : "Payment verification failed"
+      setError(errorMessage)
+      onError(errorMessage)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const paymentMethods = [
-    { icon: CreditCard, name: "Debit/Credit Cards", desc: "Visa, Mastercard, Verve" },
-    { icon: Building2, name: "Bank Transfer", desc: "Direct bank transfer" },
-    { icon: Smartphone, name: "USSD", desc: "Dial *737# or bank codes" },
-    { icon: Smartphone, name: "Mobile Money", desc: "MTN, Airtel, 9mobile" },
-    { icon: QrCode, name: "QR Code", desc: "Scan to pay" },
-  ]
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <CardHeader className="relative">
-          <button
-            onClick={onClose}
-            className="absolute right-4 top-4 p-2 hover:bg-gray-100 rounded-full transition-colors"
-            disabled={isLoading}
-          >
-            <X className="w-5 h-5" />
-          </button>
-          <CardTitle className="text-2xl text-center text-gray-800 pr-12">Secure Payment with Paystack</CardTitle>
-          <div className="flex items-center justify-center space-x-2 text-sm text-gray-600">
-            <Shield className="w-4 h-4 text-green-600" />
-            <span>256-bit SSL encrypted • PCI DSS compliant</span>
-          </div>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-md bg-white dark:bg-gray-800">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-xl text-gray-800 dark:text-gray-100 flex items-center space-x-2">
+            <CreditCard className="w-5 h-5 text-pink-500" />
+            <span>Secure Payment</span>
+          </CardTitle>
+          <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
+            <X className="w-4 h-4" />
+          </Button>
         </CardHeader>
-
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           {/* Booking Summary */}
-          <div className="bg-pink-50 dark:bg-pink-900/20 rounded-lg p-4 border border-pink-200 dark:border-pink-800">
-            <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-3">Booking Summary</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-300">Client:</span>
-                <span className="font-medium">{bookingData.customerName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-300">Services:</span>
-                <span className="font-medium text-right">{bookingData.services.join(", ")}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-300">Date & Time:</span>
-                <span className="font-medium">
-                  {new Date(bookingData.date + "T12:00:00Z").toLocaleDateString("en-US", {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                  })}{" "}
-                  at {bookingData.time}
-                </span>
-              </div>
-              <div className="border-t border-pink-200 dark:border-pink-700 pt-2 mt-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-300">Total Service Cost:</span>
-                  <span className="font-medium">₦{bookingData.totalAmount.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-lg font-bold text-pink-600 dark:text-pink-400">
-                  <span>Deposit Required (50%):</span>
-                  <span>₦{bookingData.depositAmount.toLocaleString()}</span>
-                </div>
-              </div>
+          <div className="p-4 bg-pink-50 dark:bg-pink-900/20 rounded-lg border dark:border-pink-800">
+            <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">Booking Summary</h4>
+            <div className="space-y-1 text-sm text-gray-600 dark:text-gray-300">
+              <p>
+                <strong>Customer:</strong> {bookingData.customerName}
+              </p>
+              <p>
+                <strong>Services:</strong> {bookingData.services.join(", ")}
+              </p>
+              <p>
+                <strong>Date:</strong> {new Date(bookingData.date + "T12:00:00Z").toLocaleDateString()}
+              </p>
+              <p>
+                <strong>Time:</strong> {bookingData.time}
+              </p>
+              <p>
+                <strong>Total Amount:</strong> ₦{bookingData.totalAmount.toLocaleString()}
+              </p>
+              <p className="text-lg font-bold text-pink-600 dark:text-pink-400">
+                <strong>Deposit (50%):</strong> ₦{bookingData.depositAmount.toLocaleString()}
+              </p>
             </div>
           </div>
 
-          {/* Payment Methods */}
-          <div>
-            <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-3">Supported Payment Methods</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {paymentMethods.map((method, index) => (
-                <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <method.icon className="w-5 h-5 text-green-600" />
-                  <div>
-                    <div className="font-medium text-sm">{method.name}</div>
-                    <div className="text-xs text-gray-500">{method.desc}</div>
-                  </div>
-                  <CheckCircle className="w-4 h-4 text-green-600 ml-auto" />
-                </div>
-              ))}
+          {/* Security Notice */}
+          <div className="flex items-start space-x-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border dark:border-green-800">
+            <Shield className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-green-700 dark:text-green-300">
+              <p className="font-medium">Secure Payment</p>
+              <p>Your payment is processed securely by Paystack. We never store your card details.</p>
             </div>
           </div>
 
-          {/* Security Features */}
-          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-            <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-2 flex items-center">
-              <Shield className="w-4 h-4 mr-2" />
-              Security Features
-            </h4>
-            <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
-              <li>• Bank-level 256-bit SSL encryption</li>
-              <li>• PCI DSS compliant payment processing</li>
-              <li>• Real-time fraud detection</li>
-              <li>• Secure tokenization of card details</li>
-            </ul>
-          </div>
+          {/* Error Message */}
+          {error && (
+            <div className="flex items-start space-x-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border dark:border-red-800">
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-red-700 dark:text-red-300">
+                <p className="font-medium">Payment Error</p>
+                <p>{error}</p>
+              </div>
+            </div>
+          )}
 
           {/* Payment Button */}
-          <div className="space-y-4">
+          <Button
+            onClick={handlePayment}
+            disabled={isLoading || !paymentData || !!error}
+            className="w-full bg-green-600 hover:bg-green-700 text-white"
+            size="lg"
+          >
+            {isLoading ? "Processing..." : `Pay ₦${bookingData.depositAmount.toLocaleString()} Now`}
+          </Button>
+
+          {/* Retry Button */}
+          {error && (
             <Button
-              onClick={handlePayment}
-              disabled={isLoading || !scriptLoaded}
-              className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-lg font-semibold"
+              onClick={initializePayment}
+              variant="outline"
+              className="w-full bg-transparent"
+              disabled={isLoading}
             >
-              {isLoading ? (
-                <div className="flex items-center space-x-2">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  <span>Processing...</span>
-                </div>
-              ) : (
-                <div className="flex items-center space-x-2">
-                  <CreditCard className="w-5 h-5" />
-                  <span>Pay ₦{bookingData.depositAmount.toLocaleString()} Deposit</span>
-                </div>
-              )}
+              {isLoading ? "Retrying..." : "Retry Payment"}
             </Button>
+          )}
 
-            <div className="text-center">
-              <Button variant="outline" onClick={onClose} disabled={isLoading} className="text-gray-600 bg-transparent">
-                Cancel Payment
-              </Button>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="text-center text-xs text-gray-500 space-y-1">
-            <p>Powered by Paystack • Trusted by 200,000+ businesses</p>
-            <p>Your payment information is secure and encrypted</p>
-            {paymentReference && (
-              <p className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">Reference: {paymentReference}</p>
-            )}
-          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+            By proceeding, you agree to our booking policies and terms of service.
+          </p>
         </CardContent>
       </Card>
     </div>
