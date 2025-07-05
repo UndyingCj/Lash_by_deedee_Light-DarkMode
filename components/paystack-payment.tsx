@@ -64,6 +64,8 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
     setPaymentReference(reference)
 
     try {
+      console.log("🚀 Starting payment process with reference:", reference)
+
       // Initialize payment on our backend
       const initResponse = await fetch("/api/payments/initialize", {
         method: "POST",
@@ -88,7 +90,8 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
       })
 
       if (!initResponse.ok) {
-        throw new Error("Failed to initialize payment")
+        const errorData = await initResponse.json()
+        throw new Error(errorData.message || "Failed to initialize payment")
       }
 
       const initData = await initResponse.json()
@@ -97,9 +100,11 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
         throw new Error(initData.message || "Failed to initialize payment")
       }
 
+      console.log("✅ Payment initialized successfully")
+
       // Open Paystack popup
       const handler = window.PaystackPop.setup({
-        key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
+        key: "pk_live_edddbd4959b95ee7d1eebe12b71b68f8ce5ff0a7", // Use live key directly
         email: bookingData.customerEmail,
         amount: convertToKobo(bookingData.depositAmount),
         reference: reference,
@@ -113,18 +118,24 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
           bookingTime: bookingData.time,
         },
         callback: (response: any) => {
-          console.log("Payment successful:", response)
-          verifyPayment(response.reference)
+          console.log("💳 Payment callback received:", response)
+          if (response.status === "success") {
+            verifyPayment(response.reference)
+          } else {
+            console.error("❌ Payment callback failed:", response)
+            onError("Payment was not completed successfully. Please try again.")
+            setIsLoading(false)
+          }
         },
         onClose: () => {
-          console.log("Payment popup closed")
+          console.log("🚪 Payment popup closed")
           setIsLoading(false)
         },
       })
 
       handler.openIframe()
     } catch (error) {
-      console.error("Payment initialization error:", error)
+      console.error("❌ Payment initialization error:", error)
       onError(error instanceof Error ? error.message : "Failed to start payment process")
       setIsLoading(false)
     }
@@ -132,6 +143,8 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
 
   const verifyPayment = async (reference: string) => {
     try {
+      console.log("🔍 Verifying payment:", reference)
+
       const verifyResponse = await fetch("/api/payments/verify", {
         method: "POST",
         headers: {
@@ -141,14 +154,17 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
       })
 
       const verifyData = await verifyResponse.json()
+      console.log("📋 Verification response:", verifyData)
 
-      if (verifyData.status && verifyData.data?.status === "success") {
+      if (verifyData.success && verifyData.status) {
+        console.log("✅ Payment verification successful")
         onSuccess(reference)
       } else {
-        onError("Payment verification failed. Please contact support.")
+        console.error("❌ Payment verification failed:", verifyData.message)
+        onError(verifyData.message || "Payment verification failed. Please contact support.")
       }
     } catch (error) {
-      console.error("Payment verification error:", error)
+      console.error("❌ Payment verification error:", error)
       onError("Failed to verify payment. Please contact support.")
     } finally {
       setIsLoading(false)
@@ -270,7 +286,7 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
             </Button>
 
             <div className="text-center">
-              <Button variant="outline" onClick={onClose} disabled={isLoading} className="text-gray-600">
+              <Button variant="outline" onClick={onClose} disabled={isLoading} className="text-gray-600 bg-transparent">
                 Cancel Payment
               </Button>
             </div>

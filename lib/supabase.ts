@@ -25,21 +25,23 @@ export function createClientSupabase() {
   return createClient(supabaseUrl, supabaseAnonKey)
 }
 
+// Booking interface
 export interface Booking {
-  id: number
+  id?: number
   client_name: string
   phone: string
   email: string
   service: string
   booking_date: string
   booking_time: string
-  status: "pending" | "confirmed" | "completed" | "cancelled"
+  status: string
   amount: number
   notes?: string
-  created_at: string
+  created_at?: string
   updated_at?: string
 }
 
+// BlockedDate interface
 export interface BlockedDate {
   id: number
   blocked_date: string
@@ -47,6 +49,7 @@ export interface BlockedDate {
   created_at: string
 }
 
+// BlockedTimeSlot interface
 export interface BlockedTimeSlot {
   id: number
   blocked_date: string
@@ -95,99 +98,74 @@ const formatDateForDatabase = (dateInput: string | Date): string => {
 }
 
 // Booking operations
-export async function getBookings(filters?: { status?: string; date?: string }) {
-  try {
-    let query = supabaseAdmin.from("bookings").select("*")
+export async function createBooking(bookingData: Omit<Booking, "id" | "created_at" | "updated_at">): Promise<Booking> {
+  const { data, error } = await supabase
+    .from("bookings")
+    .insert([
+      {
+        ...bookingData,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ])
+    .select()
+    .single()
 
-    if (filters?.status && filters.status !== "all") {
-      query = query.eq("status", filters.status)
-    }
-
-    if (filters?.date) {
-      const formattedDate = formatDateForDatabase(filters.date)
-      query = query.eq("booking_date", formattedDate)
-    }
-
-    query = query.order("booking_date", { ascending: false }).order("booking_time", { ascending: false })
-
-    const { data, error } = await query
-
-    if (error) {
-      console.error("Supabase error in getBookings:", error)
-      throw new Error(`Database error: ${error.message}`)
-    }
-
-    return data as Booking[]
-  } catch (error) {
-    console.error("Error in getBookings:", error)
-    throw error
+  if (error) {
+    console.error("Error creating booking:", error)
+    throw new Error(`Failed to create booking: ${error.message}`)
   }
+
+  return data
 }
 
-export async function createBooking(booking: Omit<Booking, "id" | "created_at" | "updated_at">) {
-  try {
-    console.log("Creating booking with data:", booking)
+export async function getBookings(): Promise<Booking[]> {
+  const { data, error } = await supabase.from("bookings").select("*").order("created_at", { ascending: false })
 
-    // Ensure date is in correct format
-    const formattedBooking = {
-      ...booking,
-      booking_date: formatDateForDatabase(booking.booking_date),
-    }
-
-    const { data, error } = await supabaseAdmin.from("bookings").insert([formattedBooking]).select().single()
-
-    if (error) {
-      console.error("Supabase error in createBooking:", error)
-      throw new Error(`Database error: ${error.message}`)
-    }
-
-    console.log("Successfully created booking:", data)
-    return data as Booking
-  } catch (error) {
-    console.error("Error in createBooking:", error)
-    throw error
+  if (error) {
+    console.error("Error fetching bookings:", error)
+    throw new Error(`Failed to fetch bookings: ${error.message}`)
   }
+
+  return data || []
 }
 
-export async function updateBooking(id: number, updates: Partial<Booking>) {
-  try {
-    const formattedUpdates = { ...updates }
-    if (updates.booking_date) {
-      formattedUpdates.booking_date = formatDateForDatabase(updates.booking_date)
-    }
+export async function getBookingById(id: number): Promise<Booking | null> {
+  const { data, error } = await supabase.from("bookings").select("*").eq("id", id).single()
 
-    const { data, error } = await supabaseAdmin
-      .from("bookings")
-      .update({ ...formattedUpdates, updated_at: new Date().toISOString() })
-      .eq("id", id)
-      .select()
-      .single()
-
-    if (error) {
-      console.error("Supabase error in updateBooking:", error)
-      throw new Error(`Database error: ${error.message}`)
-    }
-
-    return data as Booking
-  } catch (error) {
-    console.error("Error in updateBooking:", error)
-    throw error
+  if (error) {
+    console.error("Error fetching booking:", error)
+    return null
   }
+
+  return data
 }
 
-export async function deleteBooking(id: number) {
-  try {
-    const { data, error } = await supabaseAdmin.from("bookings").delete().eq("id", id).select().single()
+export async function updateBooking(id: number, updates: Partial<Booking>): Promise<Booking> {
+  const { data, error } = await supabase
+    .from("bookings")
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .single()
 
-    if (error) {
-      console.error("Supabase error in deleteBooking:", error)
-      throw new Error(`Database error: ${error.message}`)
-    }
+  if (error) {
+    console.error("Error updating booking:", error)
+    throw new Error(`Failed to update booking: ${error.message}`)
+  }
 
-    return data as Booking
-  } catch (error) {
-    console.error("Error in deleteBooking:", error)
-    throw error
+  return data
+}
+
+export async function deleteBooking(id: number): Promise<void> {
+  const { error } = await supabase.from("bookings").delete().eq("id", id)
+
+  if (error) {
+    console.error("Error deleting booking:", error)
+    throw new Error(`Failed to delete booking: ${error.message}`)
   }
 }
 

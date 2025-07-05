@@ -1,13 +1,9 @@
-export async function sendBookingConfirmationEmail({
-  customerName,
-  customerEmail,
-  services,
-  date,
-  time,
-  totalAmount,
-  depositAmount,
-  paymentReference,
-}: {
+import { Resend } from "resend"
+import BookingConfirmationEmail from "@/components/emails/booking-confirmation"
+
+const resend = new Resend(process.env.RESEND_API_KEY)
+
+interface BookingConfirmationData {
   customerName: string
   customerEmail: string
   services: string[]
@@ -15,40 +11,27 @@ export async function sendBookingConfirmationEmail({
   time: string
   totalAmount: number
   depositAmount: number
-  paymentReference?: string
-}) {
-  try {
-    const emailHtml = await render(
-      BookingConfirmationEmail({
-        customerName,
-        services,
-        date,
-        time,
-        totalAmount,
-        depositAmount,
-        paymentReference,
-      }),
-    )
+  paymentReference: string
+}
 
-    const { data, error } = await resend.emails.send({
+export async function sendBookingConfirmationEmail(data: BookingConfirmationData) {
+  try {
+    const { data: emailData, error } = await resend.emails.send({
       from: "Lashed by Deedee <bookings@lashedbydeedee.com>",
-      to: [customerEmail],
-      subject: `Booking Confirmed - ${new Date(date).toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-      })} at ${time}`,
-      html: emailHtml,
+      to: [data.customerEmail],
+      subject: "Booking Confirmation - Lashed by Deedee",
+      react: BookingConfirmationEmail(data),
     })
 
     if (error) {
-      console.error("Failed to send confirmation email:", error)
-      throw new Error(`Email sending failed: ${error.message}`)
+      console.error("Error sending confirmation email:", error)
+      throw new Error(`Failed to send confirmation email: ${error.message}`)
     }
 
-    console.log("Confirmation email sent successfully:", data?.id)
-    return data
+    console.log("Confirmation email sent successfully:", emailData?.id)
+    return emailData
   } catch (error) {
-    console.error("Error sending confirmation email:", error)
+    console.error("Error in sendBookingConfirmationEmail:", error)
     throw error
   }
 }
