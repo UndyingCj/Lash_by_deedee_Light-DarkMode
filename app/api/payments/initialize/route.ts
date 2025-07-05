@@ -1,10 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializePayment, type PaystackPaymentData } from "@/lib/paystack"
+import { initializePayment } from "@/lib/paystack"
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { email, amount, reference, metadata } = body
+
+    console.log("🚀 Payment initialization request:", {
+      email,
+      amount,
+      reference,
+      metadata: metadata ? "Present" : "Missing",
+    })
 
     // Validate required fields
     if (!email || !amount || !reference) {
@@ -21,48 +28,39 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate amount (should be positive and in kobo)
-    if (typeof amount !== "number" || amount <= 0) {
-      return NextResponse.json(
-        { status: false, message: "Invalid amount. Amount must be a positive number in kobo." },
-        { status: 400 },
-      )
+    if (amount <= 0) {
+      return NextResponse.json({ status: false, message: "Amount must be greater than 0" }, { status: 400 })
     }
 
-    const paymentData: PaystackPaymentData = {
+    const paymentData = {
       email,
       amount,
       reference,
       currency: "NGN",
       channels: ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
       metadata,
+      callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/payments/callback`,
     }
 
-    console.log("Initializing payment with data:", {
-      email,
-      amount,
-      reference,
-      metadata: metadata ? "present" : "not provided",
+    console.log("📤 Sending to Paystack:", paymentData)
+
+    const result = await initializePayment(paymentData)
+
+    console.log("✅ Paystack response:", {
+      status: result.status,
+      message: result.message,
+      hasData: !!result.data,
     })
 
-    const response = await initializePayment(paymentData)
-
-    if (!response.status) {
-      console.error("Paystack initialization failed:", response.message)
-      return NextResponse.json(
-        { status: false, message: response.message || "Failed to initialize payment" },
-        { status: 400 },
-      )
-    }
-
-    console.log("Payment initialized successfully:", response.data?.reference)
-
-    return NextResponse.json({
-      status: true,
-      message: "Payment initialized successfully",
-      data: response.data,
-    })
+    return NextResponse.json(result)
   } catch (error) {
-    console.error("Payment initialization error:", error)
-    return NextResponse.json({ status: false, message: "Internal server error" }, { status: 500 })
+    console.error("💥 Payment initialization error:", error)
+    return NextResponse.json(
+      {
+        status: false,
+        message: error instanceof Error ? error.message : "Failed to initialize payment",
+      },
+      { status: 500 },
+    )
   }
 }
