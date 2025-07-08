@@ -4,7 +4,19 @@ import { createClient } from "@supabase/supabase-js"
 // ─────────────────────────────────────────────
 // Server-side Supabase client (service-role key)
 // ─────────────────────────────────────────────
-const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+function createSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    console.error("❌ Missing Supabase environment variables")
+    console.error("SUPABASE_URL:", supabaseUrl ? "✅ Set" : "❌ Missing")
+    console.error("SUPABASE_SERVICE_ROLE_KEY:", supabaseKey ? "✅ Set" : "❌ Missing")
+    throw new Error("Supabase configuration missing")
+  }
+
+  return createClient(supabaseUrl, supabaseKey)
+}
 
 /**
  * GET /api/admin/availability
@@ -14,6 +26,7 @@ const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SE
  */
 export async function GET(req: NextRequest) {
   try {
+    const supabase = createSupabaseClient()
     const { searchParams } = new URL(req.url)
     const dateParam = searchParams.get("date")?.trim()
 

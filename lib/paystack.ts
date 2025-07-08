@@ -4,18 +4,15 @@ const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY
 const PAYSTACK_PUBLIC_KEY = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY
 
 export interface PaystackInitializeData {
-  email: string
-  amount: number // Amount in kobo (multiply by 100)
-  reference: string
-  callback_url?: string
-  metadata?: {
-    customer_name: string
-    customer_phone: string
-    services: string[]
-    booking_date: string
-    booking_time: string
-    [key: string]: any
-  }
+  customerName: string
+  customerEmail: string
+  customerPhone: string
+  services: string[]
+  bookingDate: string
+  bookingTime: string
+  totalAmount: number
+  depositAmount: number
+  notes?: string
 }
 
 export interface PaystackResponse {
@@ -24,11 +21,31 @@ export interface PaystackResponse {
   data?: any
 }
 
-export async function initializePayment(paymentData: PaystackInitializeData): Promise<PaystackResponse> {
+export async function initializePaystackPayment(paymentData: PaystackInitializeData): Promise<PaystackResponse> {
   try {
     if (!PAYSTACK_SECRET_KEY) {
       console.error("❌ PAYSTACK_SECRET_KEY not found")
       return { status: false, message: "Payment service not configured" }
+    }
+
+    const reference = `LBD_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
+
+    const paystackData = {
+      email: paymentData.customerEmail,
+      amount: Math.round(paymentData.depositAmount * 100), // Convert to kobo
+      reference: reference,
+      callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/payment/callback`,
+      metadata: {
+        customerName: paymentData.customerName,
+        customerEmail: paymentData.customerEmail,
+        customerPhone: paymentData.customerPhone,
+        services: paymentData.services,
+        bookingDate: paymentData.bookingDate,
+        bookingTime: paymentData.bookingTime,
+        totalAmount: paymentData.totalAmount.toString(),
+        depositAmount: paymentData.depositAmount.toString(),
+        notes: paymentData.notes || "",
+      },
     }
 
     const response = await fetch("https://api.paystack.co/transaction/initialize", {
@@ -37,7 +54,7 @@ export async function initializePayment(paymentData: PaystackInitializeData): Pr
         Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(paymentData),
+      body: JSON.stringify(paystackData),
     })
 
     const result = await response.json()
@@ -58,7 +75,7 @@ export async function initializePayment(paymentData: PaystackInitializeData): Pr
   }
 }
 
-export async function verifyPayment(reference: string): Promise<PaystackResponse> {
+export async function verifyPaystackPayment(reference: string): Promise<PaystackResponse> {
   try {
     if (!PAYSTACK_SECRET_KEY) {
       console.error("❌ PAYSTACK_SECRET_KEY not found")

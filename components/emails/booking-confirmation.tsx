@@ -7,7 +7,7 @@ interface BookingConfirmationEmailProps {
   bookingTime: string
   totalAmount: number
   depositAmount: number
-  paymentReference: string
+  paymentReference?: string
 }
 
 export default function BookingConfirmationEmail({
@@ -115,22 +115,24 @@ export default function BookingConfirmationEmail({
                 </Column>
               </Row>
 
-              <Row>
-                <Column style={{ width: "30%", padding: "8px 0", color: "#6b7280", fontWeight: "500" }}>
-                  Reference:
-                </Column>
-                <Column
-                  style={{
-                    width: "70%",
-                    padding: "8px 0",
-                    color: "#1f2937",
-                    fontFamily: "monospace",
-                    fontSize: "14px",
-                  }}
-                >
-                  {paymentReference}
-                </Column>
-              </Row>
+              {paymentReference && (
+                <Row>
+                  <Column style={{ width: "30%", padding: "8px 0", color: "#6b7280", fontWeight: "500" }}>
+                    Reference:
+                  </Column>
+                  <Column
+                    style={{
+                      width: "70%",
+                      padding: "8px 0",
+                      color: "#1f2937",
+                      fontFamily: "monospace",
+                      fontSize: "14px",
+                    }}
+                  >
+                    {paymentReference}
+                  </Column>
+                </Row>
+              )}
             </Section>
 
             {/* Important Reminders */}
@@ -181,3 +183,6 @@ export default function BookingConfirmationEmail({
     </Html>
   )
 }
+
+// Named export for compatibility
+export { BookingConfirmationEmail }

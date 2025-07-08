@@ -11,6 +11,7 @@ export interface BookingEmailDetails {
   time: string
   totalAmount: number
   depositAmount: number
+  paymentReference?: string
 }
 
 export async function sendBookingConfirmation(bookingDetails: BookingEmailDetails) {
@@ -27,10 +28,11 @@ export async function sendBookingConfirmation(bookingDetails: BookingEmailDetail
       react: BookingConfirmationEmail({
         customerName: bookingDetails.customerName,
         services: bookingDetails.services,
-        date: bookingDetails.date,
-        time: bookingDetails.time,
+        bookingDate: bookingDetails.date,
+        bookingTime: bookingDetails.time,
         totalAmount: bookingDetails.totalAmount,
         depositAmount: bookingDetails.depositAmount,
+        paymentReference: bookingDetails.paymentReference,
       }),
     })
 
@@ -45,6 +47,11 @@ export async function sendBookingConfirmation(bookingDetails: BookingEmailDetail
     console.error("❌ Failed to send customer confirmation email:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
+}
+
+export async function sendBookingConfirmationEmail(bookingDetails: BookingEmailDetails) {
+  // Alias for compatibility
+  return sendBookingConfirmation(bookingDetails)
 }
 
 export async function sendBookingNotificationToAdmin(bookingDetails: BookingEmailDetails) {
@@ -67,6 +74,7 @@ export async function sendBookingNotificationToAdmin(bookingDetails: BookingEmai
         <p><strong>Time:</strong> ${bookingDetails.time}</p>
         <p><strong>Total Amount:</strong> ₦${bookingDetails.totalAmount.toLocaleString()}</p>
         <p><strong>Deposit Amount:</strong> ₦${bookingDetails.depositAmount.toLocaleString()}</p>
+        ${bookingDetails.paymentReference ? `<p><strong>Payment Reference:</strong> ${bookingDetails.paymentReference}</p>` : ""}
       `,
     })
 
