@@ -1,165 +1,196 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Bell } from "lucide-react"
+import { Bell, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
 interface Notification {
   id: string
+  type: "booking" | "payment" | "cancellation"
   title: string
   message: string
-  type: "booking" | "payment" | "system"
-  timestamp: Date
+  timestamp: string
   read: boolean
 }
 
-export function NotificationBell() {
+export default function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [showDropdown, setShowDropdown] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
-    // Mock notifications - replace with actual API call
-    const mockNotifications: Notification[] = [
-      {
-        id: "1",
-        title: "New Booking",
-        message: "Sarah Johnson booked a Classic Lash appointment",
-        type: "booking",
-        timestamp: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
-        read: false,
-      },
-      {
-        id: "2",
-        title: "Payment Received",
-        message: "Payment of ₦15,000 received for booking #1234",
-        type: "payment",
-        timestamp: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
-        read: false,
-      },
-      {
-        id: "3",
-        title: "System Update",
-        message: "Your booking system has been updated successfully",
-        type: "system",
-        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-        read: true,
-      },
-    ]
+    // Load notifications from localStorage or API
+    loadNotifications()
 
-    setNotifications(mockNotifications)
-    setUnreadCount(mockNotifications.filter((n) => !n.read).length)
+    // Set up polling for new notifications
+    const interval = setInterval(loadNotifications, 30000) // Check every 30 seconds
+
+    return () => clearInterval(interval)
   }, [])
 
+  useEffect(() => {
+    const unread = notifications.filter((n) => !n.read).length
+    setUnreadCount(unread)
+  }, [notifications])
+
+  const loadNotifications = async () => {
+    try {
+      // In a real app, this would fetch from an API
+      // For now, we'll use localStorage as a simple example
+      const stored = localStorage.getItem("admin-notifications")
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        setNotifications(parsed)
+      }
+    } catch (error) {
+      console.error("Error loading notifications:", error)
+    }
+  }
+
   const markAsRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((notification) => (notification.id === id ? { ...notification, read: true } : notification)),
-    )
-    setUnreadCount((prev) => Math.max(0, prev - 1))
+    setNotifications((prev) => {
+      const updated = prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+      localStorage.setItem("admin-notifications", JSON.stringify(updated))
+      return updated
+    })
   }
 
   const markAllAsRead = () => {
-    setNotifications((prev) => prev.map((notification) => ({ ...notification, read: true })))
-    setUnreadCount(0)
+    setNotifications((prev) => {
+      const updated = prev.map((n) => ({ ...n, read: true }))
+      localStorage.setItem("admin-notifications", JSON.stringify(updated))
+      return updated
+    })
   }
 
-  const getNotificationIcon = (type: Notification["type"]) => {
+  const deleteNotification = (id: string) => {
+    setNotifications((prev) => {
+      const updated = prev.filter((n) => n.id !== id)
+      localStorage.setItem("admin-notifications", JSON.stringify(updated))
+      return updated
+    })
+  }
+
+  const getNotificationIcon = (type: string) => {
     switch (type) {
       case "booking":
         return "📅"
       case "payment":
         return "💰"
-      case "system":
-        return "⚙️"
+      case "cancellation":
+        return "❌"
       default:
         return "📢"
     }
   }
 
-  const formatTimestamp = (timestamp: Date) => {
+  const formatTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp)
     const now = new Date()
-    const diff = now.getTime() - timestamp.getTime()
-    const minutes = Math.floor(diff / (1000 * 60))
-    const hours = Math.floor(diff / (1000 * 60 * 60))
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
 
-    if (minutes < 1) return "Just now"
-    if (minutes < 60) return `${minutes}m ago`
-    if (hours < 24) return `${hours}h ago`
-    return `${days}d ago`
+    if (diffInMinutes < 1) return "Just now"
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`
+    return date.toLocaleDateString()
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
-            <Badge
-              variant="destructive"
-              className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
-            >
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </Badge>
-          )}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
-        <DropdownMenuLabel className="flex items-center justify-between">
-          <span>Notifications</span>
-          {unreadCount > 0 && (
-            <Button variant="ghost" size="sm" onClick={markAllAsRead} className="text-xs">
-              Mark all read
-            </Button>
-          )}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
+    <div className="relative">
+      <Button variant="ghost" size="sm" onClick={() => setShowDropdown(!showDropdown)} className="relative p-2">
+        <Bell className="h-5 w-5" />
+        {unreadCount > 0 && (
+          <Badge
+            variant="destructive"
+            className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
+          >
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </Badge>
+        )}
+      </Button>
 
-        {notifications.length === 0 ? (
-          <DropdownMenuItem disabled>
-            <div className="text-center py-4 text-muted-foreground">No notifications</div>
-          </DropdownMenuItem>
-        ) : (
-          notifications.slice(0, 5).map((notification) => (
-            <DropdownMenuItem
-              key={notification.id}
-              className={`flex flex-col items-start p-3 cursor-pointer ${!notification.read ? "bg-muted/50" : ""}`}
-              onClick={() => markAsRead(notification.id)}
-            >
-              <div className="flex items-start justify-between w-full">
-                <div className="flex items-start space-x-2">
-                  <span className="text-lg">{getNotificationIcon(notification.type)}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{notification.title}</p>
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{notification.message}</p>
-                  </div>
+      {showDropdown && (
+        <div className="absolute right-0 top-full mt-2 z-50">
+          <Card className="w-80 max-h-96 overflow-hidden shadow-lg">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium">Notifications</CardTitle>
+                <div className="flex items-center space-x-2">
+                  {unreadCount > 0 && (
+                    <Button variant="ghost" size="sm" onClick={markAllAsRead} className="text-xs h-6 px-2">
+                      Mark all read
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => setShowDropdown(false)} className="h-6 w-6 p-0">
+                    <X className="h-3 w-3" />
+                  </Button>
                 </div>
-                {!notification.read && <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1" />}
               </div>
-              <span className="text-xs text-muted-foreground mt-2">{formatTimestamp(notification.timestamp)}</span>
-            </DropdownMenuItem>
-          ))
-        )}
-
-        {notifications.length > 5 && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-center">
-              <Button variant="ghost" size="sm" className="w-full">
-                View all notifications
-              </Button>
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="max-h-80 overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-gray-500">No notifications yet</div>
+                ) : (
+                  notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className={`p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
+                        !notification.read ? "bg-blue-50" : ""
+                      }`}
+                      onClick={() => markAsRead(notification.id)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <span className="text-sm">{getNotificationIcon(notification.type)}</span>
+                            <span className="text-sm font-medium text-gray-900">{notification.title}</span>
+                            {!notification.read && <div className="w-2 h-2 bg-blue-500 rounded-full"></div>}
+                          </div>
+                          <p className="text-xs text-gray-600 mb-1">{notification.message}</p>
+                          <p className="text-xs text-gray-400">{formatTimestamp(notification.timestamp)}</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteNotification(notification.id)
+                          }}
+                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
   )
+}
+
+// Helper function to add notifications (can be called from other parts of the app)
+export function addNotification(notification: Omit<Notification, "id" | "timestamp" | "read">) {
+  const newNotification: Notification = {
+    ...notification,
+    id: Date.now().toString(),
+    timestamp: new Date().toISOString(),
+    read: false,
+  }
+
+  const stored = localStorage.getItem("admin-notifications")
+  const existing = stored ? JSON.parse(stored) : []
+  const updated = [newNotification, ...existing].slice(0, 50) // Keep only last 50 notifications
+
+  localStorage.setItem("admin-notifications", JSON.stringify(updated))
+
+  // Trigger a custom event to update the notification bell
+  window.dispatchEvent(new CustomEvent("notification-added"))
 }

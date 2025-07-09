@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
       !services ||
       !bookingDate ||
       !bookingTime ||
+      !totalAmount ||
       !depositAmount
     ) {
       return NextResponse.json(
@@ -36,39 +37,34 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log("🚀 Initializing payment for:", customerName)
+    console.log("🚀 Initializing payment for:", {
+      customer: customerName,
+      email: customerEmail,
+      amount: depositAmount,
+      services: services,
+    })
 
     // Initialize payment with Paystack
     const result = await initializePaystackPayment({
       customerName,
       customerEmail,
       customerPhone,
-      services: Array.isArray(services) ? services : [services],
+      services,
       bookingDate,
       bookingTime,
-      totalAmount: Number.parseFloat(totalAmount) || 0,
-      depositAmount: Number.parseFloat(depositAmount) || 0,
-      notes: notes || "",
+      totalAmount,
+      depositAmount,
+      notes,
     })
 
     if (!result.status) {
       console.error("❌ Payment initialization failed:", result.message)
-      return NextResponse.json(
-        {
-          status: false,
-          message: result.message,
-        },
-        { status: 400 },
-      )
+      return NextResponse.json(result, { status: 400 })
     }
 
-    console.log("✅ Payment initialized successfully:", result.data.reference)
+    console.log("✅ Payment initialized successfully:", result.data?.reference)
 
-    return NextResponse.json({
-      status: true,
-      message: "Payment initialized successfully",
-      data: result.data,
-    })
+    return NextResponse.json(result)
   } catch (error) {
     console.error("❌ Payment initialization error:", error)
     return NextResponse.json(

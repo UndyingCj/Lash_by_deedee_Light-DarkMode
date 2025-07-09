@@ -100,6 +100,7 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
       }
 
       console.log("✅ Payment initialized:", result.data.reference)
+      console.log("🔑 Public key received:", result.data.public_key ? "Present" : "Missing")
       setPaymentData(result.data)
     } catch (error) {
       console.error("❌ Payment initialization error:", error)
@@ -117,8 +118,14 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
       return
     }
 
+    if (!paymentData.public_key) {
+      setError("Payment key not available. Please try again.")
+      return
+    }
+
     try {
       console.log("💳 Opening Paystack payment modal")
+      console.log("🔑 Using public key:", paymentData.public_key.substring(0, 10) + "...")
       setIsLoading(true)
       setError(null)
 
@@ -135,9 +142,10 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
           bookingDate: bookingData.date,
           bookingTime: bookingData.time,
         },
-        callback: async (response: any) => {
-          console.log("💰 Payment callback:", response)
-          await verifyPayment(response.reference)
+        callback: (response: any) => {
+          console.log("💰 Payment callback received:", response)
+          // run verification in the background – don't return a Promise
+          void verifyPayment(response.reference)
         },
         onClose: () => {
           console.log("❌ Payment modal closed")
@@ -255,10 +263,19 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
             </div>
           )}
 
+          {/* Debug Info */}
+          {process.env.NODE_ENV === "development" && paymentData && (
+            <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-xs">
+              <p>Debug: Key present: {paymentData.public_key ? "✅" : "❌"}</p>
+              <p>Amount: {paymentData.amount}</p>
+              <p>Reference: {paymentData.reference}</p>
+            </div>
+          )}
+
           {/* Payment Button */}
           <Button
             onClick={handlePayment}
-            disabled={isLoading || !paymentData || !!error || !scriptLoaded}
+            disabled={isLoading || !paymentData || !!error || !scriptLoaded || !paymentData?.public_key}
             className="w-full bg-green-600 hover:bg-green-700 text-white"
             size="lg"
           >

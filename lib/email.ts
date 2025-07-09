@@ -3,126 +3,116 @@ import { BookingConfirmationEmail } from "@/components/emails/booking-confirmati
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-export interface BookingEmailDetails {
+interface BookingEmailData {
   customerName: string
   customerEmail: string
+  customerPhone: string
   services: string[]
-  date: string
-  time: string
+  bookingDate: string
+  bookingTime: string
   totalAmount: number
   depositAmount: number
-  paymentReference?: string
+  reference: string
+  notes?: string
 }
 
-export async function sendBookingConfirmation(bookingDetails: BookingEmailDetails) {
+export async function sendBookingConfirmationEmail(data: BookingEmailData) {
   try {
     if (!process.env.RESEND_API_KEY) {
-      console.warn("⚠️ RESEND_API_KEY not found, skipping email send")
+      console.error("❌ RESEND_API_KEY not configured")
       return { success: false, error: "Email service not configured" }
     }
 
-    const { data, error } = await resend.emails.send({
+    console.log("📧 Sending booking confirmation email to:", data.customerEmail)
+
+    const { data: emailResult, error } = await resend.emails.send({
       from: "Lashed by Deedee <bookings@lashedbydeedee.com>",
-      to: [bookingDetails.customerEmail],
-      subject: "Booking Confirmation - Lashed by Deedee",
+      to: [data.customerEmail],
+      subject: "Booking Confirmed - Lashed by Deedee ✨",
       react: BookingConfirmationEmail({
-        customerName: bookingDetails.customerName,
-        services: bookingDetails.services,
-        bookingDate: bookingDetails.date,
-        bookingTime: bookingDetails.time,
-        totalAmount: bookingDetails.totalAmount,
-        depositAmount: bookingDetails.depositAmount,
-        paymentReference: bookingDetails.paymentReference,
+        customerName: data.customerName,
+        customerEmail: data.customerEmail,
+        customerPhone: data.customerPhone,
+        services: data.services,
+        bookingDate: data.bookingDate,
+        bookingTime: data.bookingTime,
+        totalAmount: data.totalAmount,
+        depositAmount: data.depositAmount,
+        reference: data.reference,
+        notes: data.notes,
       }),
     })
 
     if (error) {
-      console.error("❌ Error sending customer confirmation email:", error)
+      console.error("❌ Email sending failed:", error)
       return { success: false, error: error.message }
     }
 
-    console.log("✅ Customer confirmation email sent:", data?.id)
-    return { success: true, data }
+    console.log("✅ Booking confirmation email sent successfully:", emailResult?.id)
+    return { success: true, data: emailResult }
   } catch (error) {
-    console.error("❌ Failed to send customer confirmation email:", error)
-    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+    console.error("❌ Email service error:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Email sending failed",
+    }
   }
 }
 
-export async function sendBookingConfirmationEmail(bookingDetails: BookingEmailDetails) {
-  // Alias for compatibility
-  return sendBookingConfirmation(bookingDetails)
-}
-
-export async function sendBookingNotificationToAdmin(bookingDetails: BookingEmailDetails) {
+export async function sendAdminNotificationEmail(data: BookingEmailData) {
   try {
     if (!process.env.RESEND_API_KEY) {
-      console.warn("⚠️ RESEND_API_KEY not found, skipping admin notification")
+      console.error("❌ RESEND_API_KEY not configured")
       return { success: false, error: "Email service not configured" }
     }
 
-    const { data, error } = await resend.emails.send({
+    const formattedDate = new Date(data.bookingDate + "T12:00:00Z").toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })
+
+    const emailContent = `
+      🎉 NEW BOOKING CONFIRMED!
+      
+      Customer Details:
+      • Name: ${data.customerName}
+      • Email: ${data.customerEmail}
+      • Phone: ${data.customerPhone}
+      
+      Booking Details:
+      • Date: ${formattedDate}
+      • Time: ${data.bookingTime}
+      • Services: ${data.services.join(", ")}
+      • Total Amount: ₦${data.totalAmount.toLocaleString()}
+      • Deposit Paid: ₦${data.depositAmount.toLocaleString()}
+      • Balance Due: ₦${(data.totalAmount - data.depositAmount).toLocaleString()}
+      • Payment Reference: ${data.reference}
+      ${data.notes ? `• Notes: ${data.notes}` : ""}
+      
+      Please prepare for this appointment and confirm the time slot is blocked in your calendar.
+    `
+
+    const { data: emailResult, error } = await resend.emails.send({
       from: "Lashed by Deedee <bookings@lashedbydeedee.com>",
-      to: ["admin@lashedbydeedee.com"], // Replace with actual admin email
-      subject: `New Booking: ${bookingDetails.customerName}`,
-      html: `
-        <h2>New Booking Received</h2>
-        <p><strong>Customer:</strong> ${bookingDetails.customerName}</p>
-        <p><strong>Email:</strong> ${bookingDetails.customerEmail}</p>
-        <p><strong>Services:</strong> ${bookingDetails.services.join(", ")}</p>
-        <p><strong>Date:</strong> ${bookingDetails.date}</p>
-        <p><strong>Time:</strong> ${bookingDetails.time}</p>
-        <p><strong>Total Amount:</strong> ₦${bookingDetails.totalAmount.toLocaleString()}</p>
-        <p><strong>Deposit Amount:</strong> ₦${bookingDetails.depositAmount.toLocaleString()}</p>
-        ${bookingDetails.paymentReference ? `<p><strong>Payment Reference:</strong> ${bookingDetails.paymentReference}</p>` : ""}
-      `,
+      to: ["admin@lashedbydeedee.com"],
+      subject: `New Booking: ${data.customerName} - ${formattedDate} at ${data.bookingTime}`,
+      text: emailContent,
     })
 
     if (error) {
-      console.error("❌ Error sending admin notification email:", error)
+      console.error("❌ Admin notification email failed:", error)
       return { success: false, error: error.message }
     }
 
-    console.log("✅ Admin notification email sent:", data?.id)
-    return { success: true, data }
+    console.log("✅ Admin notification email sent successfully:", emailResult?.id)
+    return { success: true, data: emailResult }
   } catch (error) {
-    console.error("❌ Failed to send admin notification email:", error)
-    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
-  }
-}
-
-export async function sendBookingReminder(bookingDetails: BookingEmailDetails) {
-  try {
-    if (!process.env.RESEND_API_KEY) {
-      console.warn("⚠️ RESEND_API_KEY not found, skipping reminder email")
-      return { success: false, error: "Email service not configured" }
+    console.error("❌ Admin email service error:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Admin email sending failed",
     }
-
-    const { data, error } = await resend.emails.send({
-      from: "Lashed by Deedee <bookings@lashedbydeedee.com>",
-      to: [bookingDetails.customerEmail],
-      subject: "Appointment Reminder - Lashed by Deedee",
-      html: `
-        <h2>Appointment Reminder</h2>
-        <p>Hi ${bookingDetails.customerName},</p>
-        <p>This is a friendly reminder about your upcoming appointment:</p>
-        <p><strong>Services:</strong> ${bookingDetails.services.join(", ")}</p>
-        <p><strong>Date:</strong> ${bookingDetails.date}</p>
-        <p><strong>Time:</strong> ${bookingDetails.time}</p>
-        <p>We look forward to seeing you!</p>
-        <p>Best regards,<br>Lashed by Deedee Team</p>
-      `,
-    })
-
-    if (error) {
-      console.error("❌ Error sending reminder email:", error)
-      return { success: false, error: error.message }
-    }
-
-    console.log("✅ Reminder email sent:", data?.id)
-    return { success: true, data }
-  } catch (error) {
-    console.error("❌ Failed to send reminder email:", error)
-    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
