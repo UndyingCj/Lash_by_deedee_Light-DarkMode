@@ -59,17 +59,35 @@ export async function POST(request: NextRequest) {
 
     // Save booking to database
     const bookingData = {
-      customer_name: metadata.customerName,
-      customer_email: paymentData.customer.email,
-      customer_phone: metadata.customerPhone,
-      services: metadata.services,
+      // canonical “client_*” columns
+      client_name: metadata.customerName,
+      email: paymentData.customer.email,
+      phone: metadata.customerPhone,
+
+      // generic contact columns (kept in sync)
+      phone: metadata.customerPhone,
+      email: paymentData.customer.email,
+
+      // service information
+      service_name: metadata.services, // adjust if you store the label separately
+      service: metadata.services,
+
+      // schedule
       booking_date: metadata.bookingDate,
       booking_time: metadata.bookingTime,
+
+      // financials
       total_amount: metadata.totalAmount,
+      amount: metadata.depositAmount, // amount actually paid (deposit)
       deposit_amount: metadata.depositAmount,
+
+      // payment / status
       payment_reference: paymentData.reference,
       payment_status: "completed",
-      booking_status: "confirmed",
+      status: "confirmed",
+
+      // misc
+      special_notes: metadata.notes || "",
       notes: metadata.notes || "",
       created_at: new Date().toISOString(),
     }
