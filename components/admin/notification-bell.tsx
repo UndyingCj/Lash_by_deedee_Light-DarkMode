@@ -15,7 +15,7 @@ interface Notification {
   read: boolean
 }
 
-export default function NotificationBell() {
+export function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
@@ -194,3 +194,6 @@ export function addNotification(notification: Omit<Notification, "id" | "timesta
   // Trigger a custom event to update the notification bell
   window.dispatchEvent(new CustomEvent("notification-added"))
 }
+
+// Default export for compatibility
+export default NotificationBell

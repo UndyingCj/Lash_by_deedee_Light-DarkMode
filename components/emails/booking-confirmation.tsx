@@ -1,4 +1,4 @@
-import { Body, Container, Head, Heading, Html, Img, Link, Preview, Section, Text } from "@react-email/components"
+import { Body, Container, Head, Heading, Html, Preview, Section, Text, Hr, Row, Column } from "@react-email/components"
 
 interface BookingConfirmationEmailProps {
   customerName: string
@@ -25,6 +25,7 @@ export function BookingConfirmationEmail({
   reference,
   notes,
 }: BookingConfirmationEmailProps) {
+  const balanceAmount = totalAmount - depositAmount
   const formattedDate = new Date(bookingDate + "T12:00:00Z").toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -35,176 +36,251 @@ export function BookingConfirmationEmail({
   return (
     <Html>
       <Head />
-      <Preview>Your booking with Lashed by Deedee has been confirmed!</Preview>
+      <Preview>Your booking with Lashed by Deedee has been confirmed! ✨</Preview>
       <Body style={main}>
         <Container style={container}>
-          <Section style={logoContainer}>
-            <Img
-              src="https://lashedbydeedee.com/placeholder-logo.png"
-              width="150"
-              height="50"
-              alt="Lashed by Deedee"
-              style={logo}
-            />
+          <Section style={header}>
+            <Heading style={h1}>✨ Booking Confirmed!</Heading>
+            <Text style={subtitle}>Thank you for choosing Lashed by Deedee</Text>
           </Section>
 
-          <Heading style={h1}>Booking Confirmed! ✨</Heading>
+          <Section style={content}>
+            <Text style={greeting}>Hi {customerName},</Text>
+            <Text style={paragraph}>
+              Great news! Your booking has been confirmed and your deposit payment has been processed successfully.
+            </Text>
 
-          <Text style={text}>Hi {customerName},</Text>
+            <Section style={bookingDetails}>
+              <Heading style={h2}>📅 Booking Details</Heading>
+              <Row>
+                <Column>
+                  <Text style={label}>Date:</Text>
+                  <Text style={value}>{formattedDate}</Text>
+                </Column>
+                <Column>
+                  <Text style={label}>Time:</Text>
+                  <Text style={value}>{bookingTime}</Text>
+                </Column>
+              </Row>
+              <Text style={label}>Services:</Text>
+              <Text style={value}>{services.join(", ")}</Text>
+            </Section>
 
-          <Text style={text}>
-            Thank you for booking with Lashed by Deedee! Your appointment has been confirmed and your deposit has been
-            received.
-          </Text>
+            <Hr style={divider} />
 
-          <Section style={bookingDetails}>
-            <Heading style={h2}>Booking Details</Heading>
+            <Section style={paymentDetails}>
+              <Heading style={h2}>💰 Payment Summary</Heading>
+              <Row>
+                <Column>
+                  <Text style={label}>Total Amount:</Text>
+                  <Text style={value}>₦{totalAmount.toLocaleString()}</Text>
+                </Column>
+                <Column>
+                  <Text style={label}>Deposit Paid:</Text>
+                  <Text style={value}>₦{depositAmount.toLocaleString()}</Text>
+                </Column>
+              </Row>
+              <Row>
+                <Column>
+                  <Text style={label}>Balance Due:</Text>
+                  <Text style={balanceText}>₦{balanceAmount.toLocaleString()}</Text>
+                </Column>
+                <Column>
+                  <Text style={label}>Reference:</Text>
+                  <Text style={referenceText}>{reference}</Text>
+                </Column>
+              </Row>
+            </Section>
 
-            <Text style={detailText}>
-              <strong>Date:</strong> {formattedDate}
-            </Text>
-            <Text style={detailText}>
-              <strong>Time:</strong> {bookingTime}
-            </Text>
-            <Text style={detailText}>
-              <strong>Services:</strong> {services.join(", ")}
-            </Text>
-            <Text style={detailText}>
-              <strong>Total Amount:</strong> ₦{totalAmount.toLocaleString()}
-            </Text>
-            <Text style={detailText}>
-              <strong>Deposit Paid:</strong> ₦{depositAmount.toLocaleString()}
-            </Text>
-            <Text style={detailText}>
-              <strong>Balance Due:</strong> ₦{(totalAmount - depositAmount).toLocaleString()}
-            </Text>
-            <Text style={detailText}>
-              <strong>Payment Reference:</strong> {reference}
-            </Text>
             {notes && (
-              <Text style={detailText}>
-                <strong>Notes:</strong> {notes}
-              </Text>
+              <>
+                <Hr style={divider} />
+                <Section>
+                  <Heading style={h2}>📝 Special Notes</Heading>
+                  <Text style={notesText}>{notes}</Text>
+                </Section>
+              </>
             )}
+
+            <Hr style={divider} />
+
+            <Section style={importantInfo}>
+              <Heading style={h2}>⚠️ Important Information</Heading>
+              <Text style={paragraph}>
+                • Please arrive 10 minutes before your appointment time
+                <br />• The remaining balance of ₦{balanceAmount.toLocaleString()} is due at your appointment
+                <br />• If you need to reschedule, please contact us at least 24 hours in advance
+                <br />• Bring a valid ID and your payment reference: {reference}
+              </Text>
+            </Section>
+
+            <Section style={contactInfo}>
+              <Heading style={h2}>📞 Contact Information</Heading>
+              <Text style={paragraph}>
+                If you have any questions or need to make changes to your booking, please contact us:
+                <br />
+                <br />📧 Email: bookings@lashedbydeedee.com
+                <br />📱 Phone: +234 XXX XXX XXXX
+                <br />🌐 Website: lashedbydeedee.com
+              </Text>
+            </Section>
           </Section>
 
-          <Section style={importantInfo}>
-            <Heading style={h3}>Important Reminders</Heading>
-            <Text style={text}>• Please arrive 10 minutes before your appointment time</Text>
-            <Text style={text}>• Avoid wearing makeup to ensure the best results</Text>
-            <Text style={text}>
-              • The remaining balance of ₦{(totalAmount - depositAmount).toLocaleString()} is due at your appointment
+          <Section style={footer}>
+            <Text style={footerText}>
+              Thank you for choosing Lashed by Deedee! We can't wait to make you look and feel amazing. ✨
             </Text>
-            <Text style={text}>• If you need to reschedule, please contact us at least 24 hours in advance</Text>
+            <Text style={footerText}>© 2025 Lashed by Deedee. All rights reserved.</Text>
           </Section>
-
-          <Section style={contactInfo}>
-            <Heading style={h3}>Contact Information</Heading>
-            <Text style={text}>
-              📱 WhatsApp: <Link href="https://wa.me/2348165435528">+234 816 543 5528</Link>
-            </Text>
-            <Text style={text}>📧 Email: info@lashedbydeedee.com</Text>
-            <Text style={text}>
-              🌐 Website: <Link href="https://lashedbydeedee.com">lashedbydeedee.com</Link>
-            </Text>
-          </Section>
-
-          <Text style={footer}>
-            We can't wait to see you! ✨<br />
-            The Lashed by Deedee Team
-          </Text>
         </Container>
       </Body>
     </Html>
   )
 }
 
-export default BookingConfirmationEmail
-
+// Styles
 const main = {
-  backgroundColor: "#ffffff",
-  fontFamily:
-    '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif',
+  backgroundColor: "#f6f9fc",
+  fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Ubuntu,sans-serif',
 }
 
 const container = {
+  backgroundColor: "#ffffff",
   margin: "0 auto",
   padding: "20px 0 48px",
-  maxWidth: "560px",
+  marginBottom: "64px",
 }
 
-const logoContainer = {
+const header = {
+  padding: "32px 24px",
   textAlign: "center" as const,
-  marginBottom: "32px",
-}
-
-const logo = {
-  margin: "0 auto",
+  backgroundColor: "#fdf2f8",
 }
 
 const h1 = {
   color: "#ec4899",
-  fontSize: "24px",
+  fontSize: "32px",
   fontWeight: "bold",
+  margin: "0 0 8px",
   textAlign: "center" as const,
-  margin: "30px 0",
 }
 
-const h2 = {
-  color: "#1f2937",
-  fontSize: "20px",
-  fontWeight: "bold",
-  margin: "20px 0 10px 0",
-}
-
-const h3 = {
-  color: "#1f2937",
-  fontSize: "18px",
-  fontWeight: "bold",
-  margin: "20px 0 10px 0",
-}
-
-const text = {
-  color: "#374151",
+const subtitle = {
+  color: "#6b7280",
   fontSize: "16px",
-  lineHeight: "26px",
-  margin: "10px 0",
+  margin: "0",
+  textAlign: "center" as const,
 }
 
-const detailText = {
+const content = {
+  padding: "0 24px",
+}
+
+const greeting = {
+  color: "#374151",
+  fontSize: "18px",
+  fontWeight: "600",
+  margin: "24px 0 16px",
+}
+
+const paragraph = {
   color: "#374151",
   fontSize: "16px",
   lineHeight: "24px",
-  margin: "8px 0",
+  margin: "16px 0",
 }
 
 const bookingDetails = {
-  backgroundColor: "#fef7ff",
-  border: "1px solid #f3e8ff",
+  backgroundColor: "#f9fafb",
+  padding: "24px",
   borderRadius: "8px",
-  padding: "20px",
-  margin: "20px 0",
+  margin: "24px 0",
+}
+
+const paymentDetails = {
+  backgroundColor: "#f0fdf4",
+  padding: "24px",
+  borderRadius: "8px",
+  margin: "24px 0",
 }
 
 const importantInfo = {
-  backgroundColor: "#fef3f2",
-  border: "1px solid #fecaca",
+  backgroundColor: "#fef3c7",
+  padding: "24px",
   borderRadius: "8px",
-  padding: "20px",
-  margin: "20px 0",
+  margin: "24px 0",
 }
 
 const contactInfo = {
-  backgroundColor: "#f0fdf4",
-  border: "1px solid #bbf7d0",
+  backgroundColor: "#eff6ff",
+  padding: "24px",
   borderRadius: "8px",
-  padding: "20px",
-  margin: "20px 0",
+  margin: "24px 0",
+}
+
+const h2 = {
+  color: "#374151",
+  fontSize: "20px",
+  fontWeight: "600",
+  margin: "0 0 16px",
+}
+
+const label = {
+  color: "#6b7280",
+  fontSize: "14px",
+  fontWeight: "500",
+  margin: "0 0 4px",
+}
+
+const value = {
+  color: "#374151",
+  fontSize: "16px",
+  fontWeight: "600",
+  margin: "0 0 16px",
+}
+
+const balanceText = {
+  color: "#dc2626",
+  fontSize: "16px",
+  fontWeight: "700",
+  margin: "0 0 16px",
+}
+
+const referenceText = {
+  color: "#059669",
+  fontSize: "14px",
+  fontWeight: "600",
+  fontFamily: "monospace",
+  margin: "0 0 16px",
+}
+
+const notesText = {
+  color: "#374151",
+  fontSize: "16px",
+  lineHeight: "24px",
+  fontStyle: "italic",
+  backgroundColor: "#f3f4f6",
+  padding: "16px",
+  borderRadius: "6px",
+  margin: "0",
+}
+
+const divider = {
+  borderColor: "#e5e7eb",
+  margin: "32px 0",
 }
 
 const footer = {
+  padding: "32px 24px",
+  textAlign: "center" as const,
+  backgroundColor: "#f9fafb",
+}
+
+const footerText = {
   color: "#6b7280",
   fontSize: "14px",
+  margin: "8px 0",
   textAlign: "center" as const,
-  margin: "30px 0 0 0",
 }
+
+export default BookingConfirmationEmail

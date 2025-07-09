@@ -1,3 +1,5 @@
+import crypto from "crypto"
+
 interface PaystackVerificationResponse {
   status: boolean
   message: string
@@ -138,5 +140,21 @@ export async function initializePaystackPayment(data: PaystackInitializeData): P
   } catch (err) {
     console.error("❌ Paystack initialization error:", err)
     return { status: false, message: err instanceof Error ? err.message : "Payment init failed" }
+  }
+}
+
+export function verifyWebhookSignature(body: string, signature: string): boolean {
+  try {
+    const secret = process.env.PAYSTACK_SECRET_KEY
+    if (!secret) {
+      console.error("Paystack secret key not configured for webhook verification")
+      return false
+    }
+
+    const hash = crypto.createHmac("sha512", secret).update(body).digest("hex")
+    return hash === signature
+  } catch (error) {
+    console.error("Webhook signature verification error:", error)
+    return false
   }
 }
