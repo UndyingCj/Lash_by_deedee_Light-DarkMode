@@ -11,9 +11,9 @@ interface PaystackPaymentProps {
     customerName: string
     customerEmail: string
     customerPhone: string
-    services: string[]
-    date: string
-    time: string
+    services: string[] // This matches what's passed from the booking page
+    date: string // This matches what's passed from the booking page
+    time: string // This matches what's passed from the booking page
     totalAmount: number
     depositAmount: number
     notes?: string
@@ -81,8 +81,8 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
         customerEmail: bookingData.customerEmail.trim().toLowerCase(),
         customerPhone: bookingData.customerPhone?.trim() || "",
         services: bookingData.services,
-        date: bookingData.date.trim(), // Send as 'date', not 'bookingDate'
-        time: bookingData.time.trim(), // Send as 'time', not 'bookingTime'
+        date: bookingData.date.trim(),
+        time: bookingData.time.trim(),
         totalAmount: Number(bookingData.totalAmount),
         depositAmount: Number(bookingData.depositAmount),
         notes: bookingData.notes?.trim() || "",
@@ -149,7 +149,7 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
       const handler = window.PaystackPop.setup({
         key: result.data.public_key,
         email: bookingData.customerEmail,
-        amount: result.data.amount, // Amount is already in kobo from backend
+        amount: result.data.amount,
         currency: "NGN",
         ref: result.data.reference,
         metadata: {
@@ -205,7 +205,8 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
       const result = await response.json()
       console.log("📊 Payment verification result:", result)
 
-      if (result.status === "ok" && result.success) {
+      // Check if result.status is true (boolean)
+      if (result.status === true) {
         console.log("✅ Payment verified successfully")
         toast({
           title: "Payment Successful!",
