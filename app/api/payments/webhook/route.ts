@@ -57,30 +57,21 @@ export async function POST(request: NextRequest) {
 
           // Send confirmation emails
           try {
-            await sendBookingConfirmationEmail({
+            const emailBookingDetails = {
               customerName: booking.client_name,
               customerEmail: booking.client_email,
-              service: booking.service_name,
-              date: booking.booking_date,
-              time: booking.booking_time,
-              totalAmount: booking.total_amount,
+              customerPhone: booking.client_phone || booking.phone,
+              serviceName: booking.service_name || booking.service,
+              bookingDate: booking.booking_date,
+              bookingTime: booking.booking_time,
+              totalAmount: booking.total_amount || booking.amount,
               depositAmount: booking.deposit_amount,
               paymentReference: reference,
-              notes: booking.notes,
-            })
+              notes: booking.notes || booking.special_notes,
+            }
 
-            await sendAdminNotificationEmail({
-              customerName: booking.client_name,
-              customerEmail: booking.client_email,
-              customerPhone: booking.client_phone,
-              service: booking.service_name,
-              date: booking.booking_date,
-              time: booking.booking_time,
-              totalAmount: booking.total_amount,
-              depositAmount: booking.deposit_amount,
-              paymentReference: reference,
-              notes: booking.notes,
-            })
+            await sendBookingConfirmationEmail(emailBookingDetails)
+            await sendAdminNotificationEmail(emailBookingDetails)
 
             console.log("✅ Webhook emails sent successfully")
           } catch (emailError) {

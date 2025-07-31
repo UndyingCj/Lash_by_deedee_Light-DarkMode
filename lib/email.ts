@@ -615,3 +615,9 @@ export async function sendBookingEmails(booking: BookingEmailData) {
     }
   }
 }
+
+// Legacy function names for backward compatibility
+export const sendBookingConfirmation = sendCustomerConfirmationEmail
+export const sendBookingNotificationToAdmin = sendAdminNotificationEmail
+export const sendBookingConfirmationEmail = sendCustomerConfirmationEmail
+export const sendAdminBookingNotification = sendAdminNotificationEmail

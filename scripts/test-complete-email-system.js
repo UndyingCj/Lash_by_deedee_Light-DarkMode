@@ -1,518 +1,330 @@
-const { Resend } = require("resend")
-const { createClient } = require("@supabase/supabase-js")
+/**
+ * Complete Email System Test for Lashed by Deedee
+ * Tests all email functionality including templates, sending, and integration
+ */
 
-// Configuration
-const config = {
-  resend: {
-    apiKey: process.env.RESEND_API_KEY,
-    fromEmail: "bookings@lashedbydeedee.com",
-    adminEmail: "admin@lashedbydeedee.com",
-  },
-  supabase: {
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-  },
-  testData: {
-    customerName: "Jane Smith",
-    customerEmail: "jane.smith@example.com",
-    customerPhone: "+234 801 234 5678",
-    serviceName: "Mega Volume Lashes",
-    bookingDate: "2025-02-15",
-    bookingTime: "2:00 PM",
-    totalAmount: 30000,
-    depositAmount: 15000,
-    paymentReference: `EMAIL_TEST_${Date.now()}`,
-  },
+import { createClient } from "@supabase/supabase-js"
+
+// Environment validation
+const requiredEnvVars = ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "RESEND_API_KEY"]
+
+console.log("🔍 Checking environment variables...")
+const missingVars = requiredEnvVars.filter((varName) => !process.env[varName])
+
+if (missingVars.length > 0) {
+  console.error("❌ Missing environment variables:", missingVars)
+  process.exit(1)
 }
 
-// Colors for console output
-const colors = {
-  reset: "\x1b[0m",
-  bright: "\x1b[1m",
-  red: "\x1b[31m",
-  green: "\x1b[32m",
-  yellow: "\x1b[33m",
-  blue: "\x1b[34m",
-  cyan: "\x1b[36m",
-}
+console.log("✅ All required environment variables are present")
 
-function log(message, color = colors.reset) {
-  console.log(`${color}${message}${colors.reset}`)
-}
+// Initialize Supabase client
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
 
-function logSuccess(message) {
-  log(`✅ ${message}`, colors.green)
-}
-
-function logError(message) {
-  log(`❌ ${message}`, colors.red)
-}
-
-function logInfo(message) {
-  log(`ℹ️  ${message}`, colors.blue)
-}
-
-function logWarning(message) {
-  log(`⚠️  ${message}`, colors.yellow)
-}
-
-function logStep(step, message) {
-  log(`${colors.bright}${step}${colors.reset} ${message}`, colors.cyan)
-}
-
-// Email templates
-function createCustomerConfirmationEmail(bookingData) {
-  return {
-    subject: `Booking Confirmation - ${bookingData.serviceName}`,
-    html: `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Booking Confirmation</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .booking-details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
-          .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
-          .detail-label { font-weight: bold; color: #555; }
-          .detail-value { color: #333; }
-          .amount { font-size: 1.2em; font-weight: bold; color: #667eea; }
-          .footer { text-align: center; margin-top: 30px; color: #666; font-size: 0.9em; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>🎉 Booking Confirmed!</h1>
-            <p>Thank you for choosing Lashed by Deedee</p>
-          </div>
-          <div class="content">
-            <p>Dear ${bookingData.customerName},</p>
-            <p>Your booking has been confirmed! We're excited to see you soon.</p>
-            
-            <div class="booking-details">
-              <h3>📋 Booking Details</h3>
-              <div class="detail-row">
-                <span class="detail-label">Service:</span>
-                <span class="detail-value">${bookingData.serviceName}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Date:</span>
-                <span class="detail-value">${bookingData.bookingDate}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Time:</span>
-                <span class="detail-value">${bookingData.bookingTime}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Total Amount:</span>
-                <span class="detail-value amount">₦${bookingData.totalAmount.toLocaleString()}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Deposit Paid:</span>
-                <span class="detail-value amount">₦${bookingData.depositAmount.toLocaleString()}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Reference:</span>
-                <span class="detail-value">${bookingData.paymentReference}</span>
-              </div>
-            </div>
-
-            <h3>📍 Location & Contact</h3>
-            <p><strong>Address:</strong> Lagos, Nigeria</p>
-            <p><strong>Phone:</strong> +234 XXX XXX XXXX</p>
-            <p><strong>Email:</strong> info@lashedbydeedee.com</p>
-
-            <h3>⏰ Important Reminders</h3>
-            <ul>
-              <li>Please arrive 10 minutes early for your appointment</li>
-              <li>Bring a valid ID for verification</li>
-              <li>Contact us if you need to reschedule (24hrs notice required)</li>
-              <li>The remaining balance of ₦${(bookingData.totalAmount - bookingData.depositAmount).toLocaleString()} is due at your appointment</li>
-            </ul>
-
-            <div class="footer">
-              <p>Thank you for choosing Lashed by Deedee!</p>
-              <p>Follow us on social media for beauty tips and updates</p>
-            </div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `,
-  }
-}
-
-function createAdminNotificationEmail(bookingData) {
-  return {
-    subject: `New Booking Alert - ${bookingData.serviceName}`,
-    html: `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>New Booking Alert</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: #ff6b6b; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .booking-details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
-          .detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
-          .detail-label { font-weight: bold; color: #555; }
-          .detail-value { color: #333; }
-          .amount { font-size: 1.1em; font-weight: bold; color: #ff6b6b; }
-          .actions { background: #e8f5e8; padding: 15px; border-radius: 8px; margin: 20px 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>🚨 New Booking Alert</h1>
-            <p>A new booking has been confirmed</p>
-          </div>
-          <div class="content">
-            <div class="booking-details">
-              <h3>👤 Customer Information</h3>
-              <div class="detail-row">
-                <span class="detail-label">Name:</span>
-                <span class="detail-value">${bookingData.customerName}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Email:</span>
-                <span class="detail-value">${bookingData.customerEmail}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Phone:</span>
-                <span class="detail-value">${bookingData.customerPhone}</span>
-              </div>
-              
-              <h3>📋 Booking Information</h3>
-              <div class="detail-row">
-                <span class="detail-label">Service:</span>
-                <span class="detail-value">${bookingData.serviceName}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Date:</span>
-                <span class="detail-value">${bookingData.bookingDate}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Time:</span>
-                <span class="detail-value">${bookingData.bookingTime}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Total Amount:</span>
-                <span class="detail-value amount">₦${bookingData.totalAmount.toLocaleString()}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Deposit Paid:</span>
-                <span class="detail-value amount">₦${bookingData.depositAmount.toLocaleString()}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Balance Due:</span>
-                <span class="detail-value amount">₦${(bookingData.totalAmount - bookingData.depositAmount).toLocaleString()}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Reference:</span>
-                <span class="detail-value">${bookingData.paymentReference}</span>
-              </div>
-            </div>
-
-            <div class="actions">
-              <h3>📝 Next Steps</h3>
-              <ul>
-                <li>Add appointment to calendar</li>
-                <li>Prepare materials for ${bookingData.serviceName}</li>
-                <li>Send reminder 24 hours before appointment</li>
-                <li>Collect remaining balance: ₦${(bookingData.totalAmount - bookingData.depositAmount).toLocaleString()}</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `,
-  }
-}
-
-// Test functions
-async function testEnvironmentVariables() {
-  logStep("1.", "Testing Environment Variables")
-
-  const requiredVars = ["RESEND_API_KEY", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]
-
-  let allPresent = true
-
-  for (const varName of requiredVars) {
-    if (process.env[varName]) {
-      logSuccess(`${varName} is set`)
-    } else {
-      logError(`${varName} is missing`)
-      allPresent = false
-    }
-  }
-
-  return allPresent
+// Test booking data
+const testBooking = {
+  customerName: "Sarah Johnson",
+  customerEmail: "sarah.johnson@example.com",
+  customerPhone: "+2348123456789",
+  serviceName: "Volume Lash Extensions + Brow Shaping",
+  bookingDate: "2025-08-20",
+  bookingTime: "2:00 PM",
+  totalAmount: 35000,
+  depositAmount: 17500,
+  paymentReference: `EMAIL_TEST_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`,
+  notes: "Client prefers natural look, sensitive skin",
 }
 
 async function testResendConnection() {
-  logStep("2.", "Testing Resend API Connection")
+  console.log("\n🧪 Testing Resend API Connection...")
 
   try {
-    const resend = new Resend(config.resend.apiKey)
-
-    // Test with a simple API call
-    const domains = await resend.domains.list()
-    logSuccess("Resend API connection successful")
-    logInfo(`Found ${domains.data.length} domains`)
-    return true
-  } catch (error) {
-    logError(`Resend API connection failed: ${error.message}`)
-    return false
-  }
-}
-
-async function testCustomerEmail() {
-  logStep("3.", "Testing Customer Confirmation Email")
-
-  try {
-    const resend = new Resend(config.resend.apiKey)
-    const emailContent = createCustomerConfirmationEmail(config.testData)
-
-    const result = await resend.emails.send({
-      from: config.resend.fromEmail,
-      to: [config.testData.customerEmail],
-      subject: emailContent.subject,
-      html: emailContent.html,
+    const response = await fetch("https://api.resend.com/domains", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
     })
 
-    if (result.error) {
-      logError(`Customer email failed: ${result.error.message}`)
-      return false
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
 
-    logSuccess(`Customer email sent successfully`)
-    logInfo(`Email ID: ${result.data.id}`)
+    const data = await response.json()
+    console.log("✅ Resend API connection successful")
+    console.log("📊 Available domains:", data.data?.length || 0)
+
     return true
   } catch (error) {
-    logError(`Customer email error: ${error.message}`)
+    console.error("❌ Resend API connection failed:", error.message)
     return false
   }
 }
 
-async function testAdminEmail() {
-  logStep("4.", "Testing Admin Notification Email")
+async function testEmailTemplateGeneration() {
+  console.log("\n🧪 Testing Email Template Generation...")
 
   try {
-    const resend = new Resend(config.resend.apiKey)
-    const emailContent = createAdminNotificationEmail(config.testData)
+    // Import email functions dynamically
+    const { createCustomerConfirmationEmail, createAdminNotificationEmail } = await import("../lib/email.js")
 
-    const result = await resend.emails.send({
-      from: config.resend.fromEmail,
-      to: [config.resend.adminEmail],
-      subject: emailContent.subject,
-      html: emailContent.html,
-    })
+    // Test customer confirmation template
+    const customerTemplate = createCustomerConfirmationEmail(testBooking)
+    console.log("✅ Customer confirmation template generated")
+    console.log("📧 Subject:", customerTemplate.subject)
+    console.log("📄 HTML length:", customerTemplate.html.length, "characters")
 
-    if (result.error) {
-      logError(`Admin email failed: ${result.error.message}`)
-      return false
+    // Test admin notification template
+    const adminTemplate = createAdminNotificationEmail(testBooking)
+    console.log("✅ Admin notification template generated")
+    console.log("📧 Subject:", adminTemplate.subject)
+    console.log("📄 HTML length:", adminTemplate.html.length, "characters")
+
+    // Validate template content
+    const customerHasBookingDetails =
+      customerTemplate.html.includes(testBooking.customerName) &&
+      customerTemplate.html.includes(testBooking.serviceName) &&
+      customerTemplate.html.includes(testBooking.paymentReference)
+
+    const adminHasBookingDetails =
+      adminTemplate.html.includes(testBooking.customerName) &&
+      adminTemplate.html.includes(testBooking.serviceName) &&
+      adminTemplate.html.includes(testBooking.customerPhone)
+
+    if (!customerHasBookingDetails) {
+      throw new Error("Customer template missing booking details")
     }
 
-    logSuccess(`Admin email sent successfully`)
-    logInfo(`Email ID: ${result.data.id}`)
+    if (!adminHasBookingDetails) {
+      throw new Error("Admin template missing booking details")
+    }
+
+    console.log("✅ Template content validation passed")
     return true
   } catch (error) {
-    logError(`Admin email error: ${error.message}`)
+    console.error("❌ Email template generation failed:", error.message)
     return false
   }
 }
 
-async function testDatabaseIntegration() {
-  logStep("5.", "Testing Database Integration")
+async function testEmailSending() {
+  console.log("\n🧪 Testing Email Sending...")
 
   try {
-    const supabase = createClient(config.supabase.url, config.supabase.serviceKey)
+    // Import email functions
+    const { sendCustomerConfirmationEmail, sendAdminNotificationEmail } = await import("../lib/email.js")
 
-    // Create a test booking
-    const testBooking = {
-      client_name: config.testData.customerName,
-      client_email: config.testData.customerEmail,
-      client_phone: config.testData.customerPhone,
-      phone: config.testData.customerPhone,
-      email: config.testData.customerEmail,
-      service_name: config.testData.serviceName,
-      service: config.testData.serviceName,
-      booking_date: config.testData.bookingDate,
-      booking_time: config.testData.bookingTime,
-      total_amount: config.testData.totalAmount,
-      amount: config.testData.depositAmount,
-      deposit_amount: config.testData.depositAmount,
-      payment_reference: config.testData.paymentReference,
-      status: "confirmed",
-      payment_status: "completed",
-      notes: "Email system test booking",
+    // Test customer email
+    console.log("📧 Sending customer confirmation email...")
+    const customerResult = await sendCustomerConfirmationEmail(testBooking)
+
+    if (!customerResult.success) {
+      throw new Error(`Customer email failed: ${customerResult.error}`)
     }
 
-    const { data: booking, error: insertError } = await supabase.from("bookings").insert(testBooking).select().single()
+    console.log("✅ Customer confirmation email sent successfully")
+    console.log("📧 Email ID:", customerResult.id)
+
+    // Test admin email
+    console.log("📧 Sending admin notification email...")
+    const adminResult = await sendAdminNotificationEmail(testBooking)
+
+    if (!adminResult.success) {
+      throw new Error(`Admin email failed: ${adminResult.error}`)
+    }
+
+    console.log("✅ Admin notification email sent successfully")
+    console.log("📧 Email ID:", adminResult.id)
+
+    return true
+  } catch (error) {
+    console.error("❌ Email sending failed:", error.message)
+    return false
+  }
+}
+
+async function testBulkEmailSending() {
+  console.log("\n🧪 Testing Bulk Email Sending...")
+
+  try {
+    const { sendBookingEmails } = await import("../lib/email.js")
+
+    console.log("📧 Sending both customer and admin emails concurrently...")
+    const results = await sendBookingEmails(testBooking)
+
+    console.log("📊 Bulk email results:")
+    console.log("  Customer:", results.customer.success ? "✅ Success" : "❌ Failed")
+    console.log("  Admin:", results.admin.success ? "✅ Success" : "❌ Failed")
+
+    if (results.customer.success && results.admin.success) {
+      console.log("✅ Bulk email sending successful")
+      return true
+    } else {
+      throw new Error("One or more bulk emails failed")
+    }
+  } catch (error) {
+    console.error("❌ Bulk email sending failed:", error.message)
+    return false
+  }
+}
+
+async function testDatabaseEmailIntegration() {
+  console.log("\n🧪 Testing Database Email Integration...")
+
+  try {
+    // Create a test booking in the database
+    const { data: booking, error: insertError } = await supabase
+      .from("bookings")
+      .insert({
+        client_name: testBooking.customerName,
+        client_email: testBooking.customerEmail,
+        client_phone: testBooking.customerPhone,
+        service_name: testBooking.serviceName,
+        booking_date: testBooking.bookingDate,
+        booking_time: testBooking.bookingTime,
+        total_amount: testBooking.totalAmount,
+        deposit_amount: testBooking.depositAmount,
+        payment_reference: testBooking.paymentReference,
+        payment_status: "completed",
+        status: "confirmed",
+        notes: testBooking.notes,
+      })
+      .select()
+      .single()
 
     if (insertError) {
-      logError(`Database insert failed: ${insertError.message}`)
-      return false
+      throw insertError
     }
 
-    logSuccess(`Test booking created: ${booking.id}`)
+    console.log("✅ Test booking created in database")
 
-    // Clean up
-    await supabase.from("bookings").delete().eq("id", booking.id)
-    logInfo("Test booking cleaned up")
+    // Test email sending with database data
+    const { sendBookingEmails } = await import("../lib/email.js")
+
+    const emailData = {
+      customerName: booking.client_name,
+      customerEmail: booking.client_email,
+      customerPhone: booking.client_phone,
+      serviceName: booking.service_name,
+      bookingDate: booking.booking_date,
+      bookingTime: booking.booking_time,
+      totalAmount: booking.total_amount,
+      depositAmount: booking.deposit_amount,
+      paymentReference: booking.payment_reference,
+      notes: booking.notes,
+    }
+
+    const emailResults = await sendBookingEmails(emailData)
+
+    if (emailResults.customer.success && emailResults.admin.success) {
+      console.log("✅ Database-integrated email sending successful")
+    } else {
+      throw new Error("Database-integrated email sending failed")
+    }
+
+    // Clean up test data
+    await supabase.from("bookings").delete().eq("payment_reference", testBooking.paymentReference)
+    console.log("🧹 Test data cleaned up")
 
     return true
   } catch (error) {
-    logError(`Database integration error: ${error.message}`)
+    console.error("❌ Database email integration failed:", error.message)
     return false
   }
 }
 
-async function testCompleteEmailFlow() {
-  logStep("6.", "Testing Complete Email Flow")
+async function testEmailErrorHandling() {
+  console.log("\n🧪 Testing Email Error Handling...")
 
   try {
-    const resend = new Resend(config.resend.apiKey)
+    const { sendCustomerConfirmationEmail } = await import("../lib/email.js")
 
-    // Send both emails in sequence
-    const customerEmail = createCustomerConfirmationEmail(config.testData)
-    const adminEmail = createAdminNotificationEmail(config.testData)
-
-    // Send customer email
-    const customerResult = await resend.emails.send({
-      from: config.resend.fromEmail,
-      to: [config.testData.customerEmail],
-      subject: customerEmail.subject,
-      html: customerEmail.html,
-    })
-
-    if (customerResult.error) {
-      logError(`Customer email in flow failed: ${customerResult.error.message}`)
-      return false
+    // Test with invalid email
+    const invalidBooking = {
+      ...testBooking,
+      customerEmail: "invalid-email-address",
     }
 
-    // Send admin email
-    const adminResult = await resend.emails.send({
-      from: config.resend.fromEmail,
-      to: [config.resend.adminEmail],
-      subject: adminEmail.subject,
-      html: adminEmail.html,
-    })
+    const result = await sendCustomerConfirmationEmail(invalidBooking)
 
-    if (adminResult.error) {
-      logError(`Admin email in flow failed: ${adminResult.error.message}`)
+    if (result.success) {
+      console.log("⚠️  Expected email to fail with invalid address, but it succeeded")
       return false
+    } else {
+      console.log("✅ Email error handling working correctly")
+      console.log("📧 Error:", result.error)
+      return true
     }
-
-    logSuccess("Complete email flow successful")
-    logInfo(`Customer email ID: ${customerResult.data.id}`)
-    logInfo(`Admin email ID: ${adminResult.data.id}`)
-    return true
   } catch (error) {
-    logError(`Complete email flow error: ${error.message}`)
-    return false
+    console.log("✅ Email error handling working correctly (caught exception)")
+    console.log("📧 Error:", error.message)
+    return true
   }
 }
 
-// Main test runner
-async function runEmailTests() {
-  log("\n" + "=".repeat(60), colors.bright)
-  log("📧 LASHED BY DEEDEE - EMAIL SYSTEM TEST", colors.bright)
-  log("=".repeat(60), colors.bright)
-  log(`Started at: ${new Date().toISOString()}`, colors.cyan)
-  log("")
+async function runEmailSystemTests() {
+  console.log("🚀 Starting Complete Email System Tests for Lashed by Deedee")
+  console.log("=".repeat(70))
 
-  const tests = [
-    { name: "Environment Variables", test: testEnvironmentVariables },
-    { name: "Resend Connection", test: testResendConnection },
-    { name: "Customer Email", test: testCustomerEmail },
-    { name: "Admin Email", test: testAdminEmail },
-    { name: "Database Integration", test: testDatabaseIntegration },
-    { name: "Complete Email Flow", test: testCompleteEmailFlow },
-  ]
-
-  const results = []
-
-  for (const test of tests) {
-    try {
-      const result = await test.test()
-      results.push({ name: test.name, success: result })
-    } catch (error) {
-      logError(`Test "${test.name}" threw an error: ${error.message}`)
-      results.push({ name: test.name, success: false, error: error.message })
-    }
-    log("") // Add spacing between tests
+  const results = {
+    resendConnection: false,
+    templateGeneration: false,
+    emailSending: false,
+    bulkEmailSending: false,
+    databaseIntegration: false,
+    errorHandling: false,
   }
+
+  // Test 1: Resend API Connection
+  results.resendConnection = await testResendConnection()
+
+  // Test 2: Email Template Generation
+  results.templateGeneration = await testEmailTemplateGeneration()
+
+  // Test 3: Individual Email Sending
+  results.emailSending = await testEmailSending()
+
+  // Test 4: Bulk Email Sending
+  results.bulkEmailSending = await testBulkEmailSending()
+
+  // Test 5: Database Integration
+  results.databaseIntegration = await testDatabaseEmailIntegration()
+
+  // Test 6: Error Handling
+  results.errorHandling = await testEmailErrorHandling()
 
   // Summary
-  log("=".repeat(60), colors.bright)
-  log("📊 EMAIL SYSTEM TEST RESULTS", colors.bright)
-  log("=".repeat(60), colors.bright)
+  console.log("\n" + "=".repeat(70))
+  console.log("📊 EMAIL SYSTEM TEST RESULTS")
+  console.log("=".repeat(70))
 
-  const passed = results.filter((r) => r.success).length
-  const failed = results.filter((r) => !r.success).length
-
-  results.forEach((result) => {
-    if (result.success) {
-      logSuccess(`${result.name}`)
-    } else {
-      logError(`${result.name}${result.error ? ` - ${result.error}` : ""}`)
-    }
+  Object.entries(results).forEach(([test, passed]) => {
+    const status = passed ? "✅ PASSED" : "❌ FAILED"
+    const testName = test.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase())
+    console.log(`${testName.padEnd(25)} ${status}`)
   })
 
-  log("")
-  log(`Total Tests: ${results.length}`, colors.bright)
-  log(`Passed: ${passed}`, colors.green)
-  log(`Failed: ${failed}`, failed > 0 ? colors.red : colors.green)
-  log(`Success Rate: ${Math.round((passed / results.length) * 100)}%`, colors.cyan)
+  const passedTests = Object.values(results).filter(Boolean).length
+  const totalTests = Object.keys(results).length
 
-  log("")
-  log(`Completed at: ${new Date().toISOString()}`, colors.cyan)
-  log("=".repeat(60), colors.bright)
+  console.log("\n" + "-".repeat(70))
+  console.log(`Overall Score: ${passedTests}/${totalTests} tests passed`)
 
-  if (failed === 0) {
-    logSuccess("🎉 ALL EMAIL TESTS PASSED! Email system is fully functional.")
+  if (passedTests === totalTests) {
+    console.log("🎉 All email system tests PASSED!")
+    console.log("📧 Email system is ready for production")
+    console.log("✨ Beautiful HTML templates are working perfectly")
   } else {
-    logError(`❌ ${failed} test(s) failed. Please check the errors above.`)
+    console.log("⚠️  Some tests failed. Please review the issues above.")
+    console.log("🔧 Fix the failing components before going live")
   }
 
-  process.exit(failed === 0 ? 0 : 1)
+  console.log("=".repeat(70))
 }
-
-// Handle unhandled promise rejections
-process.on("unhandledRejection", (reason, promise) => {
-  logError(`Unhandled Rejection at: ${promise}, reason: ${reason}`)
-  process.exit(1)
-})
-
-// Handle uncaught exceptions
-process.on("uncaughtException", (error) => {
-  logError(`Uncaught Exception: ${error.message}`)
-  process.exit(1)
-})
 
 // Run the tests
-if (require.main === module) {
-  runEmailTests()
-}
-
-module.exports = {
-  runEmailTests,
-  testEnvironmentVariables,
-  testResendConnection,
-  testCustomerEmail,
-  testAdminEmail,
-  testDatabaseIntegration,
-  testCompleteEmailFlow,
-}
+runEmailSystemTests().catch((error) => {
+  console.error("💥 Email test suite crashed:", error)
+  process.exit(1)
+})

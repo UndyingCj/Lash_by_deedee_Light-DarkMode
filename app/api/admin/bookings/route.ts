@@ -51,11 +51,14 @@ export async function POST(req: Request) {
       const emailBookingDetails = {
         customerName: `${firstName} ${lastName}`,
         customerEmail: email,
-        services: selectedServices.map((s: any) => s.name),
-        date: date,
-        time: time,
+        customerPhone: phone,
+        serviceName: selectedServices.map((s: any) => s.name).join(", "),
+        bookingDate: date,
+        bookingTime: time,
         totalAmount: totalPrice,
         depositAmount: Math.round(totalPrice * 0.5), // 50% deposit
+        paymentReference: bookingData.payment_reference,
+        notes: notes,
       }
 
       // Send customer confirmation

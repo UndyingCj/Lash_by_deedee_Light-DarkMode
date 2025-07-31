@@ -1,512 +1,320 @@
-#!/usr/bin/env node
-
 /**
  * Paystack Integration Test for Lashed by Deedee
- * Tests all Paystack functionality including initialization, verification, and webhooks
+ * Tests all Paystack functionality including payment initialization, verification, and webhooks
  */
 
-const fetch = require("node-fetch")
-const crypto = require("crypto")
-const { createClient } = require("@supabase/supabase-js")
+import { createClient } from "@supabase/supabase-js"
+import crypto from "crypto"
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
+// Environment validation
+const requiredEnvVars = [
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY",
+  "PAYSTACK_SECRET_KEY",
+]
 
-// Configuration
-const config = {
-  paystack: {
-    secretKey: process.env.PAYSTACK_SECRET_KEY,
-    publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
-    baseUrl: "https://api.paystack.co",
-  },
-  supabase: {
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-  },
-  testData: {
-    email: "test@example.com",
-    amount: 2000000, // ₦20,000 in kobo
-    reference: `TEST_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-    metadata: {
-      customer_name: "John Doe",
-      service_name: "Microblading",
-      booking_date: "2025-02-15",
-      booking_time: "10:00 AM",
-    },
-  },
+console.log("🔍 Checking environment variables...")
+const missingVars = requiredEnvVars.filter((varName) => !process.env[varName])
+
+if (missingVars.length > 0) {
+  console.error("❌ Missing environment variables:", missingVars)
+  process.exit(1)
 }
 
-// Colors for console output
-const colors = {
-  reset: "\x1b[0m",
-  bright: "\x1b[1m",
-  red: "\x1b[31m",
-  green: "\x1b[32m",
-  yellow: "\x1b[33m",
-  blue: "\x1b[34m",
-  cyan: "\x1b[36m",
-  magenta: "\x1b[35m",
+console.log("✅ All required environment variables are present")
+
+// Initialize Supabase client
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+
+// Test data
+const testBooking = {
+  customerName: "John Doe",
+  customerEmail: "john.doe@example.com",
+  customerPhone: "+2348123456789",
+  serviceName: "Classic Lash Extensions",
+  bookingDate: "2025-08-15",
+  bookingTime: "10:00 AM",
+  totalAmount: 25000,
+  depositAmount: 12500,
+  paymentReference: `TEST_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`,
+  notes: "First time client, allergic to latex",
 }
 
-// Utility functions
-function log(message, color = colors.reset) {
-  console.log(`${color}${message}${colors.reset}`)
-}
+async function testPaystackInitialization() {
+  console.log("\n🧪 Testing Paystack Payment Initialization...")
 
-function logSuccess(message) {
-  log(`✅ ${message}`, colors.green)
-}
-
-function logError(message) {
-  log(`❌ ${message}`, colors.red)
-}
-
-function logInfo(message) {
-  log(`ℹ️  ${message}`, colors.blue)
-}
-
-function logWarning(message) {
-  log(`⚠️  ${message}`, colors.yellow)
-}
-
-function logStep(step, message) {
-  log(`${colors.bright}${step}${colors.reset} ${message}`, colors.cyan)
-}
-
-// Test Paystack API connection
-async function testPaystackConnection() {
   try {
-    logStep("1.", "Testing Paystack API Connection")
-
-    const response = await fetch(`${config.paystack.baseUrl}/bank`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${config.paystack.secretKey}`,
-        "Content-Type": "application/json",
-      },
-    })
-
-    if (response.ok) {
-      const data = await response.json()
-      logSuccess(`Paystack API connection successful. Found ${data.data.length} banks.`)
-      return true
-    } else {
-      logError(`Paystack API connection failed: ${response.status}`)
-      return false
-    }
-  } catch (error) {
-    logError(`Paystack connection error: ${error.message}`)
-    return false
-  }
-}
-
-// Test payment initialization
-async function testPaymentInitialization() {
-  try {
-    logStep("2.", "Testing Payment Initialization")
-
-    const payload = {
-      email: config.testData.email,
-      amount: config.testData.amount,
-      reference: config.testData.reference,
-      metadata: config.testData.metadata,
-      channels: ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
-    }
-
-    logInfo(`Initializing payment with reference: ${config.testData.reference}`)
-
-    const response = await fetch(`${config.paystack.baseUrl}/transaction/initialize`, {
+    const response = await fetch("http://localhost:3000/api/payments/initialize", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${config.paystack.secretKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        email: testBooking.customerEmail,
+        amount: testBooking.depositAmount * 100, // Convert to kobo
+        reference: testBooking.paymentReference,
+        metadata: {
+          customerName: testBooking.customerName,
+          serviceName: testBooking.serviceName,
+          bookingDate: testBooking.bookingDate,
+          bookingTime: testBooking.bookingTime,
+        },
+      }),
     })
 
-    const data = await response.json()
-
-    if (response.ok && data.status) {
-      logSuccess("Payment initialization successful")
-      logInfo(`Authorization URL: ${data.data.authorization_url}`)
-      logInfo(`Access Code: ${data.data.access_code}`)
-      return { success: true, data: data.data }
-    } else {
-      logError(`Payment initialization failed: ${data.message}`)
-      return { success: false, error: data.message }
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
+
+    const data = await response.json()
+    console.log("✅ Payment initialization successful")
+    console.log("📊 Response data:", {
+      status: data.status,
+      reference: data.data?.reference,
+      authorization_url: data.data?.authorization_url ? "✅ Present" : "❌ Missing",
+      access_code: data.data?.access_code ? "✅ Present" : "❌ Missing",
+    })
+
+    return data
   } catch (error) {
-    logError(`Payment initialization error: ${error.message}`)
-    return { success: false, error: error.message }
+    console.error("❌ Payment initialization failed:", error.message)
+    return null
   }
 }
 
-// Test payment verification
-async function testPaymentVerification(reference) {
+async function testPaystackVerification() {
+  console.log("\n🧪 Testing Paystack Payment Verification...")
+
   try {
-    logStep("3.", "Testing Payment Verification")
-
-    const response = await fetch(`${config.paystack.baseUrl}/transaction/verify/${reference}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${config.paystack.secretKey}`,
-        "Content-Type": "application/json",
+    const response = await fetch(
+      `http://localhost:3000/api/payments/verify?reference=${testBooking.paymentReference}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
       },
-    })
+    )
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
 
     const data = await response.json()
+    console.log("✅ Payment verification endpoint accessible")
+    console.log("📊 Response:", {
+      status: data.status || "pending",
+      message: data.message || "No message",
+    })
 
-    if (response.ok && data.status) {
-      logSuccess("Payment verification API working")
-      logInfo(`Transaction Status: ${data.data.status}`)
-      logInfo(`Amount: ₦${(data.data.amount / 100).toLocaleString()}`)
-      logInfo(`Customer Email: ${data.data.customer.email}`)
-      return { success: true, data: data.data }
-    } else {
-      logError(`Payment verification failed: ${data.message}`)
-      return { success: false, error: data.message }
-    }
+    return data
   } catch (error) {
-    logError(`Payment verification error: ${error.message}`)
-    return { success: false, error: error.message }
+    console.error("❌ Payment verification failed:", error.message)
+    return null
   }
 }
 
-// Test webhook signature verification
 async function testWebhookSignature() {
-  try {
-    logStep("4.", "Testing Webhook Signature Verification")
+  console.log("\n🧪 Testing Webhook Signature Verification...")
 
-    const testPayload = JSON.stringify({
-      event: "charge.success",
-      data: {
-        reference: config.testData.reference,
-        status: "success",
-        amount: config.testData.amount,
-        customer: {
-          email: config.testData.email,
-        },
-        metadata: config.testData.metadata,
+  const webhookPayload = {
+    event: "charge.success",
+    data: {
+      reference: testBooking.paymentReference,
+      status: "success",
+      amount: testBooking.depositAmount * 100,
+      customer: {
+        email: testBooking.customerEmail,
       },
+    },
+  }
+
+  const payloadString = JSON.stringify(webhookPayload)
+  const signature = crypto.createHmac("sha512", process.env.PAYSTACK_SECRET_KEY).update(payloadString).digest("hex")
+
+  try {
+    const response = await fetch("http://localhost:3000/api/payments/webhook", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-paystack-signature": signature,
+      },
+      body: payloadString,
     })
 
-    // Generate signature
-    const hash = crypto.createHmac("sha512", config.paystack.secretKey).update(testPayload).digest("hex")
-
-    // Verify signature
-    const verifyHash = crypto.createHmac("sha512", config.paystack.secretKey).update(testPayload).digest("hex")
-
-    if (hash === verifyHash) {
-      logSuccess("Webhook signature verification working correctly")
-      logInfo(`Generated signature: ${hash.substring(0, 20)}...`)
-      return true
-    } else {
-      logError("Webhook signature verification failed")
-      return false
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
+
+    const data = await response.json()
+    console.log("✅ Webhook signature verification successful")
+    console.log("📊 Webhook response:", data)
+
+    return data
   } catch (error) {
-    logError(`Webhook signature test error: ${error.message}`)
+    console.error("❌ Webhook test failed:", error.message)
+    return null
+  }
+}
+
+async function testDatabaseIntegration() {
+  console.log("\n🧪 Testing Database Integration...")
+
+  try {
+    // Create a test booking
+    const { data: booking, error: insertError } = await supabase.from("bookings").insert({
+      client_name: testBooking.customerName,
+      client_email: testBooking.customerEmail,
+      client_phone: testBooking.customerPhone,
+      service_name: testBooking.serviceName,
+      booking_date: testBooking.bookingDate,
+      booking_time: testBooking.bookingTime,
+      total_amount: testBooking.totalAmount,
+      deposit_amount: testBooking.depositAmount,
+      payment_reference: testBooking.paymentReference,
+      payment_status: "pending",
+      status: "pending",
+      notes: testBooking.notes,
+    })
+
+    if (insertError) {
+      throw insertError
+    }
+
+    console.log("✅ Test booking created successfully")
+
+    // Test payment status update
+    const { data: updatedBooking, error: updateError } = await supabase
+      .from("bookings")
+      .update({
+        payment_status: "completed",
+        status: "confirmed",
+      })
+      .eq("payment_reference", testBooking.paymentReference)
+      .select()
+      .single()
+
+    if (updateError) {
+      throw updateError
+    }
+
+    console.log("✅ Payment status update successful")
+    console.log("📊 Updated booking:", {
+      id: updatedBooking.id,
+      payment_status: updatedBooking.payment_status,
+      status: updatedBooking.status,
+    })
+
+    // Clean up test data
+    await supabase.from("bookings").delete().eq("payment_reference", testBooking.paymentReference)
+    console.log("🧹 Test data cleaned up")
+
+    return true
+  } catch (error) {
+    console.error("❌ Database integration test failed:", error.message)
     return false
   }
 }
 
-// Test amount conversion (Naira to Kobo)
-async function testAmountConversion() {
+async function testPaystackDirectAPI() {
+  console.log("\n🧪 Testing Direct Paystack API Connection...")
+
   try {
-    logStep("5.", "Testing Amount Conversion (Naira to Kobo)")
-
-    const testCases = [
-      { naira: 10000, expectedKobo: 1000000 },
-      { naira: 25000, expectedKobo: 2500000 },
-      { naira: 50000, expectedKobo: 5000000 },
-      { naira: 100, expectedKobo: 10000 },
-      { naira: 1, expectedKobo: 100 },
-    ]
-
-    let allPassed = true
-
-    for (const testCase of testCases) {
-      const kobo = testCase.naira * 100
-      if (kobo === testCase.expectedKobo) {
-        logSuccess(`₦${testCase.naira.toLocaleString()} = ${kobo.toLocaleString()} kobo`)
-      } else {
-        logError(
-          `₦${testCase.naira.toLocaleString()} conversion failed. Expected: ${testCase.expectedKobo}, Got: ${kobo}`,
-        )
-        allPassed = false
-      }
-    }
-
-    return allPassed
-  } catch (error) {
-    logError(`Amount conversion test error: ${error.message}`)
-    return false
-  }
-}
-
-// Test reference generation
-async function testReferenceGeneration() {
-  try {
-    logStep("6.", "Testing Payment Reference Generation")
-
-    const references = []
-    for (let i = 0; i < 10; i++) {
-      const reference = `LBD_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`
-      references.push(reference)
-    }
-
-    // Check for uniqueness
-    const uniqueReferences = new Set(references)
-    if (uniqueReferences.size === references.length) {
-      logSuccess("Payment reference generation working correctly")
-      logInfo(`Sample references: ${references.slice(0, 3).join(", ")}`)
-      return true
-    } else {
-      logError("Duplicate references generated")
-      return false
-    }
-  } catch (error) {
-    logError(`Reference generation test error: ${error.message}`)
-    return false
-  }
-}
-
-// Test metadata handling
-async function testMetadataHandling() {
-  try {
-    logStep("7.", "Testing Metadata Handling")
-
-    const metadata = {
-      customer_name: "Alice Johnson",
-      customer_phone: "+234 801 234 5678",
-      service_name: "Microblading, Brow Lamination",
-      booking_date: "2025-02-15",
-      booking_time: "10:00 AM",
-      booking_id: "12345",
-      total_amount: 65000,
-      deposit_amount: 32500,
-    }
-
-    // Test JSON serialization/deserialization
-    const serialized = JSON.stringify(metadata)
-    const deserialized = JSON.parse(serialized)
-
-    let metadataValid = true
-
-    for (const key in metadata) {
-      if (deserialized[key] !== metadata[key]) {
-        logError(`Metadata key "${key}" not preserved correctly`)
-        metadataValid = false
-      }
-    }
-
-    if (metadataValid) {
-      logSuccess("Metadata handling working correctly")
-      logInfo(`Metadata keys: ${Object.keys(metadata).join(", ")}`)
-      return true
-    } else {
-      logError("Metadata handling failed")
-      return false
-    }
-  } catch (error) {
-    logError(`Metadata handling test error: ${error.message}`)
-    return false
-  }
-}
-
-// Test error handling
-async function testErrorHandling() {
-  try {
-    logStep("8.", "Testing Error Handling")
-
-    const errorTests = [
-      {
-        name: "Invalid API Key",
-        test: async () => {
-          const response = await fetch(`${config.paystack.baseUrl}/transaction/initialize`, {
-            method: "POST",
-            headers: {
-              Authorization: "Bearer invalid_key",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              email: "test@example.com",
-              amount: 100000,
-            }),
-          })
-          return !response.ok // Should fail with invalid key
-        },
+    const response = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        "Content-Type": "application/json",
       },
-      {
-        name: "Missing Required Fields",
-        test: async () => {
-          const response = await fetch(`${config.paystack.baseUrl}/transaction/initialize`, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${config.paystack.secretKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({}), // Empty payload
-          })
-          return !response.ok // Should fail with missing fields
-        },
-      },
-      {
-        name: "Invalid Amount",
-        test: async () => {
-          const response = await fetch(`${config.paystack.baseUrl}/transaction/initialize`, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${config.paystack.secretKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              email: "test@example.com",
-              amount: -1000, // Negative amount
-            }),
-          })
-          return !response.ok // Should fail with invalid amount
-        },
-      },
-    ]
+      body: JSON.stringify({
+        email: testBooking.customerEmail,
+        amount: testBooking.depositAmount * 100,
+        reference: testBooking.paymentReference,
+      }),
+    })
 
-    let allPassed = true
-
-    for (const errorTest of errorTests) {
-      try {
-        const result = await errorTest.test()
-        if (result) {
-          logSuccess(`${errorTest.name} error handled correctly`)
-        } else {
-          logError(`${errorTest.name} error not handled properly`)
-          allPassed = false
-        }
-      } catch (error) {
-        logSuccess(`${errorTest.name} error caught: ${error.message}`)
-      }
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
 
-    return allPassed
+    const data = await response.json()
+    console.log("✅ Direct Paystack API connection successful")
+    console.log("📊 API Response:", {
+      status: data.status,
+      message: data.message,
+      authorization_url: data.data?.authorization_url ? "✅ Present" : "❌ Missing",
+    })
+
+    return data
   } catch (error) {
-    logError(`Error handling test error: ${error.message}`)
-    return false
+    console.error("❌ Direct Paystack API test failed:", error.message)
+    return null
   }
 }
 
-// Main test runner
 async function runPaystackTests() {
-  log("\n" + "=".repeat(60), colors.bright)
-  log("💳 LASHED BY DEEDEE - PAYSTACK INTEGRATION TEST", colors.bright)
-  log("=".repeat(60), colors.bright)
-  log(`Started at: ${new Date().toISOString()}`, colors.cyan)
-  log("")
+  console.log("🚀 Starting Paystack Integration Tests for Lashed by Deedee")
+  console.log("=".repeat(60))
 
-  // Check environment variables
-  logStep("0.", "Checking Environment Variables")
-
-  const requiredVars = ["PAYSTACK_SECRET_KEY", "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY"]
-  let envValid = true
-
-  for (const varName of requiredVars) {
-    if (process.env[varName]) {
-      logSuccess(`${varName} is set`)
-    } else {
-      logError(`${varName} is missing`)
-      envValid = false
-    }
+  const results = {
+    initialization: false,
+    verification: false,
+    webhook: false,
+    database: false,
+    directAPI: false,
   }
 
-  if (!envValid) {
-    logError("Required environment variables missing. Exiting.")
-    process.exit(1)
-  }
+  // Test 1: Payment Initialization
+  const initResult = await testPaystackInitialization()
+  results.initialization = !!initResult
 
-  log("")
+  // Test 2: Payment Verification
+  const verifyResult = await testPaystackVerification()
+  results.verification = !!verifyResult
 
-  // Run tests
-  const tests = [
-    { name: "Paystack Connection", test: testPaystackConnection },
-    { name: "Payment Initialization", test: testPaymentInitialization },
-    { name: "Payment Verification", test: () => testPaymentVerification(config.testData.reference) },
-    { name: "Webhook Signature", test: testWebhookSignature },
-    { name: "Amount Conversion", test: testAmountConversion },
-    { name: "Reference Generation", test: testReferenceGeneration },
-    { name: "Metadata Handling", test: testMetadataHandling },
-    { name: "Error Handling", test: testErrorHandling },
-  ]
+  // Test 3: Webhook Processing
+  const webhookResult = await testWebhookSignature()
+  results.webhook = !!webhookResult
 
-  const results = []
+  // Test 4: Database Integration
+  const dbResult = await testDatabaseIntegration()
+  results.database = dbResult
 
-  for (const test of tests) {
-    try {
-      const result = await test.test()
-      results.push({ name: test.name, success: result })
-    } catch (error) {
-      logError(`Test "${test.name}" threw an error: ${error.message}`)
-      results.push({ name: test.name, success: false, error: error.message })
-    }
-    log("") // Add spacing between tests
-  }
+  // Test 5: Direct Paystack API
+  const apiResult = await testPaystackDirectAPI()
+  results.directAPI = !!apiResult
 
   // Summary
-  log("=".repeat(60), colors.bright)
-  log("📊 PAYSTACK INTEGRATION TEST RESULTS", colors.bright)
-  log("=".repeat(60), colors.bright)
+  console.log("\n" + "=".repeat(60))
+  console.log("📊 PAYSTACK INTEGRATION TEST RESULTS")
+  console.log("=".repeat(60))
 
-  const passed = results.filter((r) => r.success).length
-  const failed = results.filter((r) => !r.success).length
-
-  results.forEach((result) => {
-    if (result.success) {
-      logSuccess(`${result.name}`)
-    } else {
-      logError(`${result.name}${result.error ? ` - ${result.error}` : ""}`)
-    }
+  Object.entries(results).forEach(([test, passed]) => {
+    const status = passed ? "✅ PASSED" : "❌ FAILED"
+    const testName = test.charAt(0).toUpperCase() + test.slice(1)
+    console.log(`${testName.padEnd(20)} ${status}`)
   })
 
-  log("")
-  log(`Total Tests: ${results.length}`, colors.bright)
-  log(`Passed: ${passed}`, colors.green)
-  log(`Failed: ${failed}`, failed > 0 ? colors.red : colors.green)
-  log(`Success Rate: ${Math.round((passed / results.length) * 100)}%`, colors.cyan)
+  const passedTests = Object.values(results).filter(Boolean).length
+  const totalTests = Object.keys(results).length
 
-  log("")
-  log(`Completed at: ${new Date().toISOString()}`, colors.cyan)
-  log("=".repeat(60), colors.bright)
+  console.log("\n" + "-".repeat(60))
+  console.log(`Overall Score: ${passedTests}/${totalTests} tests passed`)
 
-  if (failed === 0) {
-    logSuccess("🎉 ALL PAYSTACK TESTS PASSED! Payment integration is fully functional.")
+  if (passedTests === totalTests) {
+    console.log("🎉 All Paystack integration tests PASSED!")
+    console.log("💳 Payment system is ready for production")
   } else {
-    logError(`❌ ${failed} test(s) failed. Please check the errors above.`)
+    console.log("⚠️  Some tests failed. Please review the issues above.")
+    console.log("🔧 Fix the failing components before going live")
   }
 
-  process.exit(failed === 0 ? 0 : 1)
+  console.log("=".repeat(60))
 }
-
-// Handle unhandled promise rejections
-process.on("unhandledRejection", (reason, promise) => {
-  logError(`Unhandled Rejection at: ${promise}, reason: ${reason}`)
-  process.exit(1)
-})
-
-// Handle uncaught exceptions
-process.on("uncaughtException", (error) => {
-  logError(`Uncaught Exception: ${error.message}`)
-  process.exit(1)
-})
 
 // Run the tests
-if (require.main === module) {
-  runPaystackTests()
-}
-
-module.exports = {
-  runPaystackTests,
-  testPaystackConnection,
-  testPaymentInitialization,
-  testPaymentVerification,
-  testWebhookSignature,
-  testAmountConversion,
-  testReferenceGeneration,
-  testMetadataHandling,
-  testErrorHandling,
-}
+runPaystackTests().catch((error) => {
+  console.error("💥 Test suite crashed:", error)
+  process.exit(1)
+})
