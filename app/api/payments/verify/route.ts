@@ -1,189 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { Resend } from "resend"
+import { sendBookingEmails } from "@/lib/email"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-const resend = new Resend(process.env.RESEND_API_KEY!)
-
-// Email templates
-function createCustomerConfirmationEmail(booking: any) {
-  return {
-    subject: `Booking Confirmation - ${booking.service_name}`,
-    html: `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Booking Confirmation</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .booking-details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
-          .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
-          .detail-label { font-weight: bold; color: #555; }
-          .detail-value { color: #333; }
-          .amount { font-size: 1.2em; font-weight: bold; color: #667eea; }
-          .footer { text-align: center; margin-top: 30px; color: #666; font-size: 0.9em; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>🎉 Booking Confirmed!</h1>
-            <p>Thank you for choosing Lashed by Deedee</p>
-          </div>
-          <div class="content">
-            <p>Dear ${booking.client_name},</p>
-            <p>Your booking has been confirmed! We're excited to see you soon.</p>
-            
-            <div class="booking-details">
-              <h3>📋 Booking Details</h3>
-              <div class="detail-row">
-                <span class="detail-label">Service:</span>
-                <span class="detail-value">${booking.service_name}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Date:</span>
-                <span class="detail-value">${booking.booking_date}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Time:</span>
-                <span class="detail-value">${booking.booking_time}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Total Amount:</span>
-                <span class="detail-value amount">₦${Number(booking.total_amount).toLocaleString()}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Deposit Paid:</span>
-                <span class="detail-value amount">₦${Number(booking.deposit_amount).toLocaleString()}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Reference:</span>
-                <span class="detail-value">${booking.payment_reference}</span>
-              </div>
-            </div>
-
-            <h3>📍 Location & Contact</h3>
-            <p><strong>Address:</strong> Lagos, Nigeria</p>
-            <p><strong>Phone:</strong> +234 XXX XXX XXXX</p>
-            <p><strong>Email:</strong> info@lashedbydeedee.com</p>
-
-            <h3>⏰ Important Reminders</h3>
-            <ul>
-              <li>Please arrive 10 minutes early for your appointment</li>
-              <li>Bring a valid ID for verification</li>
-              <li>Contact us if you need to reschedule (24hrs notice required)</li>
-              <li>The remaining balance of ₦${(Number(booking.total_amount) - Number(booking.deposit_amount)).toLocaleString()} is due at your appointment</li>
-            </ul>
-
-            <div class="footer">
-              <p>Thank you for choosing Lashed by Deedee!</p>
-              <p>Follow us on social media for beauty tips and updates</p>
-            </div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `,
-  }
-}
-
-function createAdminNotificationEmail(booking: any) {
-  return {
-    subject: `New Booking Alert - ${booking.service_name}`,
-    html: `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>New Booking Alert</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: #ff6b6b; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .booking-details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
-          .detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
-          .detail-label { font-weight: bold; color: #555; }
-          .detail-value { color: #333; }
-          .amount { font-size: 1.1em; font-weight: bold; color: #ff6b6b; }
-          .actions { background: #e8f5e8; padding: 15px; border-radius: 8px; margin: 20px 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>🚨 New Booking Alert</h1>
-            <p>A new booking has been confirmed</p>
-          </div>
-          <div class="content">
-            <div class="booking-details">
-              <h3>👤 Customer Information</h3>
-              <div class="detail-row">
-                <span class="detail-label">Name:</span>
-                <span class="detail-value">${booking.client_name}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Email:</span>
-                <span class="detail-value">${booking.client_email}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Phone:</span>
-                <span class="detail-value">${booking.client_phone}</span>
-              </div>
-              
-              <h3>📋 Booking Information</h3>
-              <div class="detail-row">
-                <span class="detail-label">Service:</span>
-                <span class="detail-value">${booking.service_name}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Date:</span>
-                <span class="detail-value">${booking.booking_date}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Time:</span>
-                <span class="detail-value">${booking.booking_time}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Total Amount:</span>
-                <span class="detail-value amount">₦${Number(booking.total_amount).toLocaleString()}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Deposit Paid:</span>
-                <span class="detail-value amount">₦${Number(booking.deposit_amount).toLocaleString()}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Balance Due:</span>
-                <span class="detail-value amount">₦${(Number(booking.total_amount) - Number(booking.deposit_amount)).toLocaleString()}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Reference:</span>
-                <span class="detail-value">${booking.payment_reference}</span>
-              </div>
-            </div>
-
-            <div class="actions">
-              <h3>📝 Next Steps</h3>
-              <ul>
-                <li>Add appointment to calendar</li>
-                <li>Prepare materials for ${booking.service_name}</li>
-                <li>Send reminder 24 hours before appointment</li>
-                <li>Collect remaining balance: ₦${(Number(booking.total_amount) - Number(booking.deposit_amount)).toLocaleString()}</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `,
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -266,37 +85,34 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ Booking status updated:", booking.id)
 
-    // Send confirmation emails
-    console.log("📧 Sending confirmation emails...")
+    // Send confirmation emails via Zoho
+    console.log("📧 Sending confirmation emails via Zoho...")
     try {
-      // Send customer confirmation email
-      const customerEmail = createCustomerConfirmationEmail(booking)
-      const customerResult = await resend.emails.send({
-        from: "bookings@lashedbydeedee.com",
-        to: [booking.client_email],
-        subject: customerEmail.subject,
-        html: customerEmail.html,
-      })
-
-      if (customerResult.error) {
-        console.error("❌ Customer email failed:", customerResult.error)
-      } else {
-        console.log("✅ Customer email sent:", customerResult.data.id)
+      const emailBookingData = {
+        customerName: booking.client_name,
+        customerEmail: booking.client_email,
+        customerPhone: booking.client_phone,
+        serviceName: booking.service_name,
+        bookingDate: booking.booking_date,
+        bookingTime: booking.booking_time,
+        totalAmount: booking.total_amount,
+        depositAmount: booking.deposit_amount,
+        paymentReference: booking.payment_reference,
+        notes: booking.notes,
       }
 
-      // Send admin notification email
-      const adminEmail = createAdminNotificationEmail(booking)
-      const adminResult = await resend.emails.send({
-        from: "bookings@lashedbydeedee.com",
-        to: ["admin@lashedbydeedee.com"],
-        subject: adminEmail.subject,
-        html: adminEmail.html,
-      })
+      const emailResults = await sendBookingEmails(emailBookingData)
 
-      if (adminResult.error) {
-        console.error("❌ Admin email failed:", adminResult.error)
+      if (emailResults.customer.success) {
+        console.log("✅ Customer email sent via Zoho:", emailResults.customer.id)
       } else {
-        console.log("✅ Admin email sent:", adminResult.data.id)
+        console.error("❌ Customer email failed:", emailResults.customer.error)
+      }
+
+      if (emailResults.admin.success) {
+        console.log("✅ Admin email sent via Zoho:", emailResults.admin.id)
+      } else {
+        console.error("❌ Admin email failed:", emailResults.admin.error)
       }
     } catch (emailError) {
       console.error("❌ Email sending error:", emailError)

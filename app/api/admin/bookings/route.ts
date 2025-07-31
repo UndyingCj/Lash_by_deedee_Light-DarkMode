@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       return new NextResponse("Failed to create booking, no data returned", { status: 500 })
     }
 
-    // Send confirmation emails
+    // Send confirmation emails via Zoho
     try {
       const emailBookingDetails = {
         customerName: `${firstName} ${lastName}`,
@@ -67,12 +67,12 @@ export async function POST(req: Request) {
       // Send admin notification
       const adminEmailResult = await sendBookingNotificationToAdmin(emailBookingDetails)
 
-      console.log("📧 Email results:", {
+      console.log("📧 Zoho email results:", {
         customer: customerEmailResult.success ? "✅ Sent" : "❌ Failed",
         admin: adminEmailResult.success ? "✅ Sent" : "❌ Failed",
       })
     } catch (emailError) {
-      console.error("📧 Email sending failed:", emailError)
+      console.error("📧 Zoho email sending failed:", emailError)
       // Don't fail the booking if emails fail - booking is still created
     }
 

@@ -1,17 +1,65 @@
-import { Resend } from "resend"
+interface ZohoTokenResponse {
+  access_token: string
+  expires_in: number
+  token_type: string
+}
+
+interface ZohoEmailResponse {
+  data: {
+    messageId: string
+    status: string
+  }
+  status: {
+    code: number
+    description: string
+  }
+}
 
 // Lazy initialization to avoid build-time errors
-let resendInstance: Resend | null = null
+let zohoAccessToken: string | null = null
+let tokenExpiryTime = 0
 
-function getResendInstance(): Resend {
-  if (!resendInstance) {
-    const apiKey = process.env.RESEND_API_KEY
-    if (!apiKey) {
-      throw new Error("RESEND_API_KEY environment variable is required")
-    }
-    resendInstance = new Resend(apiKey)
+async function getZohoAccessToken(): Promise<string> {
+  // Check if we have a valid token
+  if (zohoAccessToken && Date.now() < tokenExpiryTime) {
+    return zohoAccessToken
   }
-  return resendInstance
+
+  const clientId = process.env.ZOHO_CLIENT_ID
+  const clientSecret = process.env.ZOHO_CLIENT_SECRET
+  const refreshToken = process.env.ZOHO_REFRESH_TOKEN
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error("Missing Zoho environment variables")
+  }
+
+  try {
+    const response = await fetch("https://accounts.zoho.com/oauth/v2/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        refresh_token: refreshToken,
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: "refresh_token",
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Zoho token refresh failed: ${response.status}`)
+    }
+
+    const data: ZohoTokenResponse = await response.json()
+    zohoAccessToken = data.access_token
+    tokenExpiryTime = Date.now() + (data.expires_in - 300) * 1000 // Refresh 5 minutes early
+
+    return zohoAccessToken
+  } catch (error) {
+    console.error("Failed to refresh Zoho access token:", error)
+    throw new Error("Failed to authenticate with Zoho Mail")
+  }
 }
 
 export interface BookingEmailData {
@@ -549,25 +597,73 @@ export function createAdminNotificationEmail(booking: BookingEmailData) {
   }
 }
 
-export async function sendCustomerConfirmationEmail(booking: BookingEmailData) {
+async function sendZohoEmail(
+  to: string[],
+  subject: string,
+  htmlContent: string,
+): Promise<{ success: boolean; id?: string; error?: any }> {
   try {
-    const resend = getResendInstance()
-    const emailContent = createCustomerConfirmationEmail(booking)
+    const accessToken = await getZohoAccessToken()
+    const fromEmail = process.env.ZOHO_EMAIL_USER
 
-    const result = await resend.emails.send({
-      from: "bookings@lashedbydeedee.com",
-      to: [booking.customerEmail],
-      subject: emailContent.subject,
-      html: emailContent.html,
+    if (!fromEmail) {
+      throw new Error("ZOHO_EMAIL_USER environment variable is required")
+    }
+
+    const emailData = {
+      fromAddress: fromEmail,
+      toAddress: to.join(","),
+      subject: subject,
+      content: htmlContent,
+      mailFormat: "html",
+    }
+
+    const response = await fetch("https://mail.zoho.com/api/accounts/me/messages", {
+      method: "POST",
+      headers: {
+        Authorization: `Zoho-oauthtoken ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(emailData),
     })
 
-    if (result.error) {
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Zoho Mail API error: ${response.status} - ${errorText}`)
+    }
+
+    const result: ZohoEmailResponse = await response.json()
+
+    if (result.status.code === 200) {
+      return {
+        success: true,
+        id: result.data.messageId,
+      }
+    } else {
+      throw new Error(`Zoho Mail error: ${result.status.description}`)
+    }
+  } catch (error) {
+    console.error("Zoho email sending failed:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    }
+  }
+}
+
+export async function sendCustomerConfirmationEmail(booking: BookingEmailData) {
+  try {
+    const emailContent = createCustomerConfirmationEmail(booking)
+
+    const result = await sendZohoEmail([booking.customerEmail], emailContent.subject, emailContent.html)
+
+    if (result.success) {
+      console.log("✅ Customer email sent via Zoho:", result.id)
+      return { success: true, id: result.id }
+    } else {
       console.error("❌ Customer email failed:", result.error)
       return { success: false, error: result.error }
     }
-
-    console.log("✅ Customer email sent:", result.data.id)
-    return { success: true, id: result.data.id }
   } catch (error) {
     console.error("❌ Customer email error:", error)
     return { success: false, error }
@@ -576,23 +672,17 @@ export async function sendCustomerConfirmationEmail(booking: BookingEmailData) {
 
 export async function sendAdminNotificationEmail(booking: BookingEmailData) {
   try {
-    const resend = getResendInstance()
     const emailContent = createAdminNotificationEmail(booking)
 
-    const result = await resend.emails.send({
-      from: "bookings@lashedbydeedee.com",
-      to: ["admin@lashedbydeedee.com"],
-      subject: emailContent.subject,
-      html: emailContent.html,
-    })
+    const result = await sendZohoEmail(["admin@lashedbydeedee.com"], emailContent.subject, emailContent.html)
 
-    if (result.error) {
+    if (result.success) {
+      console.log("✅ Admin email sent via Zoho:", result.id)
+      return { success: true, id: result.id }
+    } else {
       console.error("❌ Admin email failed:", result.error)
       return { success: false, error: result.error }
     }
-
-    console.log("✅ Admin email sent:", result.data.id)
-    return { success: true, id: result.data.id }
   } catch (error) {
     console.error("❌ Admin email error:", error)
     return { success: false, error }
@@ -601,7 +691,7 @@ export async function sendAdminNotificationEmail(booking: BookingEmailData) {
 
 export async function sendBookingEmails(booking: BookingEmailData) {
   try {
-    console.log("📧 Sending booking confirmation emails...")
+    console.log("📧 Sending booking confirmation emails via Zoho...")
 
     // Send both emails concurrently
     const [customerResult, adminResult] = await Promise.allSettled([
@@ -615,7 +705,7 @@ export async function sendBookingEmails(booking: BookingEmailData) {
       admin: adminResult.status === "fulfilled" ? adminResult.value : { success: false, error: adminResult.reason },
     }
 
-    console.log("📊 Email results:", {
+    console.log("📊 Zoho email results:", {
       customer: results.customer.success ? "✅ Sent" : "❌ Failed",
       admin: results.admin.success ? "✅ Sent" : "❌ Failed",
     })

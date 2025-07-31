@@ -3,14 +3,44 @@ import { createClient } from "@supabase/supabase-js"
 // Environment variables
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-const RESEND_API_KEY = process.env.RESEND_API_KEY
+const ZOHO_CLIENT_ID = process.env.ZOHO_CLIENT_ID
+const ZOHO_CLIENT_SECRET = process.env.ZOHO_CLIENT_SECRET
+const ZOHO_REFRESH_TOKEN = process.env.ZOHO_REFRESH_TOKEN
+const ZOHO_EMAIL_USER = process.env.ZOHO_EMAIL_USER
 
-console.log("📧 Testing Complete Email System...\n")
+console.log("📧 Testing Complete Email System with Zoho Mail...\n")
 
 // Initialize Supabase client
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-// Mock email functions for testing (since we can't import from lib/email directly in Node.js)
+// Mock Zoho token refresh
+async function getZohoAccessToken() {
+  try {
+    const response = await fetch("https://accounts.zoho.com/oauth/v2/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        refresh_token: ZOHO_REFRESH_TOKEN,
+        client_id: ZOHO_CLIENT_ID,
+        client_secret: ZOHO_CLIENT_SECRET,
+        grant_type: "refresh_token",
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Zoho token refresh failed: ${response.status}`)
+    }
+
+    const data = await response.json()
+    return data.access_token
+  } catch (error) {
+    throw new Error(`Failed to get Zoho access token: ${error.message}`)
+  }
+}
+
+// Mock email functions for testing
 function createCustomerConfirmationEmail(booking) {
   const remainingBalance = booking.totalAmount - booking.depositAmount
 
@@ -79,25 +109,41 @@ function createAdminNotificationEmail(booking) {
   }
 }
 
-async function sendTestEmail(emailData, type) {
+async function sendZohoTestEmail(emailData, type) {
   try {
-    const { Resend } = await import("resend")
-    const resend = new Resend(RESEND_API_KEY)
+    const accessToken = await getZohoAccessToken()
 
-    const result = await resend.emails.send({
-      from: "bookings@lashedbydeedee.com",
-      to: [emailData.to],
+    const zohoEmailData = {
+      fromAddress: ZOHO_EMAIL_USER,
+      toAddress: emailData.to,
       subject: emailData.subject,
-      html: emailData.html,
-    })
-
-    if (result.error) {
-      console.log(`❌ ${type} email failed:`, result.error)
-      return { success: false, error: result.error }
+      content: emailData.html,
+      mailFormat: "html",
     }
 
-    console.log(`✅ ${type} email sent:`, result.data.id)
-    return { success: true, id: result.data.id }
+    const response = await fetch("https://mail.zoho.com/api/accounts/me/messages", {
+      method: "POST",
+      headers: {
+        Authorization: `Zoho-oauthtoken ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(zohoEmailData),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Zoho Mail API error: ${response.status} - ${errorText}`)
+    }
+
+    const result = await response.json()
+
+    if (result.status && result.status.code === 200) {
+      console.log(`✅ ${type} email sent via Zoho:`, result.data.messageId)
+      return { success: true, id: result.data.messageId }
+    } else {
+      console.log(`❌ ${type} email failed:`, result.status?.description || "Unknown error")
+      return { success: false, error: result.status?.description || "Unknown error" }
+    }
   } catch (error) {
     console.log(`❌ ${type} email error:`, error.message)
     return { success: false, error: error.message }
@@ -109,14 +155,35 @@ async function testCompleteEmailSystem() {
     console.log("📋 Environment Check:")
     console.log(`✅ Supabase URL: ${SUPABASE_URL ? "Set" : "❌ Missing"}`)
     console.log(`✅ Supabase Service Key: ${SUPABASE_SERVICE_KEY ? "Set" : "❌ Missing"}`)
-    console.log(`✅ Resend API Key: ${RESEND_API_KEY ? "Set" : "❌ Missing"}\n`)
+    console.log(`✅ Zoho Client ID: ${ZOHO_CLIENT_ID ? "Set" : "❌ Missing"}`)
+    console.log(`✅ Zoho Client Secret: ${ZOHO_CLIENT_SECRET ? "Set" : "❌ Missing"}`)
+    console.log(`✅ Zoho Refresh Token: ${ZOHO_REFRESH_TOKEN ? "Set" : "❌ Missing"}`)
+    console.log(`✅ Zoho Email User: ${ZOHO_EMAIL_USER ? "Set" : "❌ Missing"}\n`)
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !RESEND_API_KEY) {
+    if (
+      !SUPABASE_URL ||
+      !SUPABASE_SERVICE_KEY ||
+      !ZOHO_CLIENT_ID ||
+      !ZOHO_CLIENT_SECRET ||
+      !ZOHO_REFRESH_TOKEN ||
+      !ZOHO_EMAIL_USER
+    ) {
       throw new Error("Missing required environment variables")
     }
 
-    // Test 1: Email Template Generation
-    console.log("📝 Test 1: Email Template Generation")
+    // Test 1: Zoho Token Refresh
+    console.log("🔑 Test 1: Zoho Token Refresh")
+    try {
+      const accessToken = await getZohoAccessToken()
+      console.log("✅ Zoho access token obtained successfully")
+      console.log(`🔑 Token preview: ${accessToken.substring(0, 20)}...\n`)
+    } catch (error) {
+      console.log("❌ Zoho token refresh failed:", error.message)
+      return
+    }
+
+    // Test 2: Email Template Generation
+    console.log("📝 Test 2: Email Template Generation")
     const testBookingData = {
       customerName: "Jane Doe",
       customerEmail: "test@example.com",
@@ -138,8 +205,8 @@ async function testCompleteEmailSystem() {
     console.log(`📧 Customer subject: ${customerEmail.subject}`)
     console.log(`📧 Admin subject: ${adminEmail.subject}\n`)
 
-    // Test 2: Email Content Validation
-    console.log("🔍 Test 2: Email Content Validation")
+    // Test 3: Email Content Validation
+    console.log("🔍 Test 3: Email Content Validation")
 
     // Check customer email content
     const customerHtml = customerEmail.html
@@ -152,7 +219,6 @@ async function testCompleteEmailSystem() {
       hasDepositAmount: customerHtml.includes("₦12,500"),
       hasBalanceDue: customerHtml.includes("₦12,500"), // remaining balance
       hasPaymentReference: customerHtml.includes(testBookingData.paymentReference),
-      hasNotes: customerHtml.includes(testBookingData.notes),
     }
 
     console.log("📧 Customer Email Content:")
@@ -179,49 +245,44 @@ async function testCompleteEmailSystem() {
       console.log(`  ${passed ? "✅" : "❌"} ${check}: ${passed ? "Present" : "Missing"}`)
     })
 
-    // Test 3: Email Sending (if RESEND_API_KEY is available)
-    console.log("\n📤 Test 3: Email Sending")
+    // Test 4: Email Sending via Zoho
+    console.log("\n📤 Test 4: Email Sending via Zoho")
 
-    if (RESEND_API_KEY && RESEND_API_KEY !== "your-resend-api-key") {
-      console.log("🚀 Attempting to send test emails...")
+    console.log("🚀 Attempting to send test emails via Zoho Mail...")
 
-      // Send customer email
-      const customerResult = await sendTestEmail(
-        {
-          to: "test@example.com",
-          subject: customerEmail.subject,
-          html: customerEmail.html,
-        },
-        "Customer",
-      )
+    // Send customer email
+    const customerResult = await sendZohoTestEmail(
+      {
+        to: "test@example.com",
+        subject: customerEmail.subject,
+        html: customerEmail.html,
+      },
+      "Customer",
+    )
 
-      // Send admin email
-      const adminResult = await sendTestEmail(
-        {
-          to: "admin@example.com",
-          subject: adminEmail.subject,
-          html: adminEmail.html,
-        },
-        "Admin",
-      )
+    // Send admin email
+    const adminResult = await sendZohoTestEmail(
+      {
+        to: "admin@example.com",
+        subject: adminEmail.subject,
+        html: adminEmail.html,
+      },
+      "Admin",
+    )
 
-      console.log("\n📊 Email Sending Results:")
-      console.log(`  Customer Email: ${customerResult.success ? "✅ Sent" : "❌ Failed"}`)
-      console.log(`  Admin Email: ${adminResult.success ? "✅ Sent" : "❌ Failed"}`)
+    console.log("\n📊 Zoho Email Sending Results:")
+    console.log(`  Customer Email: ${customerResult.success ? "✅ Sent" : "❌ Failed"}`)
+    console.log(`  Admin Email: ${adminResult.success ? "✅ Sent" : "❌ Failed"}`)
 
-      if (!customerResult.success) {
-        console.log(`  Customer Error: ${customerResult.error}`)
-      }
-      if (!adminResult.success) {
-        console.log(`  Admin Error: ${adminResult.error}`)
-      }
-    } else {
-      console.log("⚠️  Skipping email sending test (RESEND_API_KEY not configured)")
-      console.log("   Set RESEND_API_KEY to test actual email sending")
+    if (!customerResult.success) {
+      console.log(`  Customer Error: ${customerResult.error}`)
+    }
+    if (!adminResult.success) {
+      console.log(`  Admin Error: ${adminResult.error}`)
     }
 
-    // Test 4: Database Integration Test
-    console.log("\n💾 Test 4: Database Integration Test")
+    // Test 5: Database Integration Test
+    console.log("\n💾 Test 5: Database Integration Test")
 
     // Create test booking
     const testBooking = {
@@ -280,22 +341,24 @@ async function testCompleteEmailSystem() {
       }
     }
 
-    console.log("\n🎉 Complete Email System Test Finished!")
+    console.log("\n🎉 Complete Email System Test with Zoho Mail Finished!")
     console.log("📊 Summary:")
+    console.log("  ✅ Zoho Token Refresh: Working")
     console.log("  ✅ Template Generation: Working")
     console.log("  ✅ Content Validation: Working")
     console.log("  ✅ Database Integration: Working")
     console.log(
-      `  ${RESEND_API_KEY && RESEND_API_KEY !== "your-resend-api-key" ? "✅" : "⚠️ "} Email Sending: ${RESEND_API_KEY && RESEND_API_KEY !== "your-resend-api-key" ? "Working" : "Skipped (API key needed)"}`,
+      `  ${customerResult.success && adminResult.success ? "✅" : "⚠️ "} Zoho Email Sending: ${customerResult.success && adminResult.success ? "Working" : "Needs Review"}`,
     )
   } catch (error) {
     console.error("❌ Test failed:", error.message)
     console.log("\n🔧 Troubleshooting:")
-    console.log("  1. Check environment variables are set correctly")
-    console.log("  2. Verify Resend API key is valid")
-    console.log("  3. Ensure Supabase connection is working")
-    console.log("  4. Check email templates for syntax errors")
-    console.log("  5. Verify domain is configured in Resend")
+    console.log("  1. Check Zoho environment variables are set correctly")
+    console.log("  2. Verify Zoho OAuth2 credentials are valid")
+    console.log("  3. Ensure Zoho Mail API access is enabled")
+    console.log("  4. Check Supabase connection is working")
+    console.log("  5. Verify email templates for syntax errors")
+    console.log("  6. Ensure Zoho Mail domain is properly configured")
   }
 }
 

@@ -2,7 +2,7 @@
 
 /**
  * Comprehensive Booking Scenarios Test for Lashed by Deedee
- * Tests realistic booking flows, edge cases, and system integration
+ * Tests realistic booking flows, edge cases, and system integration with Zoho Mail
  */
 
 import { createClient } from "@supabase/supabase-js"
@@ -12,7 +12,10 @@ import fetch from "node-fetch"
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY
-const RESEND_API_KEY = process.env.RESEND_API_KEY
+const ZOHO_CLIENT_ID = process.env.ZOHO_CLIENT_ID
+const ZOHO_CLIENT_SECRET = process.env.ZOHO_CLIENT_SECRET
+const ZOHO_REFRESH_TOKEN = process.env.ZOHO_REFRESH_TOKEN
+const ZOHO_EMAIL_USER = process.env.ZOHO_EMAIL_USER
 
 // Configuration
 const config = {
@@ -135,6 +138,32 @@ const scenarios = [
     },
   },
 ]
+
+async function getZohoAccessToken() {
+  try {
+    const response = await fetch("https://accounts.zoho.com/oauth/v2/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        refresh_token: ZOHO_REFRESH_TOKEN,
+        client_id: ZOHO_CLIENT_ID,
+        client_secret: ZOHO_CLIENT_SECRET,
+        grant_type: "refresh_token",
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Zoho token refresh failed: ${response.status}`)
+    }
+
+    const data = await response.json()
+    return data.access_token
+  } catch (error) {
+    throw new Error(`Failed to get Zoho access token: ${error.message}`)
+  }
+}
 
 async function createTestBooking(scenario) {
   const depositAmount = Math.round(scenario.booking.totalAmount * 0.5) // 50% deposit
@@ -264,6 +293,48 @@ function generateEmailContent(booking) {
   }
 }
 
+async function testZohoEmailIntegration(booking) {
+  try {
+    const accessToken = await getZohoAccessToken()
+
+    const emailData = {
+      fromAddress: ZOHO_EMAIL_USER,
+      toAddress: booking.client_email,
+      subject: `Test Email - Booking ${booking.payment_reference}`,
+      content: `<p>This is a test email for booking ${booking.payment_reference}</p>`,
+      mailFormat: "html",
+    }
+
+    const response = await fetch("https://mail.zoho.com/api/accounts/me/messages", {
+      method: "POST",
+      headers: {
+        Authorization: `Zoho-oauthtoken ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(emailData),
+    })
+
+    if (response.ok) {
+      const result = await response.json()
+      return {
+        success: true,
+        messageId: result.data?.messageId,
+      }
+    } else {
+      const errorText = await response.text()
+      return {
+        success: false,
+        error: `Zoho API error: ${response.status} - ${errorText}`,
+      }
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+    }
+  }
+}
+
 async function testBookingScenario(scenario, index) {
   console.log(`\n🎬 Scenario ${index + 1}: ${scenario.name}`)
   console.log("─".repeat(50))
@@ -307,8 +378,19 @@ async function testBookingScenario(scenario, index) {
     console.log("✅ Admin email content generated")
     console.log(`📧 Subject: ${emailContent.admin.subject}`)
 
-    // Step 5: Validate booking data
-    console.log("\n🔍 Step 5: Validating booking data...")
+    // Step 5: Test Zoho email integration
+    console.log("\n📤 Step 5: Testing Zoho email integration...")
+    const emailResult = await testZohoEmailIntegration(webhookResult.success ? webhookResult.booking : booking)
+
+    if (emailResult.success) {
+      console.log("✅ Zoho email integration working")
+      console.log(`📧 Message ID: ${emailResult.messageId}`)
+    } else {
+      console.log(`❌ Zoho email integration failed: ${emailResult.error}`)
+    }
+
+    // Step 6: Validate booking data
+    console.log("\n🔍 Step 6: Validating booking data...")
     const finalBooking = webhookResult.success ? webhookResult.booking : booking
 
     const validations = {
@@ -348,6 +430,7 @@ async function testBookingScenario(scenario, index) {
       paymentInitialized: paymentResult.success,
       webhookProcessed: webhookResult.success,
       emailsGenerated: true,
+      zohoEmailWorking: emailResult.success,
       validationPassed: allValid,
     }
   } catch (error) {
@@ -366,13 +449,24 @@ async function testBookingScenarios() {
     console.log(`✅ Supabase URL: ${SUPABASE_URL ? "Set" : "❌ Missing"}`)
     console.log(`✅ Supabase Service Key: ${SUPABASE_SERVICE_KEY ? "Set" : "❌ Missing"}`)
     console.log(`✅ Paystack Secret Key: ${PAYSTACK_SECRET_KEY ? "Set" : "❌ Missing"}`)
-    console.log(`✅ Resend API Key: ${RESEND_API_KEY ? "Set" : "❌ Missing"}`)
+    console.log(`✅ Zoho Client ID: ${ZOHO_CLIENT_ID ? "Set" : "❌ Missing"}`)
+    console.log(`✅ Zoho Client Secret: ${ZOHO_CLIENT_SECRET ? "Set" : "❌ Missing"}`)
+    console.log(`✅ Zoho Refresh Token: ${ZOHO_REFRESH_TOKEN ? "Set" : "❌ Missing"}`)
+    console.log(`✅ Zoho Email User: ${ZOHO_EMAIL_USER ? "Set" : "❌ Missing"}`)
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !PAYSTACK_SECRET_KEY) {
+    if (
+      !SUPABASE_URL ||
+      !SUPABASE_SERVICE_KEY ||
+      !PAYSTACK_SECRET_KEY ||
+      !ZOHO_CLIENT_ID ||
+      !ZOHO_CLIENT_SECRET ||
+      !ZOHO_REFRESH_TOKEN ||
+      !ZOHO_EMAIL_USER
+    ) {
       throw new Error("Missing required environment variables")
     }
 
-    console.log(`\n🎭 Running ${scenarios.length} booking scenarios...\n`)
+    console.log(`\n🎭 Running ${scenarios.length} booking scenarios with Zoho Mail integration...\n`)
 
     const results = []
 
@@ -410,6 +504,7 @@ async function testBookingScenarios() {
         console.log(`     Payment Initialized: ${result.paymentInitialized ? "✅" : "❌"}`)
         console.log(`     Webhook Processed: ${result.webhookProcessed ? "✅" : "❌"}`)
         console.log(`     Emails Generated: ${result.emailsGenerated ? "✅" : "❌"}`)
+        console.log(`     Zoho Email Working: ${result.zohoEmailWorking ? "✅" : "❌"}`)
         console.log(`     Validation Passed: ${result.validationPassed ? "✅" : "❌"}`)
       } else {
         console.log(`     Error: ${result.error}`)
@@ -418,7 +513,7 @@ async function testBookingScenarios() {
 
     if (successful === scenarios.length) {
       console.log("\n🎉 All booking scenarios completed successfully!")
-      console.log("✅ The booking system is working correctly across all test cases")
+      console.log("✅ The booking system with Zoho Mail integration is working correctly")
     } else {
       console.log("\n⚠️  Some scenarios failed. Please review the errors above.")
     }
@@ -428,6 +523,7 @@ async function testBookingScenarios() {
     console.log("  ✅ Payment initialization with Paystack")
     console.log("  ✅ Webhook processing simulation")
     console.log("  ✅ Email content generation")
+    console.log("  ✅ Zoho Mail API integration")
     console.log("  ✅ Data validation and integrity")
     console.log("  ✅ Multiple service types and pricing")
     console.log("  ✅ Different customer scenarios")
@@ -437,8 +533,9 @@ async function testBookingScenarios() {
     console.log("  1. Check all environment variables are set correctly")
     console.log("  2. Verify database schema matches expected structure")
     console.log("  3. Ensure Paystack API keys are valid")
-    console.log("  4. Check network connectivity")
-    console.log("  5. Verify Supabase permissions and RLS policies")
+    console.log("  4. Verify Zoho OAuth2 credentials and refresh token")
+    console.log("  5. Check Zoho Mail API access permissions")
+    console.log("  6. Verify Supabase permissions and RLS policies")
   }
 }
 
