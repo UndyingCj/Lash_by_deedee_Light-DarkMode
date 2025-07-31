@@ -1,6 +1,18 @@
 import { Resend } from "resend"
 
-const resend = new Resend(process.env.RESEND_API_KEY!)
+// Lazy initialization to avoid build-time errors
+let resendInstance: Resend | null = null
+
+function getResendInstance(): Resend {
+  if (!resendInstance) {
+    const apiKey = process.env.RESEND_API_KEY
+    if (!apiKey) {
+      throw new Error("RESEND_API_KEY environment variable is required")
+    }
+    resendInstance = new Resend(apiKey)
+  }
+  return resendInstance
+}
 
 export interface BookingEmailData {
   customerName: string
@@ -539,6 +551,7 @@ export function createAdminNotificationEmail(booking: BookingEmailData) {
 
 export async function sendCustomerConfirmationEmail(booking: BookingEmailData) {
   try {
+    const resend = getResendInstance()
     const emailContent = createCustomerConfirmationEmail(booking)
 
     const result = await resend.emails.send({
@@ -563,6 +576,7 @@ export async function sendCustomerConfirmationEmail(booking: BookingEmailData) {
 
 export async function sendAdminNotificationEmail(booking: BookingEmailData) {
   try {
+    const resend = getResendInstance()
     const emailContent = createAdminNotificationEmail(booking)
 
     const result = await resend.emails.send({
