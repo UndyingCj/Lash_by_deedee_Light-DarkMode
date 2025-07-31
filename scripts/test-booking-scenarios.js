@@ -1,487 +1,659 @@
-// Comprehensive Booking System Test Suite
-console.log("🧪 Starting Comprehensive Booking System Tests...\n")
+#!/usr/bin/env node
 
-// Test 1: Basic Form Validation
-console.log("📋 TEST 1: Basic Form Validation")
-const testFormValidation = () => {
-  const scenarios = [
-    {
-      name: "Empty service",
-      service: "",
-      date: "2025-01-15",
-      time: "9:00 AM",
-      clientName: "John Doe",
-      phone: "08012345678",
-      expected: "fail",
-    },
-    {
-      name: "Empty date",
-      service: "Microblading",
-      date: "",
-      time: "9:00 AM",
-      clientName: "John Doe",
-      phone: "08012345678",
-      expected: "fail",
-    },
-    {
-      name: "Empty time",
-      service: "Microblading",
-      date: "2025-01-15",
-      time: "",
-      clientName: "John Doe",
-      phone: "08012345678",
-      expected: "fail",
-    },
-    {
-      name: "Empty name",
-      service: "Microblading",
-      date: "2025-01-15",
-      time: "9:00 AM",
-      clientName: "",
-      phone: "08012345678",
-      expected: "fail",
-    },
-    {
-      name: "Empty phone",
-      service: "Microblading",
-      date: "2025-01-15",
-      time: "9:00 AM",
-      clientName: "John Doe",
-      phone: "",
-      expected: "fail",
-    },
-    {
-      name: "Valid form",
-      service: "Microblading",
-      date: "2025-01-15",
-      time: "9:00 AM",
-      clientName: "John Doe",
-      phone: "08012345678",
-      expected: "pass",
-    },
-  ]
+/**
+ * Booking Scenarios Test for Lashed by Deedee
+ * Tests various booking scenarios and edge cases
+ */
 
-  scenarios.forEach((scenario) => {
-    const isValid = scenario.service && scenario.date && scenario.time && scenario.clientName && scenario.phone
-    const result = isValid ? "pass" : "fail"
-    const status = result === scenario.expected ? "✅ PASS" : "❌ FAIL"
-    console.log(`  ${status} ${scenario.name}: Expected ${scenario.expected}, got ${result}`)
-  })
+const { createClient } = require("@supabase/supabase-js")
+const { Resend } = require("resend")
+
+// Configuration
+const config = {
+  supabase: {
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  },
+  paystack: {
+    secretKey: process.env.PAYSTACK_SECRET_KEY,
+    publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
+  },
+  resend: {
+    apiKey: process.env.RESEND_API_KEY,
+  },
+  baseUrl: process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
 }
-testFormValidation()
 
-// Test 2: Service Selection and Pricing
-console.log("\n💰 TEST 2: Service Selection and Pricing")
-const testServicePricing = () => {
-  const services = [
-    { name: "Microblading", price: "40,000", expectedDeposit: 20000 },
-    { name: "Ombré Brows", price: "45,000", expectedDeposit: 22500 },
-    { name: "Combo Brows", price: "50,000", expectedDeposit: 25000 },
-    { name: "Microshading", price: "55,000", expectedDeposit: 27500 },
-    { name: "Brow Lamination", price: "15,000", expectedDeposit: 7500 },
-    { name: "Classic Lashes", price: "15,000", expectedDeposit: 7500 },
-    { name: "Volume Lashes", price: "25,000", expectedDeposit: 12500 },
-    { name: "Mega Volume Lashes", price: "30,000", expectedDeposit: 15000 },
-  ]
-
-  services.forEach((service) => {
-    try {
-      const price = Number.parseInt(service.price.replace(/,/g, ""))
-      const calculatedDeposit = Math.floor(price / 2)
-      const status = calculatedDeposit === service.expectedDeposit ? "✅ PASS" : "❌ FAIL"
-      console.log(`  ${status} ${service.name}: ₦${service.price} → Deposit: ₦${calculatedDeposit.toLocaleString()}`)
-    } catch (error) {
-      console.log(`  ❌ ERROR ${service.name}: Price calculation failed - ${error.message}`)
-    }
-  })
+// Colors for console output
+const colors = {
+  reset: "\x1b[0m",
+  bright: "\x1b[1m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  cyan: "\x1b[36m",
 }
-testServicePricing()
 
-// Test 3: Date Availability Logic
-console.log("\n📅 TEST 3: Date Availability Logic")
-const testDateAvailability = () => {
-  // Simulate blocked dates
-  const blockedDates = ["2025-01-15", "2025-01-20", "2025-01-25"]
-  const testDates = [
-    { date: "2025-01-15", expected: "blocked" },
-    { date: "2025-01-16", expected: "available" },
-    { date: "2025-01-20", expected: "blocked" },
-    { date: "2025-01-21", expected: "available" },
-    { date: "2025-01-25", expected: "blocked" },
-    { date: "", expected: "invalid" },
-    { date: null, expected: "invalid" },
+function log(message, color = colors.reset) {
+  console.log(`${color}${message}${colors.reset}`)
+}
+
+function logSuccess(message) {
+  log(`✅ ${message}`, colors.green)
+}
+
+function logError(message) {
+  log(`❌ ${message}`, colors.red)
+}
+
+function logInfo(message) {
+  log(`ℹ️  ${message}`, colors.blue)
+}
+
+function logWarning(message) {
+  log(`⚠️  ${message}`, colors.yellow)
+}
+
+function logStep(step, message) {
+  log(`${colors.bright}${step}${colors.reset} ${message}`, colors.cyan)
+}
+
+// Test scenarios
+const testScenarios = [
+  {
+    name: "Standard Booking",
+    data: {
+      customerName: "Alice Johnson",
+      customerEmail: "alice.johnson@example.com",
+      customerPhone: "+234 801 234 5678",
+      services: ["Classic Lashes"],
+      date: "2025-02-15",
+      time: "10:00 AM",
+      totalAmount: 25000,
+      depositAmount: 12500,
+      notes: "First time customer",
+    },
+  },
+  {
+    name: "Multiple Services Booking",
+    data: {
+      customerName: "Sarah Williams",
+      customerEmail: "sarah.williams@example.com",
+      customerPhone: "+234 802 345 6789",
+      services: ["Mega Volume Lashes", "Brow Lamination"],
+      date: "2025-02-16",
+      time: "2:00 PM",
+      totalAmount: 45000,
+      depositAmount: 22500,
+      notes: "Returning customer, prefers natural look",
+    },
+  },
+  {
+    name: "Premium Service Booking",
+    data: {
+      customerName: "Emma Davis",
+      customerEmail: "emma.davis@example.com",
+      customerPhone: "+234 803 456 7890",
+      services: ["Microblading"],
+      date: "2025-02-17",
+      time: "11:00 AM",
+      totalAmount: 65000,
+      depositAmount: 32500,
+      notes: "Special occasion - wedding preparation",
+    },
+  },
+  {
+    name: "Weekend Booking",
+    data: {
+      customerName: "Grace Thompson",
+      customerEmail: "grace.thompson@example.com",
+      customerPhone: "+234 804 567 8901",
+      services: ["Volume Lashes"],
+      date: "2025-02-22", // Saturday
+      time: "1:00 PM",
+      totalAmount: 30000,
+      depositAmount: 15000,
+      notes: "Weekend appointment",
+    },
+  },
+  {
+    name: "Early Morning Booking",
+    data: {
+      customerName: "Lisa Brown",
+      customerEmail: "lisa.brown@example.com",
+      customerPhone: "+234 805 678 9012",
+      services: ["Classic Lashes"],
+      date: "2025-02-18",
+      time: "9:00 AM",
+      totalAmount: 25000,
+      depositAmount: 12500,
+      notes: "Early morning appointment before work",
+    },
+  },
+]
+
+// Test functions
+async function testEnvironmentSetup() {
+  logStep("1.", "Testing Environment Setup")
+
+  const requiredVars = [
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "PAYSTACK_SECRET_KEY",
+    "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY",
+    "RESEND_API_KEY",
   ]
 
-  const isDateBlocked = (date) => {
-    try {
-      if (!date || typeof date !== "string") return false
-      return blockedDates.includes(date)
-    } catch {
-      return false
+  let allPresent = true
+
+  for (const varName of requiredVars) {
+    if (process.env[varName]) {
+      logSuccess(`${varName} is set`)
+    } else {
+      logError(`${varName} is missing`)
+      allPresent = false
     }
   }
 
-  testDates.forEach((test) => {
-    try {
-      const isBlocked = isDateBlocked(test.date)
-      let result
-      if (!test.date) result = "invalid"
-      else result = isBlocked ? "blocked" : "available"
-
-      const status = result === test.expected ? "✅ PASS" : "❌ FAIL"
-      console.log(`  ${status} Date "${test.date}": Expected ${test.expected}, got ${result}`)
-    } catch (error) {
-      console.log(`  ❌ ERROR Date "${test.date}": ${error.message}`)
-    }
-  })
+  return allPresent
 }
-testDateAvailability()
 
-// Test 4: Time Slot Availability
-console.log("\n⏰ TEST 4: Time Slot Availability")
-const testTimeSlotAvailability = () => {
-  const allTimeSlots = ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"]
-  const blockedTimeSlots = {
-    "2025-01-16": ["9:00 AM", "2:00 PM"],
-    "2025-01-17": ["11:00 AM"],
-    "2025-01-18": [],
-  }
-
-  const getAvailableTimeSlots = (date) => {
-    try {
-      if (!date || typeof date !== "string") return []
-      const blocked = blockedTimeSlots[date] || []
-      return allTimeSlots.filter((slot) => !blocked.includes(slot))
-    } catch {
-      return allTimeSlots
-    }
-  }
-
-  const testCases = [
-    { date: "2025-01-16", expected: ["11:00 AM", "4:00 PM"] },
-    { date: "2025-01-17", expected: ["9:00 AM", "2:00 PM", "4:00 PM"] },
-    { date: "2025-01-18", expected: ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"] },
-    { date: "2025-01-19", expected: ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"] },
-    { date: "", expected: [] },
-    { date: null, expected: [] },
-  ]
-
-  testCases.forEach((test) => {
-    try {
-      const available = getAvailableTimeSlots(test.date)
-      const matches = JSON.stringify(available.sort()) === JSON.stringify(test.expected.sort())
-      const status = matches ? "✅ PASS" : "❌ FAIL"
-      console.log(`  ${status} Date "${test.date}": Available slots [${available.join(", ")}]`)
-    } catch (error) {
-      console.log(`  ❌ ERROR Date "${test.date}": ${error.message}`)
-    }
-  })
-}
-testTimeSlotAvailability()
-
-// Test 5: Form Input Handling
-console.log("\n📝 TEST 5: Form Input Handling")
-const testFormInputHandling = () => {
-  const testInputs = [
-    { field: "name", value: "John Doe", expected: "valid" },
-    { field: "name", value: "", expected: "invalid" },
-    { field: "phone", value: "08012345678", expected: "valid" },
-    { field: "phone", value: "+234 801 234 5678", expected: "valid" },
-    { field: "phone", value: "", expected: "invalid" },
-    { field: "email", value: "john@example.com", expected: "valid" },
-    { field: "email", value: "", expected: "valid" }, // Email is optional
-    { field: "notes", value: "I want natural looking brows", expected: "valid" },
-    { field: "notes", value: "", expected: "valid" }, // Notes are optional
-  ]
-
-  testInputs.forEach((test) => {
-    try {
-      let isValid = true
-
-      if (test.field === "name" || test.field === "phone") {
-        isValid = test.value.trim().length > 0
-      } else if (test.field === "email") {
-        isValid = true // Email is optional
-        if (test.value && test.value.includes("@")) {
-          isValid = true
-        }
-      }
-
-      const result = isValid ? "valid" : "invalid"
-      const status = result === test.expected ? "✅ PASS" : "❌ FAIL"
-      console.log(`  ${status} ${test.field}: "${test.value}" → ${result}`)
-    } catch (error) {
-      console.log(`  ❌ ERROR ${test.field}: ${error.message}`)
-    }
-  })
-}
-testFormInputHandling()
-
-// Test 6: Edge Cases and Error Handling
-console.log("\n🛡️ TEST 6: Edge Cases and Error Handling")
-const testEdgeCases = () => {
-  const edgeCases = [
-    {
-      name: "Past date selection",
-      date: "2024-01-01",
-      test: () => {
-        const today = new Date().toISOString().split("T")[0]
-        return "2024-01-01" < today
-      },
-      expected: true,
-    },
-    {
-      name: "Invalid date format",
-      date: "invalid-date",
-      test: () => {
-        try {
-          new Date("invalid-date").toISOString()
-          return false
-        } catch {
-          return true
-        }
-      },
-      expected: true,
-    },
-    {
-      name: "Very long service name",
-      service: "A".repeat(1000),
-      test: () => {
-        return "A".repeat(1000).length > 0
-      },
-      expected: true,
-    },
-    {
-      name: "Special characters in name",
-      name: "José María O'Connor-Smith",
-      test: () => {
-        return "José María O'Connor-Smith".trim().length > 0
-      },
-      expected: true,
-    },
-    {
-      name: "International phone number",
-      phone: "+1-555-123-4567",
-      test: () => {
-        return "+1-555-123-4567".trim().length > 0
-      },
-      expected: true,
-    },
-  ]
-
-  edgeCases.forEach((testCase) => {
-    try {
-      const result = testCase.test()
-      const status = result === testCase.expected ? "✅ PASS" : "❌ FAIL"
-      console.log(`  ${status} ${testCase.name}: Handled correctly`)
-    } catch (error) {
-      console.log(`  ❌ ERROR ${testCase.name}: ${error.message}`)
-    }
-  })
-}
-testEdgeCases()
-
-// Test 7: WhatsApp Message Generation
-console.log("\n📱 TEST 7: WhatsApp Message Generation")
-const testWhatsAppMessage = () => {
-  const bookingData = {
-    service: "Microblading",
-    price: "40,000",
-    deposit: 20000,
-    date: "2025-01-15",
-    time: "9:00 AM",
-    name: "Jane Doe",
-    phone: "08012345678",
-    email: "jane@example.com",
-    notes: "First time client",
-  }
+async function testDatabaseConnection() {
+  logStep("2.", "Testing Database Connection")
 
   try {
-    const message = `Hi! I'd like to book an appointment:
+    const supabase = createClient(config.supabase.url, config.supabase.serviceKey)
 
-📅 Service: ${bookingData.service}
-💰 Price: ₦${bookingData.price} (Deposit: ₦${bookingData.deposit.toLocaleString()})
-📅 Date: ${new Date(bookingData.date).toLocaleDateString()}
-⏰ Time: ${bookingData.time}
-👤 Name: ${bookingData.name}
-📱 Phone: ${bookingData.phone}
-📧 Email: ${bookingData.email}
-📝 Notes: ${bookingData.notes}
+    const { data, error } = await supabase.from("bookings").select("count", { count: "exact", head: true })
 
-Please confirm my appointment and let me know how to pay the deposit. Thank you!`
+    if (error) {
+      logError(`Database connection failed: ${error.message}`)
+      return false
+    }
 
-    const encodedMessage = encodeURIComponent(message)
-    const whatsappUrl = `https://wa.me/message/X5M2NOA553NGK1?text=${encodedMessage}`
-
-    const isValidUrl = whatsappUrl.includes("wa.me") && whatsappUrl.includes("text=")
-    console.log(`  ✅ PASS WhatsApp URL generation: ${isValidUrl ? "Valid" : "Invalid"}`)
-    console.log(`  📝 Message preview: "${message.substring(0, 100)}..."`)
+    logSuccess(`Database connection successful. Found ${data} existing bookings`)
+    return true
   } catch (error) {
-    console.log(`  ❌ ERROR WhatsApp message generation: ${error.message}`)
+    logError(`Database connection error: ${error.message}`)
+    return false
   }
 }
-testWhatsAppMessage()
 
-// Test 8: Payment Data Preparation
-console.log("\n💳 TEST 8: Payment Data Preparation")
-const testPaymentDataPrep = () => {
-  const paymentScenarios = [
-    {
-      name: "Standard booking",
-      service: "Microblading",
-      price: "40,000",
-      email: "user@example.com",
-      phone: "08012345678",
-    },
-    {
-      name: "No email provided",
-      service: "Volume Lashes",
-      price: "25,000",
-      email: "",
-      phone: "08087654321",
-    },
-    {
-      name: "High value service",
-      service: "Microshading",
-      price: "55,000",
-      email: "vip@example.com",
-      phone: "08011111111",
-    },
-  ]
+async function testAvailabilitySystem() {
+  logStep("3.", "Testing Availability System")
 
-  paymentScenarios.forEach((scenario) => {
+  try {
+    const supabase = createClient(config.supabase.url, config.supabase.serviceKey)
+
+    // Test blocked dates
+    const { data: blockedDates, error: datesError } = await supabase.from("blocked_dates").select("*")
+
+    if (datesError) {
+      logError(`Blocked dates query failed: ${datesError.message}`)
+      return false
+    }
+
+    logSuccess(`Blocked dates system working. Found ${blockedDates.length} blocked dates`)
+
+    // Test blocked time slots
+    const { data: blockedSlots, error: slotsError } = await supabase.from("blocked_time_slots").select("*")
+
+    if (slotsError) {
+      logError(`Blocked time slots query failed: ${slotsError.message}`)
+      return false
+    }
+
+    logSuccess(`Blocked time slots system working. Found ${blockedSlots.length} blocked slots`)
+    return true
+  } catch (error) {
+    logError(`Availability system error: ${error.message}`)
+    return false
+  }
+}
+
+async function testBookingCreation(scenario) {
+  logInfo(`Testing: ${scenario.name}`)
+
+  try {
+    const supabase = createClient(config.supabase.url, config.supabase.serviceKey)
+    const paymentReference = `TEST_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+
+    // Create booking record
+    const bookingData = {
+      client_name: scenario.data.customerName,
+      client_email: scenario.data.customerEmail,
+      client_phone: scenario.data.customerPhone,
+      phone: scenario.data.customerPhone,
+      email: scenario.data.customerEmail,
+      service_name: scenario.data.services.join(", "),
+      service: scenario.data.services.join(", "),
+      booking_date: scenario.data.date,
+      booking_time: scenario.data.time,
+      total_amount: scenario.data.totalAmount,
+      amount: scenario.data.depositAmount,
+      deposit_amount: scenario.data.depositAmount,
+      payment_reference: paymentReference,
+      status: "pending",
+      payment_status: "pending",
+      notes: scenario.data.notes,
+      special_notes: scenario.data.notes,
+    }
+
+    const { data: booking, error: bookingError } = await supabase.from("bookings").insert(bookingData).select().single()
+
+    if (bookingError) {
+      logError(`${scenario.name} - Booking creation failed: ${bookingError.message}`)
+      return { success: false, error: bookingError.message }
+    }
+
+    logSuccess(`${scenario.name} - Booking created: ${booking.id}`)
+
+    // Test payment status update
+    const { data: updatedBooking, error: updateError } = await supabase
+      .from("bookings")
+      .update({
+        payment_status: "completed",
+        status: "confirmed",
+      })
+      .eq("id", booking.id)
+      .select()
+      .single()
+
+    if (updateError) {
+      logError(`${scenario.name} - Status update failed: ${updateError.message}`)
+      return { success: false, error: updateError.message, bookingId: booking.id }
+    }
+
+    logSuccess(`${scenario.name} - Status updated to confirmed`)
+
+    return {
+      success: true,
+      bookingId: booking.id,
+      paymentReference,
+      booking: updatedBooking,
+    }
+  } catch (error) {
+    logError(`${scenario.name} - Error: ${error.message}`)
+    return { success: false, error: error.message }
+  }
+}
+
+async function testPaystackIntegration(scenario) {
+  logInfo(`Testing Paystack integration for: ${scenario.name}`)
+
+  try {
+    const paymentReference = `PAYSTACK_TEST_${Date.now()}`
+    const amountInKobo = scenario.data.depositAmount * 100
+
+    const payload = {
+      email: scenario.data.customerEmail,
+      amount: amountInKobo,
+      reference: paymentReference,
+      metadata: {
+        customer_name: scenario.data.customerName,
+        customer_phone: scenario.data.customerPhone,
+        service_name: scenario.data.services.join(", "),
+        booking_date: scenario.data.date,
+        booking_time: scenario.data.time,
+      },
+    }
+
+    const response = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.paystack.secretKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
+
+    const result = await response.json()
+
+    if (!response.ok || !result.status) {
+      logError(`${scenario.name} - Paystack initialization failed: ${result.message}`)
+      return false
+    }
+
+    logSuccess(`${scenario.name} - Paystack initialization successful`)
+    logInfo(`   Authorization URL: ${result.data.authorization_url}`)
+    return true
+  } catch (error) {
+    logError(`${scenario.name} - Paystack error: ${error.message}`)
+    return false
+  }
+}
+
+async function testEmailNotifications(booking) {
+  logInfo(`Testing email notifications for booking: ${booking.id}`)
+
+  try {
+    const resend = new Resend(config.resend.apiKey)
+
+    // Test customer confirmation email
+    const customerEmailResult = await resend.emails.send({
+      from: "bookings@lashedbydeedee.com",
+      to: [booking.client_email],
+      subject: `Booking Confirmation - ${booking.service_name}`,
+      html: `
+        <h1>Booking Confirmed!</h1>
+        <p>Dear ${booking.client_name},</p>
+        <p>Your booking for ${booking.service_name} on ${booking.booking_date} at ${booking.booking_time} has been confirmed.</p>
+        <p>Reference: ${booking.payment_reference}</p>
+        <p>Total Amount: ₦${booking.total_amount.toLocaleString()}</p>
+        <p>Deposit Paid: ₦${booking.deposit_amount.toLocaleString()}</p>
+      `,
+    })
+
+    if (customerEmailResult.error) {
+      logError(`Customer email failed: ${customerEmailResult.error.message}`)
+      return false
+    }
+
+    logSuccess(`Customer email sent: ${customerEmailResult.data.id}`)
+
+    // Test admin notification email
+    const adminEmailResult = await resend.emails.send({
+      from: "bookings@lashedbydeedee.com",
+      to: ["admin@lashedbydeedee.com"],
+      subject: `New Booking Alert - ${booking.service_name}`,
+      html: `
+        <h1>New Booking Alert</h1>
+        <p>Customer: ${booking.client_name}</p>
+        <p>Email: ${booking.client_email}</p>
+        <p>Phone: ${booking.client_phone}</p>
+        <p>Service: ${booking.service_name}</p>
+        <p>Date: ${booking.booking_date}</p>
+        <p>Time: ${booking.booking_time}</p>
+        <p>Amount: ₦${booking.total_amount.toLocaleString()}</p>
+        <p>Reference: ${booking.payment_reference}</p>
+      `,
+    })
+
+    if (adminEmailResult.error) {
+      logError(`Admin email failed: ${adminEmailResult.error.message}`)
+      return false
+    }
+
+    logSuccess(`Admin email sent: ${adminEmailResult.data.id}`)
+    return true
+  } catch (error) {
+    logError(`Email notification error: ${error.message}`)
+    return false
+  }
+}
+
+async function testCompleteBookingScenarios() {
+  logStep("4.", "Testing Complete Booking Scenarios")
+
+  const results = []
+
+  for (const scenario of testScenarios) {
     try {
-      const price = Number.parseInt(scenario.price.replace(/,/g, ""))
-      const depositAmount = Math.floor(price / 2)
-      const email = scenario.email || `${scenario.phone.replace(/\D/g, "")}@temp.com`
-      const amountInKobo = depositAmount * 100
+      // Test booking creation
+      const bookingResult = await testBookingCreation(scenario)
 
-      const paymentData = {
-        key: "pk_test_your_paystack_public_key",
-        email: email,
-        amount: amountInKobo,
-        currency: "NGN",
-        ref: `LBD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      if (!bookingResult.success) {
+        results.push({
+          scenario: scenario.name,
+          success: false,
+          error: bookingResult.error,
+        })
+        continue
       }
 
-      const isValid = paymentData.amount > 0 && paymentData.email.includes("@") && paymentData.ref.startsWith("LBD_")
-      console.log(`  ✅ PASS ${scenario.name}: Deposit ₦${depositAmount.toLocaleString()}, Email: ${email}`)
+      // Test Paystack integration
+      const paystackResult = await testPaystackIntegration(scenario)
+
+      // Test email notifications
+      const emailResult = await testEmailNotifications(bookingResult.booking)
+
+      // Clean up test booking
+      const supabase = createClient(config.supabase.url, config.supabase.serviceKey)
+      await supabase.from("bookings").delete().eq("id", bookingResult.bookingId)
+      logInfo(`${scenario.name} - Test data cleaned up`)
+
+      results.push({
+        scenario: scenario.name,
+        success: paystackResult && emailResult,
+        bookingCreated: true,
+        paystackWorking: paystackResult,
+        emailsWorking: emailResult,
+      })
     } catch (error) {
-      console.log(`  ❌ ERROR ${scenario.name}: ${error.message}`)
+      logError(`${scenario.name} - Scenario test failed: ${error.message}`)
+      results.push({
+        scenario: scenario.name,
+        success: false,
+        error: error.message,
+      })
     }
-  })
-}
-testPaymentDataPrep()
 
-// Test 9: API Error Handling Simulation
-console.log("\n🌐 TEST 9: API Error Handling Simulation")
-const testAPIErrorHandling = () => {
-  const apiScenarios = [
-    {
-      name: "Network timeout",
-      simulate: () => {
-        throw new Error("Network timeout")
-      },
-    },
-    {
-      name: "Invalid JSON response",
-      simulate: () => {
-        return "invalid json{"
-      },
-    },
-    {
-      name: "Server error 500",
-      simulate: () => {
-        throw new Error("Internal Server Error")
-      },
-    },
-    {
-      name: "Malformed data",
-      simulate: () => {
-        return { success: true, blockedDates: "not an array" }
-      },
-    },
-  ]
-
-  apiScenarios.forEach((scenario) => {
-    try {
-      const result = scenario.simulate()
-      console.log(`  ✅ PASS ${scenario.name}: Gracefully handled`)
-    } catch (error) {
-      // This is expected for error scenarios
-      console.log(`  ✅ PASS ${scenario.name}: Error caught and handled - ${error.message}`)
-    }
-  })
-}
-testAPIErrorHandling()
-
-// Test 10: State Management
-console.log("\n🔄 TEST 10: State Management")
-const testStateManagement = () => {
-  let state = {
-    selectedService: "",
-    selectedDate: "",
-    selectedTime: "",
-    formData: { name: "", phone: "", email: "", notes: "" },
+    log("") // Add spacing between scenarios
   }
 
-  const stateOperations = [
-    {
-      name: "Set service",
-      operation: () => {
-        state.selectedService = "Microblading"
-      },
-      verify: () => state.selectedService === "Microblading",
-    },
-    {
-      name: "Set date",
-      operation: () => {
-        state.selectedDate = "2025-01-15"
-      },
-      verify: () => state.selectedDate === "2025-01-15",
-    },
-    {
-      name: "Reset time on date change",
-      operation: () => {
-        state.selectedDate = "2025-01-16"
-        state.selectedTime = ""
-      },
-      verify: () => state.selectedTime === "",
-    },
-    {
-      name: "Update form data",
-      operation: () => {
-        state.formData = { ...state.formData, name: "John Doe", phone: "08012345678" }
-      },
-      verify: () => state.formData.name === "John Doe" && state.formData.phone === "08012345678",
-    },
-    {
-      name: "Reset all state",
-      operation: () => {
-        state = {
-          selectedService: "",
-          selectedDate: "",
-          selectedTime: "",
-          formData: { name: "", phone: "", email: "", notes: "" },
-        }
-      },
-      verify: () => state.selectedService === "" && state.selectedDate === "" && state.selectedTime === "",
-    },
-  ]
+  return results
+}
 
-  stateOperations.forEach((test) => {
-    try {
-      test.operation()
-      const isValid = test.verify()
-      const status = isValid ? "✅ PASS" : "❌ FAIL"
-      console.log(`  ${status} ${test.name}: State updated correctly`)
-    } catch (error) {
-      console.log(`  ❌ ERROR ${test.name}: ${error.message}`)
+async function testEdgeCases() {
+  logStep("5.", "Testing Edge Cases")
+
+  const supabase = createClient(config.supabase.url, config.supabase.serviceKey)
+  const edgeCases = []
+
+  try {
+    // Test 1: Duplicate payment reference
+    logInfo("Testing duplicate payment reference handling...")
+    const duplicateRef = `DUPLICATE_${Date.now()}`
+
+    const booking1 = {
+      client_name: "Test Customer 1",
+      client_email: "test1@example.com",
+      client_phone: "+234000000001",
+      phone: "+234000000001",
+      email: "test1@example.com",
+      service_name: "Test Service",
+      service: "Test Service",
+      booking_date: "2025-08-01",
+      booking_time: "10:00 AM",
+      total_amount: 25000,
+      amount: 12500,
+      deposit_amount: 12500,
+      payment_reference: duplicateRef,
+      status: "pending",
+      payment_status: "pending",
+    }
+
+    const { data: firstBooking, error: firstError } = await supabase.from("bookings").insert(booking1).select().single()
+
+    if (firstError) {
+      logError(`First booking with duplicate ref failed: ${firstError.message}`)
+      edgeCases.push({ test: "Duplicate Reference", success: false })
+    } else {
+      // Try to insert second booking with same reference
+      const booking2 = { ...booking1, client_name: "Test Customer 2", client_email: "test2@example.com" }
+      const { error: secondError } = await supabase.from("bookings").insert(booking2)
+
+      if (secondError && secondError.code === "23505") {
+        logSuccess("Duplicate payment reference properly rejected")
+        edgeCases.push({ test: "Duplicate Reference", success: true })
+      } else {
+        logError("Duplicate payment reference not properly handled")
+        edgeCases.push({ test: "Duplicate Reference", success: false })
+      }
+
+      // Clean up
+      await supabase.from("bookings").delete().eq("id", firstBooking.id)
+    }
+
+    // Test 2: Invalid date format
+    logInfo("Testing invalid date format handling...")
+    const invalidDateBooking = {
+      ...booking1,
+      payment_reference: `INVALID_DATE_${Date.now()}`,
+      booking_date: "invalid-date",
+    }
+
+    const { error: invalidDateError } = await supabase.from("bookings").insert(invalidDateBooking)
+
+    if (invalidDateError) {
+      logSuccess("Invalid date format properly rejected")
+      edgeCases.push({ test: "Invalid Date Format", success: true })
+    } else {
+      logError("Invalid date format not properly handled")
+      edgeCases.push({ test: "Invalid Date Format", success: false })
+    }
+
+    // Test 3: Missing required fields
+    logInfo("Testing missing required fields...")
+    const incompleteBooking = {
+      client_name: "Incomplete Customer",
+      // Missing required fields
+    }
+
+    const { error: incompleteError } = await supabase.from("bookings").insert(incompleteBooking)
+
+    if (incompleteError && incompleteError.code === "23502") {
+      logSuccess("Missing required fields properly rejected")
+      edgeCases.push({ test: "Missing Required Fields", success: true })
+    } else {
+      logError("Missing required fields not properly handled")
+      edgeCases.push({ test: "Missing Required Fields", success: false })
+    }
+  } catch (error) {
+    logError(`Edge case testing error: ${error.message}`)
+    edgeCases.push({ test: "Edge Cases", success: false, error: error.message })
+  }
+
+  return edgeCases
+}
+
+// Main test runner
+async function runBookingScenarioTests() {
+  log("\n" + "=".repeat(60), colors.bright)
+  log("📋 LASHED BY DEEDEE - BOOKING SCENARIOS TEST", colors.bright)
+  log("=".repeat(60), colors.bright)
+  log(`Started at: ${new Date().toISOString()}`, colors.cyan)
+  log("")
+
+  // Run all tests
+  const envTest = await testEnvironmentSetup()
+  if (!envTest) {
+    logError("Environment setup failed. Exiting.")
+    process.exit(1)
+  }
+  log("")
+
+  const dbTest = await testDatabaseConnection()
+  if (!dbTest) {
+    logError("Database connection failed. Exiting.")
+    process.exit(1)
+  }
+  log("")
+
+  const availabilityTest = await testAvailabilitySystem()
+  log("")
+
+  const scenarioResults = await testCompleteBookingScenarios()
+  log("")
+
+  const edgeCaseResults = await testEdgeCases()
+  log("")
+
+  // Summary
+  log("=".repeat(60), colors.bright)
+  log("📊 BOOKING SCENARIOS TEST RESULTS", colors.bright)
+  log("=".repeat(60), colors.bright)
+
+  // Environment and basic tests
+  logInfo("Basic System Tests:")
+  logSuccess(`Environment Setup: ${envTest ? "PASSED" : "FAILED"}`)
+  logSuccess(`Database Connection: ${dbTest ? "PASSED" : "FAILED"}`)
+  logSuccess(`Availability System: ${availabilityTest ? "PASSED" : "FAILED"}`)
+  log("")
+
+  // Scenario tests
+  logInfo("Booking Scenario Tests:")
+  const passedScenarios = scenarioResults.filter((r) => r.success).length
+  const totalScenarios = scenarioResults.length
+
+  scenarioResults.forEach((result) => {
+    if (result.success) {
+      logSuccess(`${result.scenario}: PASSED`)
+    } else {
+      logError(`${result.scenario}: FAILED${result.error ? ` - ${result.error}` : ""}`)
     }
   })
-}
-testStateManagement()
 
-console.log("\n🎉 BOOKING SYSTEM TEST COMPLETED!")
-console.log("📊 All major booking scenarios have been tested for stability and error handling.")
-console.log("✅ The booking system is ready for production use!")
+  log("")
+  logInfo(`Scenario Tests: ${passedScenarios}/${totalScenarios} passed`)
+  log("")
+
+  // Edge case tests
+  logInfo("Edge Case Tests:")
+  const passedEdgeCases = edgeCaseResults.filter((r) => r.success).length
+  const totalEdgeCases = edgeCaseResults.length
+
+  edgeCaseResults.forEach((result) => {
+    if (result.success) {
+      logSuccess(`${result.test}: PASSED`)
+    } else {
+      logError(`${result.test}: FAILED${result.error ? ` - ${result.error}` : ""}`)
+    }
+  })
+
+  log("")
+  logInfo(`Edge Case Tests: ${passedEdgeCases}/${totalEdgeCases} passed`)
+  log("")
+
+  // Overall summary
+  const totalTests = 3 + totalScenarios + totalEdgeCases // 3 basic tests + scenarios + edge cases
+  const totalPassed =
+    (envTest ? 1 : 0) + (dbTest ? 1 : 0) + (availabilityTest ? 1 : 0) + passedScenarios + passedEdgeCases
+
+  log(`Total Tests: ${totalTests}`, colors.bright)
+  log(`Passed: ${totalPassed}`, colors.green)
+  log(`Failed: ${totalTests - totalPassed}`, totalPassed === totalTests ? colors.green : colors.red)
+  log(`Success Rate: ${Math.round((totalPassed / totalTests) * 100)}%`, colors.cyan)
+
+  log("")
+  log(`Completed at: ${new Date().toISOString()}`, colors.cyan)
+  log("=".repeat(60), colors.bright)
+
+  if (totalPassed === totalTests) {
+    logSuccess("🎉 ALL BOOKING SCENARIO TESTS PASSED! System is fully functional.")
+  } else {
+    logError(`❌ ${totalTests - totalPassed} test(s) failed. Please check the errors above.`)
+  }
+
+  process.exit(totalPassed === totalTests ? 0 : 1)
+}
+
+// Handle unhandled promise rejections
+process.on("unhandledRejection", (reason, promise) => {
+  logError(`Unhandled Rejection at: ${promise}, reason: ${reason}`)
+  process.exit(1)
+})
+
+// Handle uncaught exceptions
+process.on("uncaughtException", (error) => {
+  logError(`Uncaught Exception: ${error.message}`)
+  process.exit(1)
+})
+
+// Run the tests
+if (require.main === module) {
+  runBookingScenarioTests()
+}
+
+module.exports = {
+  runBookingScenarioTests,
+  testEnvironmentSetup,
+  testDatabaseConnection,
+  testAvailabilitySystem,
+  testBookingCreation,
+  testPaystackIntegration,
+  testEmailNotifications,
+  testCompleteBookingScenarios,
+  testEdgeCases,
+}

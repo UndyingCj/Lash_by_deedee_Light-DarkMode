@@ -48,6 +48,7 @@
     "cmdk": "latest",
     "crypto": "latest",
     "date-fns": "4.1.0",
+    "dotenv": "latest",
     "embla-carousel-react": "latest",
     "fs": "latest",
     "input-otp": "latest",

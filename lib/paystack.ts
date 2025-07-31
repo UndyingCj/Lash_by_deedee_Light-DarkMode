@@ -1,65 +1,8 @@
-import crypto from "crypto"
+import { createClient } from "@supabase/supabase-js"
 
-interface PaystackVerificationResponse {
-  status: boolean
-  message: string
-  data?: {
-    reference: string
-    amount: number
-    status: string
-    customer: {
-      email: string
-      first_name?: string
-      last_name?: string
-    }
-    metadata: {
-      customerName: string
-      customerEmail: string
-      customerPhone: string
-      services: string[]
-      bookingDate: string
-      bookingTime: string
-      totalAmount: number
-      depositAmount: number
-      notes?: string
-    }
-  }
-}
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-export async function verifyPaystackPayment(reference: string): Promise<PaystackVerificationResponse> {
-  try {
-    const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-        "Content-Type": "application/json",
-      },
-    })
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      return {
-        status: false,
-        message: data.message || "Payment verification failed",
-      }
-    }
-
-    return {
-      status: data.status,
-      message: data.message,
-      data: data.data,
-    }
-  } catch (error) {
-    console.error("Paystack verification error:", error)
-    return {
-      status: false,
-      message: "Failed to verify payment",
-    }
-  }
-}
-
-interface PaystackInitializeData {
+interface PaymentData {
   customerName: string
   customerEmail: string
   customerPhone: string
@@ -71,90 +14,164 @@ interface PaystackInitializeData {
   notes?: string
 }
 
-interface PaystackResponse {
-  status: boolean
-  message: string
-  data?: {
-    authorization_url: string
-    access_code: string
-    reference: string
-    amount: number
-    public_key: string
-  }
-}
-
-export async function initializePaystackPayment(data: PaystackInitializeData): Promise<PaystackResponse> {
+export async function initializePaystackPayment(data: PaymentData) {
   try {
-    const secretKey = process.env.PAYSTACK_SECRET_KEY
-    const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY
-    if (!secretKey) throw new Error("Paystack secret key not configured")
-    if (!publicKey) throw new Error("Paystack public key not configured")
+    console.log("🚀 Initializing Paystack payment:", {
+      customer: data.customerName,
+      email: data.customerEmail,
+      amount: data.depositAmount,
+    })
 
-    // Convert NGN → kobo
-    const amountInKobo = Math.round(data.depositAmount * 100)
-    const reference = `LBD_${Date.now()}_${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+    // Generate unique reference
+    const reference = `LBD_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`
 
-    const payload = {
-      email: data.customerEmail, // ✅ now populated
-      amount: amountInKobo,
-      currency: "NGN",
-      reference,
-      callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/payments/callback`,
-      metadata: {
-        customerName: data.customerName,
-        customerPhone: data.customerPhone,
-        services: data.services,
-        bookingDate: data.bookingDate,
-        bookingTime: data.bookingTime,
-        totalAmount: data.totalAmount,
-        depositAmount: data.depositAmount,
-        notes: data.notes ?? "",
-      },
+    // Prepare metadata
+    const metadata = {
+      customer_name: data.customerName,
+      customer_phone: data.customerPhone,
+      services: data.services.join(", "),
+      booking_date: data.bookingDate,
+      booking_time: data.bookingTime,
+      total_amount: data.totalAmount.toString(),
+      deposit_amount: data.depositAmount.toString(),
+      notes: data.notes || "",
+      booking_source: "website",
     }
 
-    const response = await fetch("https://api.paystack.co/transaction/initialize", {
+    console.log("📋 Payment metadata:", metadata)
+
+    // Initialize payment with Paystack
+    const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${secretKey}`,
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        email: data.customerEmail,
+        amount: Math.round(data.depositAmount * 100), // Convert to kobo
+        currency: "NGN",
+        reference: reference,
+        callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/book/success`,
+        metadata: metadata,
+        channels: ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
+      }),
     })
-    const result = await response.json()
 
-    if (!response.ok || !result.status) {
-      return { status: false, message: result.message || "Payment initialization failed" }
+    if (!paystackResponse.ok) {
+      const errorText = await paystackResponse.text()
+      console.error("❌ Paystack API error:", errorText)
+      throw new Error(`Paystack API error: ${paystackResponse.status}`)
     }
+
+    const paystackData = await paystackResponse.json()
+    console.log("📊 Paystack response:", paystackData)
+
+    if (!paystackData.status) {
+      console.error("❌ Paystack initialization failed:", paystackData.message)
+      return {
+        status: false,
+        message: paystackData.message || "Payment initialization failed",
+      }
+    }
+
+    // Store pending booking in database
+    try {
+      const { error: dbError } = await supabase.from("bookings").insert({
+        customer_name: data.customerName,
+        customer_email: data.customerEmail,
+        customer_phone: data.customerPhone,
+        services: data.services,
+        appointment_date: data.bookingDate,
+        appointment_time: data.bookingTime,
+        total_amount: data.totalAmount,
+        deposit_amount: data.depositAmount,
+        payment_reference: reference,
+        payment_status: "pending",
+        notes: data.notes || "",
+        created_at: new Date().toISOString(),
+      })
+
+      if (dbError) {
+        console.error("⚠️ Database insert failed:", dbError)
+        // Continue with payment even if DB insert fails
+      } else {
+        console.log("✅ Pending booking stored in database")
+      }
+    } catch (dbError) {
+      console.error("⚠️ Database error:", dbError)
+      // Continue with payment even if DB fails
+    }
+
+    console.log("✅ Payment initialized successfully")
 
     return {
       status: true,
       message: "Payment initialized successfully",
       data: {
-        authorization_url: result.data.authorization_url,
-        access_code: result.data.access_code,
-        reference: result.data.reference,
-        amount: amountInKobo,
-        public_key: publicKey,
+        reference: reference,
+        authorization_url: paystackData.data.authorization_url,
+        access_code: paystackData.data.access_code,
+        amount: Math.round(data.depositAmount * 100), // Amount in kobo
+        public_key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
       },
     }
-  } catch (err) {
-    console.error("❌ Paystack initialization error:", err)
-    return { status: false, message: err instanceof Error ? err.message : "Payment init failed" }
+  } catch (error) {
+    console.error("❌ Payment initialization error:", error)
+    return {
+      status: false,
+      message: error instanceof Error ? error.message : "Payment initialization failed",
+    }
   }
 }
 
-export function verifyWebhookSignature(body: string, signature: string): boolean {
+export async function verifyPaystackPayment(reference: string) {
   try {
-    const secret = process.env.PAYSTACK_SECRET_KEY
-    if (!secret) {
-      console.error("Paystack secret key not configured for webhook verification")
-      return false
+    console.log("🔍 Verifying payment:", reference)
+
+    const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        "Content-Type": "application/json",
+      },
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("❌ Paystack verification API error:", errorText)
+      throw new Error(`Paystack verification failed: ${response.status}`)
     }
 
-    const hash = crypto.createHmac("sha512", secret).update(body).digest("hex")
-    return hash === signature
+    const data = await response.json()
+    console.log("📊 Paystack verification response:", data)
+
+    if (!data.status) {
+      console.error("❌ Payment verification failed:", data.message)
+      return {
+        status: false,
+        message: data.message || "Payment verification failed",
+      }
+    }
+
+    const transaction = data.data
+    console.log("💳 Transaction details:", {
+      reference: transaction.reference,
+      status: transaction.status,
+      amount: transaction.amount,
+      customer: transaction.customer.email,
+    })
+
+    return {
+      status: true,
+      message: "Payment verified successfully",
+      data: transaction,
+    }
   } catch (error) {
-    console.error("Webhook signature verification error:", error)
-    return false
+    console.error("❌ Payment verification error:", error)
+    return {
+      status: false,
+      message: error instanceof Error ? error.message : "Payment verification failed",
+    }
   }
 }

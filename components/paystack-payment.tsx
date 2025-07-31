@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { X, CreditCard, Shield, AlertCircle, Loader2 } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 interface PaystackPaymentProps {
   bookingData: {
@@ -22,10 +23,11 @@ interface PaystackPaymentProps {
   onClose: () => void
 }
 
+// Extend Window interface for TypeScript
 declare global {
   interface Window {
     PaystackPop: {
-      setup: (options: any) => {
+      setup: (config: any) => {
         openIframe: () => void
       }
     }
@@ -34,131 +36,157 @@ declare global {
 
 export default function PaystackPayment({ bookingData, onSuccess, onError, onClose }: PaystackPaymentProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const [isInitializing, setIsInitializing] = useState(true)
-  const [paymentData, setPaymentData] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
-  const [scriptLoaded, setScriptLoaded] = useState(false)
+  const { toast } = useToast()
 
-  // Load Paystack script
-  useEffect(() => {
-    const script = document.createElement("script")
-    script.src = "https://js.paystack.co/v1/inline.js"
-    script.async = true
-    script.onload = () => {
-      console.log("✅ Paystack script loaded")
-      setScriptLoaded(true)
-    }
-    script.onerror = () => {
-      console.error("❌ Failed to load Paystack script")
-      setError("Failed to load payment system")
-    }
-    document.body.appendChild(script)
-
-    return () => {
-      if (document.body.contains(script)) {
-        document.body.removeChild(script)
-      }
-    }
-  }, [])
-
-  // Initialize payment when component mounts
-  useEffect(() => {
-    if (scriptLoaded) {
-      initializePayment()
-    }
-  }, [scriptLoaded])
-
-  const initializePayment = async () => {
+  const handlePayment = async () => {
     try {
-      setIsInitializing(true)
+      setIsLoading(true)
       setError(null)
 
       console.log("🚀 Initializing payment for:", bookingData.customerName)
+
+      // Validate booking data before sending
+      if (!bookingData.customerName?.trim()) {
+        throw new Error("Customer name is required")
+      }
+
+      if (!bookingData.customerEmail?.trim() || !bookingData.customerEmail.includes("@")) {
+        throw new Error("Valid customer email is required")
+      }
+
+      if (!bookingData.services || bookingData.services.length === 0) {
+        throw new Error("At least one service must be selected")
+      }
+
+      if (!bookingData.date || !/^\d{4}-\d{2}-\d{2}$/.test(bookingData.date)) {
+        throw new Error("Valid booking date is required")
+      }
+
+      if (!bookingData.time?.trim()) {
+        throw new Error("Booking time is required")
+      }
+
+      if (!bookingData.totalAmount || bookingData.totalAmount <= 0) {
+        throw new Error("Valid total amount is required")
+      }
+
+      if (!bookingData.depositAmount || bookingData.depositAmount <= 0) {
+        throw new Error("Valid deposit amount is required")
+      }
+
+      // Prepare clean request data with correct field names
+      const requestData = {
+        customerName: bookingData.customerName.trim(),
+        customerEmail: bookingData.customerEmail.trim().toLowerCase(),
+        customerPhone: bookingData.customerPhone?.trim() || "",
+        services: bookingData.services,
+        date: bookingData.date.trim(), // Send as 'date', not 'bookingDate'
+        time: bookingData.time.trim(), // Send as 'time', not 'bookingTime'
+        totalAmount: Number(bookingData.totalAmount),
+        depositAmount: Number(bookingData.depositAmount),
+        notes: bookingData.notes?.trim() || "",
+      }
+
+      console.log("📤 Sending payment initialization request:", requestData)
 
       const response = await fetch("/api/payments/initialize", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          customerName: bookingData.customerName,
-          customerEmail: bookingData.customerEmail,
-          customerPhone: bookingData.customerPhone,
-          services: bookingData.services,
-          bookingDate: bookingData.date,
-          bookingTime: bookingData.time,
-          totalAmount: bookingData.totalAmount,
-          depositAmount: bookingData.depositAmount,
-          notes: bookingData.notes,
-        }),
+        body: JSON.stringify(requestData),
       })
 
-      const result = await response.json()
+      const responseText = await response.text()
+      console.log("📥 Raw response:", responseText)
+
+      let result
+      try {
+        result = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error("❌ Failed to parse response:", parseError)
+        throw new Error("Invalid response from server")
+      }
+
+      if (!response.ok) {
+        console.error("❌ HTTP error:", response.status, result)
+        throw new Error(result.message || result.error || `HTTP ${response.status}`)
+      }
 
       if (!result.status) {
-        throw new Error(result.message || "Payment initialization failed")
+        console.error("❌ Payment initialization failed:", result.message)
+        throw new Error(result.message || result.error || "Payment initialization failed")
+      }
+
+      if (!result.data) {
+        console.error("❌ No payment data received:", result)
+        throw new Error("No payment data received from server")
+      }
+
+      if (!result.data.public_key) {
+        console.error("❌ No public key received:", result.data)
+        throw new Error("Payment configuration error - missing public key")
       }
 
       console.log("✅ Payment initialized:", result.data.reference)
-      console.log("🔑 Public key received:", result.data.public_key ? "Present" : "Missing")
-      setPaymentData(result.data)
-    } catch (error) {
-      console.error("❌ Payment initialization error:", error)
-      const errorMessage = error instanceof Error ? error.message : "Payment initialization failed"
-      setError(errorMessage)
-      onError(errorMessage)
-    } finally {
-      setIsInitializing(false)
-    }
-  }
 
-  const handlePayment = () => {
-    if (!paymentData || !window.PaystackPop || !scriptLoaded) {
-      setError("Payment system not ready. Please try again.")
-      return
-    }
+      // Load Paystack script if not already loaded
+      if (!window.PaystackPop) {
+        const script = document.createElement("script")
+        script.src = "https://js.paystack.co/v1/inline.js"
+        script.async = true
+        document.head.appendChild(script)
 
-    if (!paymentData.public_key) {
-      setError("Payment key not available. Please try again.")
-      return
-    }
+        await new Promise((resolve, reject) => {
+          script.onload = resolve
+          script.onerror = reject
+        })
+      }
 
-    try {
       console.log("💳 Opening Paystack payment modal")
-      console.log("🔑 Using public key:", paymentData.public_key.substring(0, 10) + "...")
-      setIsLoading(true)
-      setError(null)
 
       const handler = window.PaystackPop.setup({
-        key: paymentData.public_key,
+        key: result.data.public_key,
         email: bookingData.customerEmail,
-        amount: paymentData.amount, // Amount is already in kobo from backend
+        amount: result.data.amount, // Amount is already in kobo from backend
         currency: "NGN",
-        ref: paymentData.reference,
+        ref: result.data.reference,
         metadata: {
           customerName: bookingData.customerName,
           customerPhone: bookingData.customerPhone,
-          services: bookingData.services,
+          services: bookingData.services.join(", "),
           bookingDate: bookingData.date,
           bookingTime: bookingData.time,
         },
         callback: (response: any) => {
           console.log("💰 Payment callback received:", response)
-          // run verification in the background – don't return a Promise
-          void verifyPayment(response.reference)
+          verifyPayment(response.reference)
         },
         onClose: () => {
           console.log("❌ Payment modal closed")
           setIsLoading(false)
           setError("Payment was cancelled by user")
+          toast({
+            title: "Payment Cancelled",
+            description: "You cancelled the payment process",
+            variant: "destructive",
+          })
         },
       })
 
       handler.openIframe()
     } catch (error) {
-      console.error("❌ Payment modal error:", error)
-      setError("Failed to open payment modal")
+      console.error("❌ Payment initialization error:", error)
+      const errorMessage = error instanceof Error ? error.message : "Payment initialization failed"
+      setError(errorMessage)
       setIsLoading(false)
+      toast({
+        title: "Payment Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+      onError(errorMessage)
     }
   }
 
@@ -175,34 +203,31 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
       })
 
       const result = await response.json()
+      console.log("📊 Payment verification result:", result)
 
-      if (!result.status) {
+      if (result.status === "ok" && result.success) {
+        console.log("✅ Payment verified successfully")
+        toast({
+          title: "Payment Successful!",
+          description: "Your booking has been confirmed. Check your email for details.",
+        })
+        onSuccess(reference)
+      } else {
         throw new Error(result.message || "Payment verification failed")
       }
-
-      console.log("✅ Payment verified successfully")
-      onSuccess(reference)
     } catch (error) {
       console.error("❌ Payment verification error:", error)
       const errorMessage = error instanceof Error ? error.message : "Payment verification failed"
       setError(errorMessage)
+      toast({
+        title: "Verification Failed",
+        description: errorMessage,
+        variant: "destructive",
+      })
       onError(errorMessage)
     } finally {
       setIsLoading(false)
     }
-  }
-
-  if (isInitializing) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <Card className="w-full max-w-md bg-white dark:bg-gray-800">
-          <CardContent className="flex flex-col items-center justify-center py-8">
-            <Loader2 className="w-8 h-8 animate-spin text-pink-500 mb-4" />
-            <p className="text-gray-600 dark:text-gray-300">Preparing payment...</p>
-          </CardContent>
-        </Card>
-      </div>
-    )
   }
 
   return (
@@ -263,19 +288,10 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
             </div>
           )}
 
-          {/* Debug Info */}
-          {process.env.NODE_ENV === "development" && paymentData && (
-            <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-xs">
-              <p>Debug: Key present: {paymentData.public_key ? "✅" : "❌"}</p>
-              <p>Amount: {paymentData.amount}</p>
-              <p>Reference: {paymentData.reference}</p>
-            </div>
-          )}
-
           {/* Payment Button */}
           <Button
             onClick={handlePayment}
-            disabled={isLoading || !paymentData || !!error || !scriptLoaded || !paymentData?.public_key}
+            disabled={isLoading}
             className="w-full bg-green-600 hover:bg-green-700 text-white"
             size="lg"
           >
@@ -291,20 +307,8 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
 
           {/* Retry Button */}
           {error && (
-            <Button
-              onClick={initializePayment}
-              variant="outline"
-              className="w-full bg-transparent"
-              disabled={isLoading || isInitializing}
-            >
-              {isInitializing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Retrying...
-                </>
-              ) : (
-                "Retry Payment"
-              )}
+            <Button onClick={handlePayment} variant="outline" className="w-full bg-transparent" disabled={isLoading}>
+              Retry Payment
             </Button>
           )}
 
