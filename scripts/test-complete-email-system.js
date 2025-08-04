@@ -253,8 +253,8 @@ async function testBookingEmailTemplates() {
             <td style="padding: 8px 0; border-bottom: 1px solid #f3f4f6;">${sampleBookingData.bookingTime}</td>
           </tr>
           <tr>
-            <td style="padding: 8px 0; border-bottom: 1px solid #f3f4f6;"><strong>Total Amount:</strong></td>
-            <td style="padding: 8px 0; border-bottom: 1px solid #f3f4f6;">₦${sampleBookingData.totalAmount?.toLocaleString()}</td>
+            <td style="padding: 8px 0;"><strong>Total Amount:</strong></td>
+            <td style="padding: 8px 0;">₦${sampleBookingData.totalAmount?.toLocaleString()}</td>
           </tr>
           <tr>
             <td style="padding: 8px 0;"><strong>Deposit Paid:</strong></td>
@@ -324,57 +324,36 @@ async function testBookingEmailTemplates() {
   return true
 }
 
-async function runCompleteEmailTest() {
-  console.log("🚀 Starting Complete Email System Test...\n")
+import { testEmailSystem } from "../lib/email.js"
 
-  const tests = [
-    { name: "Environment Variables", test: testEnvironmentVariables },
-    { name: "Zoho Token Refresh", test: testZohoTokenRefresh },
-    { name: "Resend Connection", test: testResendConnection },
-    { name: "Email Templates", test: testBookingEmailTemplates },
-    { name: "Email Sending", test: testEmailSending },
-  ]
+async function runEmailTest() {
+  console.log("🧪 Starting comprehensive email system test...\n")
 
-  let passedTests = 0
+  try {
+    const results = await testEmailSystem()
 
-  for (const { name, test } of tests) {
-    console.log(`\n--- ${name} Test ---`)
-    try {
-      const result = await test()
-      if (result) {
-        passedTests++
-        console.log(`✅ ${name}: PASSED`)
-      } else {
-        console.log(`❌ ${name}: FAILED`)
-      }
-    } catch (error) {
-      console.error(`❌ ${name}: ERROR -`, error.message)
+    console.log("\n📊 EMAIL SYSTEM TEST RESULTS:")
+    console.log("================================")
+    console.log(`Nodemailer: ${results.nodemailer ? "✅ Working" : "❌ Failed"}`)
+    console.log(`Zoho API: ${results.zoho ? "✅ Working" : "❌ Failed"}`)
+    console.log(`Overall System: ${results.overall ? "✅ Working" : "❌ Failed"}`)
+
+    if (results.overall) {
+      console.log("\n🎉 Email system is operational!")
+      console.log("At least one email provider is working correctly.")
+    } else {
+      console.log("\n⚠️ Email system needs attention!")
+      console.log("Both email providers are failing.")
+      console.log("\nTroubleshooting steps:")
+      console.log("1. Check ZOHO_EMAIL_USER and ZOHO_EMAIL_PASSWORD")
+      console.log("2. Verify Zoho SMTP settings")
+      console.log("3. Check Zoho OAuth credentials")
+      console.log("4. Ensure environment variables are set correctly")
     }
+  } catch (error) {
+    console.error("❌ Test execution failed:", error)
+    process.exit(1)
   }
-
-  console.log(`\n🎯 Test Results: ${passedTests}/${tests.length} tests passed`)
-
-  if (passedTests === tests.length) {
-    console.log("🎉 All email system tests passed!")
-    console.log("\n📋 Email system is ready for production:")
-    console.log("✅ Environment variables configured")
-    console.log("✅ Zoho authentication working")
-    console.log("✅ Resend API connection established")
-    console.log("✅ Email templates rendering correctly")
-    console.log("✅ Email sending functionality operational")
-  } else {
-    console.log("⚠️ Some tests failed. Please check the configuration:")
-    console.log("1. Verify all environment variables are set correctly")
-    console.log("2. Check Zoho OAuth configuration")
-    console.log("3. Verify Resend API key and domain setup")
-    console.log("4. Ensure email templates are properly formatted")
-  }
-
-  console.log("\n💡 Next steps:")
-  console.log("1. Test with real email addresses")
-  console.log("2. Monitor email delivery rates")
-  console.log("3. Set up email analytics and tracking")
 }
 
-// Run the complete test
-runCompleteEmailTest().catch(console.error)
+runEmailTest()

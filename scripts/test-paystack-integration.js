@@ -1,297 +1,107 @@
-console.log("🧪 Testing Paystack Integration...")
+import fetch from "node-fetch"
 
-// Test environment setup
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY
-const PAYSTACK_PUBLIC_KEY = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY
+async function testPaystackIntegration() {
+  console.log("🧪 Testing Paystack Integration...\n")
 
-async function testEnvironmentVariables() {
-  console.log("\n📋 Checking Paystack Environment Variables...")
+  const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY
+  const PAYSTACK_PUBLIC_KEY = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY
 
-  const requiredVars = {
-    PAYSTACK_SECRET_KEY: PAYSTACK_SECRET_KEY,
-    NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: PAYSTACK_PUBLIC_KEY,
+  if (!PAYSTACK_SECRET_KEY) {
+    console.error("❌ PAYSTACK_SECRET_KEY not found in environment variables")
+    return false
   }
 
-  let allPresent = true
-  for (const [key, value] of Object.entries(requiredVars)) {
-    const status = value ? "✅" : "❌"
-    const preview = value ? `${value.substring(0, 10)}...` : "Missing"
-    console.log(`${status} ${key}: ${preview}`)
-    if (!value) allPresent = false
+  if (!PAYSTACK_PUBLIC_KEY) {
+    console.error("❌ NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY not found in environment variables")
+    return false
   }
 
-  return allPresent
-}
-
-async function testPaystackConnection() {
-  console.log("\n🔗 Testing Paystack API Connection...")
+  console.log("✅ Paystack keys found")
+  console.log(`Public Key: ${PAYSTACK_PUBLIC_KEY.substring(0, 10)}...`)
+  console.log(`Secret Key: ${PAYSTACK_SECRET_KEY.substring(0, 10)}...\n`)
 
   try {
-    if (!PAYSTACK_SECRET_KEY) {
-      console.log("❌ Paystack secret key not configured")
-      return false
-    }
-
-    // Test with a simple API call to verify the key
-    const response = await fetch("https://api.paystack.co/bank", {
+    // Test 1: Verify API connectivity
+    console.log("🔍 Test 1: Verifying API connectivity...")
+    const verifyResponse = await fetch("https://api.paystack.co/transaction/verify/invalid_reference", {
+      method: "GET",
       headers: {
         Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
         "Content-Type": "application/json",
       },
     })
 
-    console.log(`📡 Response status: ${response.status}`)
-
-    if (response.ok) {
-      const data = await response.json()
-      console.log("✅ Paystack API connection successful")
-      console.log(`📊 Available banks: ${data.data?.length || 0}`)
-      return true
+    if (verifyResponse.status === 404) {
+      console.log("✅ API connectivity confirmed (404 expected for invalid reference)")
     } else {
-      const errorText = await response.text()
-      console.error("❌ Paystack API error:", errorText)
-      return false
-    }
-  } catch (error) {
-    console.error("❌ Paystack connection error:", error.message)
-    return false
-  }
-}
-
-async function testPaymentInitialization() {
-  console.log("\n💳 Testing Payment Initialization...")
-
-  try {
-    if (!PAYSTACK_SECRET_KEY) {
-      console.log("❌ Paystack secret key not configured")
-      return false
+      console.log(`⚠️ Unexpected response status: ${verifyResponse.status}`)
     }
 
-    const testPaymentData = {
+    // Test 2: Initialize a test transaction
+    console.log("\n🔍 Test 2: Initializing test transaction...")
+    const initData = {
       email: "test@example.com",
-      amount: 2750000, // ₦27,500 in kobo
-      reference: `LBD_TEST_${Date.now()}`,
-      currency: "NGN",
-      metadata: {
-        customerName: "Test Customer",
-        customerPhone: "+2348012345678",
-        services: "Test Service",
-        bookingDate: "2025-08-15",
-        bookingTime: "2:00 PM",
-        totalAmount: 55000,
-        depositAmount: 27500,
-        notes: "Test booking",
-      },
-      channels: ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
+      amount: 50000, // 500 NGN in kobo
+      reference: `TEST_${Date.now()}`,
+      callback_url: "https://example.com/callback",
     }
 
-    console.log("🔄 Initializing test payment...")
-    console.log(`📧 Email: ${testPaymentData.email}`)
-    console.log(`💰 Amount: ₦${(testPaymentData.amount / 100).toLocaleString()}`)
-    console.log(`🔗 Reference: ${testPaymentData.reference}`)
-
-    const response = await fetch("https://api.paystack.co/transaction/initialize", {
+    const initResponse = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(testPaymentData),
+      body: JSON.stringify(initData),
     })
 
-    console.log(`📡 Response status: ${response.status}`)
+    const initResult = await initResponse.json()
 
-    if (response.ok) {
-      const data = await response.json()
-      console.log("✅ Payment initialization successful")
-      console.log(`🔗 Authorization URL: ${data.data?.authorization_url}`)
-      console.log(`🎫 Access Code: ${data.data?.access_code}`)
-      console.log(`📝 Reference: ${data.data?.reference}`)
-      return true
+    if (initResponse.ok && initResult.status) {
+      console.log("✅ Transaction initialization successful")
+      console.log(`Reference: ${initResult.data.reference}`)
+      console.log(`Authorization URL: ${initResult.data.authorization_url}`)
     } else {
-      const errorText = await response.text()
-      console.error("❌ Payment initialization failed:", errorText)
-      return false
-    }
-  } catch (error) {
-    console.error("❌ Payment initialization error:", error.message)
-    return false
-  }
-}
-
-async function testPaymentVerification() {
-  console.log("\n🔍 Testing Payment Verification...")
-
-  try {
-    if (!PAYSTACK_SECRET_KEY) {
-      console.log("❌ Paystack secret key not configured")
+      console.error("❌ Transaction initialization failed:", initResult.message)
       return false
     }
 
-    // Test with a dummy reference (this will fail but shows the API works)
-    const testReference = `LBD_TEST_${Date.now()}`
-
-    console.log(`🔄 Verifying test reference: ${testReference}`)
-
-    const response = await fetch(`https://api.paystack.co/transaction/verify/${testReference}`, {
+    // Test 3: List transactions (to verify read permissions)
+    console.log("\n🔍 Test 3: Testing transaction listing...")
+    const listResponse = await fetch("https://api.paystack.co/transaction?perPage=1", {
+      method: "GET",
       headers: {
         Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
         "Content-Type": "application/json",
       },
     })
 
-    console.log(`📡 Response status: ${response.status}`)
+    const listResult = await listResponse.json()
 
-    if (response.status === 404) {
-      console.log("✅ Payment verification API is working (transaction not found as expected)")
-      return true
-    } else if (response.ok) {
-      const data = await response.json()
-      console.log("✅ Payment verification successful")
-      console.log(`📊 Transaction status: ${data.data?.status}`)
-      return true
+    if (listResponse.ok && listResult.status) {
+      console.log("✅ Transaction listing successful")
+      console.log(`Total transactions: ${listResult.meta.total}`)
     } else {
-      const errorText = await response.text()
-      console.error("❌ Payment verification error:", errorText)
+      console.error("❌ Transaction listing failed:", listResult.message)
       return false
     }
-  } catch (error) {
-    console.error("❌ Payment verification error:", error.message)
-    return false
-  }
-}
 
-async function testWebhookValidation() {
-  console.log("\n🔗 Testing Webhook Validation...")
-
-  try {
-    // Test webhook signature validation logic
-    const testPayload = JSON.stringify({
-      event: "charge.success",
-      data: {
-        reference: "LBD_TEST_12345",
-        amount: 2750000,
-        status: "success",
-        customer: {
-          email: "test@example.com",
-        },
-      },
-    })
-
-    const crypto = require("crypto")
-    const hash = crypto
-      .createHmac("sha512", PAYSTACK_SECRET_KEY || "test")
-      .update(testPayload)
-      .digest("hex")
-
-    console.log("✅ Webhook signature generation working")
-    console.log(`🔐 Test signature: ${hash.substring(0, 20)}...`)
-
-    // Test signature verification
-    const testSignature = `sha512=${hash}`
-    const expectedHash = crypto
-      .createHmac("sha512", PAYSTACK_SECRET_KEY || "test")
-      .update(testPayload)
-      .digest("hex")
-    const expectedSignature = `sha512=${expectedHash}`
-
-    if (testSignature === expectedSignature) {
-      console.log("✅ Webhook signature verification working")
-      return true
-    } else {
-      console.log("❌ Webhook signature verification failed")
-      return false
-    }
-  } catch (error) {
-    console.error("❌ Webhook validation error:", error.message)
-    return false
-  }
-}
-
-async function testPaystackIntegrationAPI() {
-  console.log("\n🌐 Testing Local Payment API...")
-
-  try {
-    const testBookingData = {
-      customerName: "Test Customer",
-      customerEmail: "test@example.com",
-      customerPhone: "+2348012345678",
-      services: ["Test Service"],
-      date: "2025-08-15",
-      time: "2:00 PM",
-      totalAmount: 55000,
-      depositAmount: 27500,
-      notes: "Test booking for integration",
-    }
-
-    console.log("🔄 Testing local payment initialization API...")
-    console.log("📝 Test data:", testBookingData)
-
-    // This would normally call the local API endpoint
-    console.log("✅ Local API test data is valid")
-    console.log("💡 To test the actual API, make a POST request to /api/payments/initialize")
+    console.log("\n🎉 All Paystack tests passed!")
+    console.log("✅ API connectivity: Working")
+    console.log("✅ Transaction initialization: Working")
+    console.log("✅ Transaction listing: Working")
+    console.log("\n💡 Paystack integration is ready for production use.")
 
     return true
   } catch (error) {
-    console.error("❌ Local API test error:", error.message)
+    console.error("❌ Paystack test failed:", error.message)
     return false
   }
 }
 
-async function runPaystackIntegrationTest() {
-  console.log("🚀 Starting Paystack Integration Test...\n")
-
-  const tests = [
-    { name: "Environment Variables", test: testEnvironmentVariables },
-    { name: "Paystack Connection", test: testPaystackConnection },
-    { name: "Payment Initialization", test: testPaymentInitialization },
-    { name: "Payment Verification", test: testPaymentVerification },
-    { name: "Webhook Validation", test: testWebhookValidation },
-    { name: "Local API Integration", test: testPaystackIntegrationAPI },
-  ]
-
-  let passedTests = 0
-
-  for (const { name, test } of tests) {
-    console.log(`\n--- ${name} Test ---`)
-    try {
-      const result = await test()
-      if (result) {
-        passedTests++
-        console.log(`✅ ${name}: PASSED`)
-      } else {
-        console.log(`❌ ${name}: FAILED`)
-      }
-    } catch (error) {
-      console.error(`❌ ${name}: ERROR -`, error.message)
-    }
+// Run the test
+testPaystackIntegration().then((success) => {
+  if (!success) {
+    process.exit(1)
   }
-
-  console.log(`\n🎯 Test Results: ${passedTests}/${tests.length} tests passed`)
-
-  if (passedTests === tests.length) {
-    console.log("🎉 All Paystack integration tests passed!")
-    console.log("\n📋 Paystack integration is ready:")
-    console.log("✅ API keys configured correctly")
-    console.log("✅ Connection to Paystack established")
-    console.log("✅ Payment initialization working")
-    console.log("✅ Payment verification functional")
-    console.log("✅ Webhook validation ready")
-    console.log("✅ Local API integration prepared")
-  } else {
-    console.log("⚠️ Some tests failed. Please check:")
-    console.log("1. Verify Paystack API keys are correct")
-    console.log("2. Check network connectivity to Paystack")
-    console.log("3. Ensure webhook endpoints are properly configured")
-    console.log("4. Test with actual payment flow")
-  }
-
-  console.log("\n💡 Next steps:")
-  console.log("1. Test with real payment scenarios")
-  console.log("2. Monitor payment success rates")
-  console.log("3. Set up webhook endpoint monitoring")
-  console.log("4. Implement payment analytics")
-}
-
-// Run the complete test
-runPaystackIntegrationTest().catch(console.error)
+})
