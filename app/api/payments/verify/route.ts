@@ -1,260 +1,194 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { NextRequest, NextResponse } from "next/server"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY!
+
+interface PaystackVerifyResponse {
+  status: boolean
+  message: string
+  data: {
+    id: number
+    domain: string
+    status: string
+    reference: string
+    amount: number
+    message: string | null
+    gateway_response: string
+    paid_at: string
+    created_at: string
+    channel: string
+    currency: string
+    ip_address: string
+    metadata: any
+    log: any
+    fees: number
+    fees_split: any
+    authorization: any
+    customer: any
+    plan: any
+    split: any
+    order_id: any
+    paidAt: string
+    createdAt: string
+    requested_amount: number
+  }
+}
+
+async function verifyPaystackPayment(reference: string): Promise<PaystackVerifyResponse> {
+  const maxRetries = 3
+  const retryDelay = 1000 // 1 second
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🔍 Verifying payment attempt ${attempt}/${maxRetries} for reference: ${reference}`)
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+
+      const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        throw new Error(`Paystack API error: ${response.status} ${response.statusText}`)
+      }
+
+      const data: PaystackVerifyResponse = await response.json()
+      console.log(`✅ Payment verification successful for ${reference}:`, data.data.status)
+      return data
+
+    } catch (error) {
+      console.error(`❌ Payment verification attempt ${attempt} failed:`, error)
+
+      if (attempt === maxRetries) {
+        throw error
+      }
+
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, retryDelay * attempt))
+    }
+  }
+
+  throw new Error("Max retries exceeded")
+}
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔍 Payment verification started")
-
-    const body = await request.json()
-    const { reference } = body
+    const { reference } = await request.json()
 
     if (!reference) {
-      console.error("❌ No payment reference provided")
+      return NextResponse.json(
+        { error: "Payment reference is required" },
+        { status: 400 }
+      )
+    }
+
+    console.log("🔍 Starting payment verification for reference:", reference)
+
+    const verificationResult = await verifyPaystackPayment(reference)
+
+    if (!verificationResult.status) {
+      console.error("❌ Paystack verification failed:", verificationResult.message)
+      return NextResponse.json(
+        { 
+          error: "Payment verification failed",
+          message: verificationResult.message 
+        },
+        { status: 400 }
+      )
+    }
+
+    const paymentData = verificationResult.data
+
+    // Check if payment was successful
+    if (paymentData.status !== "success") {
+      console.error("❌ Payment was not successful:", paymentData.status)
       return NextResponse.json(
         {
-          status: false,
-          message: "Payment reference is required",
+          error: "Payment was not successful",
+          status: paymentData.status,
+          message: paymentData.gateway_response
         },
-        { status: 400 },
+        { status: 400 }
       )
     }
 
-    console.log("🔗 Verifying payment reference:", reference)
-
-    // Verify payment with Paystack with timeout and retry logic
-    let paystackData
-    let attempts = 0
-    const maxAttempts = 3
-    const timeout = 10000 // 10 seconds
-
-    while (attempts < maxAttempts) {
-      try {
-        console.log(`🔄 Paystack verification attempt ${attempts + 1}/${maxAttempts}`)
-        
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), timeout)
-
-        const paystackResponse = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-            "Content-Type": "application/json",
-          },
-          signal: controller.signal,
-        })
-
-        clearTimeout(timeoutId)
-
-        if (!paystackResponse.ok) {
-          throw new Error(`HTTP ${paystackResponse.status}: ${paystackResponse.statusText}`)
-        }
-
-        paystackData = await paystackResponse.json()
-        console.log("📊 Paystack verification response:", paystackData.status)
-        break // Success, exit retry loop
-
-      } catch (error) {
-        attempts++
-        console.error(`❌ Paystack verification attempt ${attempts} failed:`, error)
-        
-        if (attempts >= maxAttempts) {
-          console.error("❌ All Paystack verification attempts failed")
-          return NextResponse.json(
-            {
-              status: false,
-              message: "Payment verification failed after multiple attempts. Please contact support.",
-            },
-            { status: 500 },
-          )
-        }
-
-        // Wait before retry (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempts))
-      }
-    }
-
-    if (!paystackData || !paystackData.status || paystackData.data.status !== "success") {
-      console.error("❌ Payment not successful:", paystackData?.data?.status || "Unknown status")
-      return NextResponse.json(
-        {
-          status: false,
-          message: "Payment was not successful",
-        },
-        { status: 400 },
-      )
-    }
-
-    console.log("✅ Payment verified successfully")
-
-    // Find booking by payment reference
-    const { data: booking, error: bookingError } = await supabase
-      .from("bookings")
-      .select("*")
-      .eq("payment_reference", reference)
-      .single()
-
-    if (bookingError || !booking) {
-      console.error("❌ Booking not found:", bookingError)
-      return NextResponse.json(
-        {
-          status: false,
-          message: "Booking not found",
-        },
-        { status: 404 },
-      )
-    }
-
-    console.log("📋 Found booking:", booking.id)
-
-    // Update booking status to confirmed
-    const { error: updateError } = await supabase
-      .from("bookings")
-      .update({
-        payment_status: "completed",
-        status: "confirmed",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", booking.id)
-
-    if (updateError) {
-      console.error("❌ Failed to update booking:", updateError)
-      return NextResponse.json(
-        {
-          status: false,
-          message: "Failed to update booking status",
-        },
-        { status: 500 },
-      )
-    }
-
-    console.log("✅ Booking status updated to confirmed")
-
-    // Block the time slot to prevent double booking
-    try {
-      const { error: blockError } = await supabase.from("blocked_time_slots").upsert(
-        {
-          blocked_date: booking.booking_date,
-          blocked_time: booking.booking_time,
-          reason: `Booking confirmed - ${booking.client_name}`,
-          created_at: new Date().toISOString(),
-        },
-        {
-          onConflict: "blocked_date,blocked_time",
-        }
-      )
-
-      if (blockError) {
-        console.error("⚠️ Failed to block time slot:", blockError)
-        // Don't fail the entire process if blocking fails
-      } else {
-        console.log("🚫 Time slot blocked successfully")
-      }
-    } catch (blockError) {
-      console.error("⚠️ Error blocking time slot:", blockError)
-      // Continue with the booking process even if blocking fails
-    }
-
-    // Send confirmation emails (simplified for now)
-    try {
-      console.log("📧 Sending confirmation emails...")
-      // Email sending logic would go here
-      console.log("📧 Emails sent successfully")
-    } catch (emailError) {
-      console.error("⚠️ Email sending failed:", emailError)
-      // Don't fail the booking if emails fail
-    }
+    console.log("✅ Payment verification completed successfully")
 
     return NextResponse.json({
-      status: true,
-      message: "Payment verified and booking confirmed",
+      success: true,
+      message: "Payment verified successfully",
       data: {
-        booking_id: booking.id,
-        payment_reference: reference,
-        booking_status: "confirmed",
-        payment_status: "completed",
-        customer_name: booking.client_name,
-        service_name: booking.service_name,
-        booking_date: booking.booking_date,
-        booking_time: booking.booking_time,
-        total_amount: booking.total_amount,
-        deposit_amount: booking.deposit_amount,
-      },
+        reference: paymentData.reference,
+        amount: paymentData.amount / 100, // Convert from kobo to naira
+        status: paymentData.status,
+        paidAt: paymentData.paid_at,
+        channel: paymentData.channel,
+        currency: paymentData.currency,
+        customer: paymentData.customer,
+        fees: paymentData.fees / 100, // Convert from kobo to naira
+      }
     })
+
   } catch (error) {
     console.error("❌ Payment verification error:", error)
+
+    // Handle specific error types
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        return NextResponse.json(
+          { error: "Payment verification timed out. Please try again." },
+          { status: 408 }
+        )
+      }
+
+      if (error.message.includes('Paystack API error')) {
+        return NextResponse.json(
+          { error: "Payment service temporarily unavailable. Please try again." },
+          { status: 503 }
+        )
+      }
+    }
+
     return NextResponse.json(
-      {
-        status: false,
-        message: "Payment verification failed",
-        error: error instanceof Error ? error.message : "Unknown error occurred",
-      },
-      { status: 500 },
+      { error: "Payment verification failed. Please contact support." },
+      { status: 500 }
     )
   }
 }
 
 export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const reference = searchParams.get("reference")
+
+  if (!reference) {
+    return NextResponse.json(
+      { error: "Payment reference is required" },
+      { status: 400 }
+    )
+  }
+
   try {
-    const { searchParams } = new URL(request.url)
-    const reference = searchParams.get("reference")
+    console.log("🔍 GET payment verification for reference:", reference)
 
-    if (!reference) {
-      return NextResponse.json(
-        {
-          status: false,
-          message: "Payment reference is required",
-        },
-        { status: 400 },
-      )
-    }
-
-    // Get booking from database
-    const { data: booking, error: bookingError } = await supabase
-      .from("bookings")
-      .select("*")
-      .eq("payment_reference", reference)
-      .single()
-
-    if (bookingError || !booking) {
-      return NextResponse.json(
-        {
-          status: false,
-          message: "Booking not found",
-        },
-        { status: 404 },
-      )
-    }
+    const verificationResult = await verifyPaystackPayment(reference)
 
     return NextResponse.json({
-      status: true,
-      message: "Booking found",
-      data: {
-        booking_id: booking.id,
-        payment_reference: booking.payment_reference,
-        payment_status: booking.payment_status,
-        booking_status: booking.status,
-        customer_name: booking.client_name,
-        service_name: booking.service_name,
-        booking_date: booking.booking_date,
-        booking_time: booking.booking_time,
-        total_amount: booking.total_amount,
-        deposit_amount: booking.deposit_amount,
-      },
+      success: verificationResult.status,
+      data: verificationResult.data
     })
+
   } catch (error) {
-    console.error("❌ Booking lookup error:", error)
+    console.error("❌ GET payment verification error:", error)
     return NextResponse.json(
-      {
-        status: false,
-        message: "Failed to lookup booking",
-        error: error instanceof Error ? error.message : "Unknown error occurred",
-      },
-      { status: 500 },
+      { error: "Payment verification failed" },
+      { status: 500 }
     )
   }
 }

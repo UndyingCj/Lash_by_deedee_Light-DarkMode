@@ -1,195 +1,214 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY!
+
+interface PaystackInitializeResponse {
+  status: boolean
+  message: string
+  data: {
+    authorization_url: string
+    access_code: string
+    reference: string
+  }
+}
+
+async function initializePaystackPayment(paymentData: any): Promise<PaystackInitializeResponse> {
+  const maxRetries = 3
+  const retryDelay = 1000 // 1 second
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`💳 Initializing payment attempt ${attempt}/${maxRetries}`)
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
+
+      const response = await fetch("https://api.paystack.co/transaction/initialize", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(paymentData),
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Paystack API error: ${response.status} ${response.statusText} - ${errorText}`)
+      }
+
+      const data: PaystackInitializeResponse = await response.json()
+      console.log(`✅ Payment initialization successful:`, data.data.reference)
+      return data
+
+    } catch (error) {
+      console.error(`❌ Payment initialization attempt ${attempt} failed:`, error)
+
+      if (attempt === maxRetries) {
+        throw error
+      }
+
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, retryDelay * attempt))
+    }
+  }
+
+  throw new Error("Max retries exceeded")
+}
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🚀 Payment initialization started")
-
     const body = await request.json()
     const {
+      email,
+      amount,
       customerName,
-      customerEmail,
       customerPhone,
       services,
-      date,
-      time,
-      totalAmount,
-      depositAmount,
-      notes,
+      bookingDate,
+      bookingTime,
+      notes
     } = body
 
     // Validate required fields
-    if (!customerName || !customerEmail || !services || !date || !time || !totalAmount || !depositAmount) {
-      console.error("❌ Missing required fields")
+    if (!email || !amount || !customerName || !services || !bookingDate || !bookingTime) {
       return NextResponse.json(
-        {
-          status: false,
-          message: "Missing required booking information",
-        },
-        { status: 400 },
+        { error: "Missing required fields" },
+        { status: 400 }
       )
     }
 
-    console.log("📋 Initializing payment for:", {
-      customer: customerName,
-      email: customerEmail,
-      services: Array.isArray(services) ? services.join(", ") : services,
-      date,
-      time,
-      amount: depositAmount,
-    })
+    // Validate amount
+    if (amount <= 0) {
+      return NextResponse.json(
+        { error: "Invalid amount" },
+        { status: 400 }
+      )
+    }
 
     // Generate unique reference
-    const reference = `LBD_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+    const reference = `lbd_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
 
-    // Prepare metadata for Paystack
-    const metadata = {
-      customer_name: customerName,
-      customer_phone: customerPhone || "",
-      services: Array.isArray(services) ? services.join(", ") : services,
-      booking_date: date,
-      booking_time: time,
-      total_amount: totalAmount.toString(),
-      deposit_amount: depositAmount.toString(),
-      notes: notes || "",
-      booking_source: "website",
+    console.log("💳 Initializing payment for:", { email, amount, reference })
+
+    // Calculate amounts (amount should be the deposit amount)
+    const depositAmount = amount
+    const totalAmount = Array.isArray(services) 
+      ? services.reduce((total, service) => total + (service.price || 0), 0)
+      : amount * 2 // Default: assume deposit is 50% of total
+
+    // Prepare Paystack payment data
+    const paymentData = {
+      email,
+      amount: Math.round(depositAmount * 100), // Convert to kobo
+      reference,
+      currency: "NGN",
+      callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/booking/success?reference=${reference}`,
+      metadata: {
+        customer_name: customerName,
+        customer_phone: customerPhone || "",
+        services: Array.isArray(services) ? services.map(s => s.name || s).join(", ") : services,
+        booking_date: bookingDate,
+        booking_time: bookingTime,
+        notes: notes || "",
+        total_amount: totalAmount,
+        deposit_amount: depositAmount,
+      },
+      channels: ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
     }
 
-    console.log("💳 Initializing Paystack payment...")
+    // Initialize payment with Paystack
+    const paymentResult = await initializePaystackPayment(paymentData)
 
-    // Initialize payment with Paystack with timeout and retry logic
-    let paystackData
-    let attempts = 0
-    const maxAttempts = 3
-    const timeout = 15000 // 15 seconds
-
-    while (attempts < maxAttempts) {
-      try {
-        console.log(`🔄 Paystack initialization attempt ${attempts + 1}/${maxAttempts}`)
-        
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), timeout)
-
-        const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email: customerEmail,
-            amount: Math.round(depositAmount * 100), // Convert to kobo
-            currency: "NGN",
-            reference: reference,
-            callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/book/success`,
-            metadata: metadata,
-            channels: ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
-          }),
-          signal: controller.signal,
-        })
-
-        clearTimeout(timeoutId)
-
-        if (!paystackResponse.ok) {
-          const errorText = await paystackResponse.text()
-          throw new Error(`HTTP ${paystackResponse.status}: ${errorText}`)
-        }
-
-        paystackData = await paystackResponse.json()
-        console.log("📊 Paystack initialization response:", paystackData.status)
-        break // Success, exit retry loop
-
-      } catch (error) {
-        attempts++
-        console.error(`❌ Paystack initialization attempt ${attempts} failed:`, error)
-        
-        if (attempts >= maxAttempts) {
-          console.error("❌ All Paystack initialization attempts failed")
-          return NextResponse.json(
-            {
-              status: false,
-              message: "Payment initialization failed after multiple attempts. Please try again later.",
-            },
-            { status: 500 },
-          )
-        }
-
-        // Wait before retry (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempts))
-      }
-    }
-
-    if (!paystackData || !paystackData.status) {
-      console.error("❌ Paystack initialization failed:", paystackData?.message)
+    if (!paymentResult.status) {
+      console.error("❌ Paystack initialization failed:", paymentResult.message)
       return NextResponse.json(
-        {
-          status: false,
-          message: paystackData?.message || "Payment initialization failed",
-        },
-        { status: 500 },
+        { error: "Payment initialization failed", message: paymentResult.message },
+        { status: 400 }
       )
     }
 
-    console.log("✅ Payment initialized successfully")
-
-    // Store pending booking in database
-    try {
-      const { error: dbError } = await supabase.from("bookings").insert({
-        client_name: customerName,
-        client_email: customerEmail,
-        client_phone: customerPhone || "",
-        phone: customerPhone || "",
-        email: customerEmail,
-        service_name: Array.isArray(services) ? services.join(", ") : services,
-        service: Array.isArray(services) ? services.join(", ") : services,
-        booking_date: date,
-        booking_time: time,
-        total_amount: totalAmount,
-        amount: depositAmount,
-        deposit_amount: depositAmount,
-        payment_reference: reference,
-        payment_status: "pending",
-        status: "pending",
-        special_notes: notes || "",
-        notes: notes || "",
-        created_at: new Date().toISOString(),
-      })
-
-      if (dbError) {
-        console.error("⚠️ Database insert failed:", dbError)
-        // Continue with payment even if DB insert fails
-      } else {
-        console.log("✅ Pending booking stored in database")
-      }
-    } catch (dbError) {
-      console.error("⚠️ Database error:", dbError)
-      // Continue with payment even if DB fails
+    // Store booking in database with pending status
+    const bookingData = {
+      client_name: customerName,
+      client_email: email,
+      client_phone: customerPhone || "",
+      service_name: Array.isArray(services) ? services.map(s => s.name || s).join(", ") : services,
+      booking_date: bookingDate,
+      booking_time: bookingTime,
+      total_amount: totalAmount,
+      deposit_amount: depositAmount,
+      payment_reference: reference,
+      payment_status: "pending",
+      status: "pending",
+      notes: notes || "",
     }
 
+    const { data: booking, error: bookingError } = await supabase
+      .from("bookings")
+      .insert(bookingData)
+      .select()
+      .single()
+
+    if (bookingError) {
+      console.error("❌ Error creating booking:", bookingError)
+      return NextResponse.json(
+        { error: "Failed to create booking" },
+        { status: 500 }
+      )
+    }
+
+    console.log("✅ Booking created with ID:", booking.id)
+
     return NextResponse.json({
-      status: true,
+      success: true,
       message: "Payment initialized successfully",
       data: {
-        reference: reference,
-        authorization_url: paystackData.data.authorization_url,
-        access_code: paystackData.data.access_code,
-        amount: Math.round(depositAmount * 100), // Amount in kobo
-        public_key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
-      },
+        authorization_url: paymentResult.data.authorization_url,
+        access_code: paymentResult.data.access_code,
+        reference: paymentResult.data.reference,
+        booking_id: booking.id,
+        amount: depositAmount,
+        currency: "NGN",
+      }
     })
+
   } catch (error) {
     console.error("❌ Payment initialization error:", error)
+
+    // Handle specific error types
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        return NextResponse.json(
+          { error: "Payment initialization timed out. Please try again." },
+          { status: 408 }
+        )
+      }
+
+      if (error.message.includes('Paystack API error')) {
+        return NextResponse.json(
+          { error: "Payment service temporarily unavailable. Please try again." },
+          { status: 503 }
+        )
+      }
+    }
+
     return NextResponse.json(
-      {
-        status: false,
-        message: error instanceof Error ? error.message : "Payment initialization failed",
-      },
-      { status: 500 },
+      { error: "Payment initialization failed. Please try again." },
+      { status: 500 }
     )
   }
+}
+
+export async function GET() {
+  return NextResponse.json({
+    message: "Paystack payment initialization endpoint",
+    status: "active",
+    timestamp: new Date().toISOString(),
+  })
 }

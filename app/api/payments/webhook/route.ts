@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import crypto from "crypto"
-import { sendBookingConfirmationEmail, sendAdminBookingNotification } from "@/lib/email"
+import { sendCustomerBookingConfirmation, sendAdminBookingNotification } from "@/lib/email"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       const { error: updateError } = await supabase
         .from("bookings")
         .update({
-          payment_status: "paid",
+          payment_status: "completed",
           status: "confirmed",
           updated_at: new Date().toISOString(),
         })
@@ -92,37 +92,28 @@ export async function POST(request: NextRequest) {
 
         const services = booking.service_name ? booking.service_name.split(", ") : [booking.service || "Service"]
 
-        // Send customer confirmation email
-        const customerEmailResult = await sendBookingConfirmationEmail({
+        const emailData = {
           customerName: booking.client_name,
           customerEmail: booking.client_email,
+          customerPhone: booking.client_phone || "",
           services,
-          date: booking.booking_date,
-          time: booking.booking_time,
+          bookingDate: booking.booking_date,
+          bookingTime: booking.booking_time,
           totalAmount: booking.total_amount,
           depositAmount: booking.deposit_amount,
           paymentReference: reference,
-          notes: booking.notes,
-        })
-
-        // Send admin notification email
-        const adminEmailResult = await sendAdminBookingNotification({
-          customerName: booking.client_name,
-          customerEmail: booking.client_email,
-          customerPhone: booking.client_phone,
-          services,
-          date: booking.booking_date,
-          time: booking.booking_time,
-          totalAmount: booking.total_amount,
-          depositAmount: booking.deposit_amount,
-          paymentReference: reference,
-          notes: booking.notes,
+          notes: booking.notes || "",
           bookingId: booking.id,
-        })
+        }
+
+        const [customerResult, adminResult] = await Promise.all([
+          sendCustomerBookingConfirmation(emailData),
+          sendAdminBookingNotification(emailData)
+        ])
 
         console.log("📧 Email results:", {
-          customer: customerEmailResult.success,
-          admin: adminEmailResult.success,
+          customer: customerResult.success ? "✅ Sent" : "❌ Failed",
+          admin: adminResult.success ? "✅ Sent" : "❌ Failed",
         })
       } catch (emailError) {
         console.error("⚠️ Warning: Email sending failed:", emailError)
@@ -163,4 +154,11 @@ export async function POST(request: NextRequest) {
     console.error("❌ Webhook processing error:", error)
     return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 })
   }
+}
+
+export async function GET() {
+  return NextResponse.json({
+    message: "Paystack webhook endpoint is active",
+    timestamp: new Date().toISOString(),
+  })
 }
