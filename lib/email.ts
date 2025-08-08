@@ -1,5 +1,5 @@
-// Simple email logging system - no external dependencies required
-// This system logs emails to console for development and testing
+// Production email system using Zoho Mail SMTP
+// Sends actual emails in production, logs in development
 
 interface BookingEmailData {
   customerName: string
@@ -15,29 +15,65 @@ interface BookingEmailData {
   bookingId?: string
 }
 
-// Email logging function for development
-async function logEmail(type: string, to: string, subject: string, content: string): Promise<boolean> {
-  try {
-    const timestamp = new Date().toISOString()
-    const logEntry = {
-      type: type.toUpperCase(),
-      to,
-      subject,
-      timestamp,
-      contentLength: content.length,
-      preview: content.substring(0, 200) + "..."
+import nodemailer from 'nodemailer'
+
+// Create transporter for Zoho Mail
+const createTransporter = () => {
+  const zohoUser = process.env.ZOHO_EMAIL_USER
+  const zohoPass = process.env.ZOHO_EMAIL_PASSWORD
+  
+  if (!zohoUser || !zohoPass) {
+    throw new Error('Zoho email credentials not configured')
+  }
+  
+  return nodemailer.createTransporter({
+    host: 'smtp.zoho.com',
+    port: 587,
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: zohoUser,
+      pass: zohoPass,
+    },
+    tls: {
+      rejectUnauthorized: false
     }
+  })
+}
+
+// Send actual email or log based on environment
+async function sendEmail(type: string, to: string, subject: string, content: string): Promise<boolean> {
+  try {
+    // In development, just log the email
+    if (process.env.NODE_ENV === 'development') {
+      console.log("📧 EMAIL LOG START")
+      console.log(`Type: ${type.toUpperCase()}`)
+      console.log(`To: ${to}`)
+      console.log(`Subject: ${subject}`)
+      console.log(`Content Preview: ${content.substring(0, 200)}...`)
+      console.log("📧 EMAIL LOG END")
+      return true
+    }
+
+    // In production, send actual email
+    const transporter = createTransporter()
     
-    console.log("📧 EMAIL LOG START")
-    console.log(JSON.stringify(logEntry, null, 2))
-    console.log("📧 EMAIL LOG END")
-    
-    // Simulate email sending delay
-    await new Promise(resolve => setTimeout(resolve, 100))
-    
-    return true // Always return success for logging
+    const mailOptions = {
+      from: {
+        name: 'Lashed by Deedee',
+        address: process.env.ZOHO_EMAIL_USER || 'noreply@example.com'
+      },
+      to: to,
+      subject: subject,
+      html: content.replace(/\n/g, '<br>'),
+      text: content
+    }
+
+    await transporter.sendMail(mailOptions)
+    console.log(`✅ Email sent successfully [${type}] to ${to}`)
+    return true
+
   } catch (error) {
-    console.error(`❌ Email logging error [${type}]:`, error)
+    console.error(`❌ Email sending error [${type}]:`, error)
     return false
   }
 }
@@ -95,11 +131,11 @@ Lashed by Deedee
 WhatsApp: +234 816 543 5528
     `
 
-    const success = await logEmail("customer_confirmation", data.customerEmail, subject, emailContent)
+    const success = await sendEmail("customer_confirmation", data.customerEmail, subject, emailContent)
     
     return {
       success,
-      message: success ? "Customer email logged successfully" : "Failed to log customer email",
+      message: success ? "Customer email sent successfully" : "Failed to send customer email",
       id: `log_${Date.now()}_customer`
     }
   } catch (error) {
@@ -163,11 +199,12 @@ Please prepare for this appointment and contact the customer if needed.
 The time slot has been automatically blocked in the system.
     `
 
-    const success = await logEmail("admin_notification", "admin@lashedbydeedee.com", subject, emailContent)
+    const adminEmail = process.env.ZOHO_EMAIL_USER || 'admin@example.com'
+    const success = await sendEmail("admin_notification", adminEmail, subject, emailContent)
     
     return {
       success,
-      message: success ? "Admin email logged successfully" : "Failed to log admin email",
+      message: success ? "Admin email sent successfully" : "Failed to send admin email",
       id: `log_${Date.now()}_admin`
     }
   } catch (error) {
@@ -223,11 +260,11 @@ Lashed by Deedee
 WhatsApp: +234 816 543 5528
     `
 
-    const success = await logEmail("booking_reminder", data.customerEmail, subject, emailContent)
+    const success = await sendEmail("booking_reminder", data.customerEmail, subject, emailContent)
     
     return {
       success,
-      message: success ? "Reminder email logged successfully" : "Failed to log reminder email",
+      message: success ? "Reminder email sent successfully" : "Failed to send reminder email",
       id: `log_${Date.now()}_reminder`
     }
   } catch (error) {

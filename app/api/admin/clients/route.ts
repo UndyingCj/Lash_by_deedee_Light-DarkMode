@@ -1,7 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase-admin"
+import { verifyAuth } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
+  // Verify authentication
+  const authResult = await verifyAuth(request)
+  if (!authResult.success) {
+    return NextResponse.json({ success: false, message: "Authentication required" }, { status: 401 })
+  }
+
   try {
     // Get all bookings to calculate client statistics
     const { data: bookings, error: bookingsError } = await supabaseAdmin

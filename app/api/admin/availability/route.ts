@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { verifyAuth } from "@/lib/auth"
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-service-key'
 )
 
 export async function GET(request: NextRequest) {
+  // Verify authentication
+  const authResult = await verifyAuth(request)
+  if (!authResult.success) {
+    return NextResponse.json({ success: false, message: "Authentication required" }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const date = searchParams.get("date")
@@ -139,6 +146,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Verify authentication
+  const authResult = await verifyAuth(request)
+  if (!authResult.success) {
+    return NextResponse.json({ success: false, message: "Authentication required" }, { status: 401 })
+  }
+
   try {
     const body = await request.json()
     const { date, time, reason } = body
@@ -188,6 +201,12 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  // Verify authentication
+  const authResult = await verifyAuth(request)
+  if (!authResult.success) {
+    return NextResponse.json({ success: false, message: "Authentication required" }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const date = searchParams.get("date")
