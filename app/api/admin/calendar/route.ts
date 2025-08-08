@@ -7,8 +7,15 @@ import {
   addBlockedTimeSlot,
   removeBlockedTimeSlot,
 } from "@/lib/supabase"
+import { verifyAuth } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
+  // Verify authentication
+  const authResult = await verifyAuth(request)
+  if (!authResult.success) {
+    return NextResponse.json({ success: false, message: "Authentication required" }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const type = searchParams.get("type") // 'dates' or 'timeslots'
@@ -33,6 +40,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Verify authentication
+  const authResult = await verifyAuth(request)
+  if (!authResult.success) {
+    return NextResponse.json({ success: false, message: "Authentication required" }, { status: 401 })
+  }
+
   try {
     const body = await request.json()
     const { type, date, time, reason } = body
@@ -59,6 +72,12 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  // Verify authentication
+  const authResult = await verifyAuth(request)
+  if (!authResult.success) {
+    return NextResponse.json({ success: false, message: "Authentication required" }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const type = searchParams.get("type")

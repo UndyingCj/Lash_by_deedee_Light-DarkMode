@@ -5,8 +5,15 @@ import {
   markNotificationAsRead,
   getUnreadNotificationCount,
 } from "@/lib/settings"
+import { verifyAuth } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
+  // Verify authentication
+  const authResult = await verifyAuth(request)
+  if (!authResult.success) {
+    return NextResponse.json({ success: false, message: "Authentication required" }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const action = searchParams.get("action")
@@ -25,6 +32,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Verify authentication
+  const authResult = await verifyAuth(request)
+  if (!authResult.success) {
+    return NextResponse.json({ success: false, message: "Authentication required" }, { status: 401 })
+  }
+
   try {
     const { title, message, type, expiresInHours } = await request.json()
     const notification = await createNotification(title, message, type, expiresInHours)
@@ -37,6 +50,12 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  // Verify authentication
+  const authResult = await verifyAuth(request)
+  if (!authResult.success) {
+    return NextResponse.json({ success: false, message: "Authentication required" }, { status: 401 })
+  }
+
   try {
     const { id } = await request.json()
     await markNotificationAsRead(id)

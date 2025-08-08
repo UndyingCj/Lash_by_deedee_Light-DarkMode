@@ -30,14 +30,16 @@ const nextConfig = {
     ZOHO_CLIENT_ID: process.env.ZOHO_CLIENT_ID,
     ZOHO_CLIENT_SECRET: process.env.ZOHO_CLIENT_SECRET,
     ZOHO_REFRESH_TOKEN: process.env.ZOHO_REFRESH_TOKEN,
+    ADMIN_USERNAME: process.env.ADMIN_USERNAME,
+    ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
+    JWT_SECRET: process.env.JWT_SECRET,
   },
   images: {
     domains: ['placeholder.svg'],
     unoptimized: true,
   },
-  experimental: {
-    serverComponentsExternalPackages: ['@supabase/supabase-js'],
-  },
+  serverExternalPackages: ['@supabase/supabase-js'],
+  output: 'standalone',
 }
 
 export default nextConfig

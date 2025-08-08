@@ -26,17 +26,33 @@ export function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
   const router = useRouter()
 
   useEffect(() => {
-    // Check authentication
-    const isAuth = localStorage.getItem("adminAuth")
-    if (!isAuth) {
-      router.push("/egusi")
-      return
+    // Check authentication via API
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/verify')
+        const data = await response.json()
+        
+        if (!data.success) {
+          router.push("/egusi")
+          return
+        }
+      } catch (error) {
+        console.error("Auth check failed:", error)
+        router.push("/egusi")
+      }
     }
+
+    checkAuth()
   }, [router])
 
-  const handleLogout = () => {
-    localStorage.removeItem("adminAuth")
-    router.push("/egusi")
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } catch (error) {
+      console.error("Logout error:", error)
+    } finally {
+      router.push("/egusi")
+    }
   }
 
   const navigation = [

@@ -24,15 +24,27 @@ export default function AdminLoginPage() {
     setError("")
 
     try {
-      // Simulate login - replace with actual authentication
-      if (credentials.username === "deedee" && credentials.password === "admin123") {
-        // Store auth token/session
-        localStorage.setItem("adminAuth", "authenticated")
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: credentials.username,
+          password: credentials.password,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Remove localStorage usage - now using HTTP-only cookies
         window.location.href = "/egusi/dashboard"
       } else {
-        setError("Invalid credentials")
+        setError(data.message || "Invalid credentials")
       }
     } catch (err) {
+      console.error("Login error:", err)
       setError("Login failed. Please try again.")
     } finally {
       setIsLoading(false)

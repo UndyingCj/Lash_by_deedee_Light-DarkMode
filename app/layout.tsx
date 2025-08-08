@@ -4,6 +4,12 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import LayoutWrapper from "@/components/layout-wrapper"
+import { logEnvironmentStatus } from "@/lib/env-validation"
+
+// Validate environment on app startup
+if (typeof window === 'undefined') {
+  logEnvironmentStatus()
+}
 
 const inter = Inter({ subsets: ["latin"] })
 

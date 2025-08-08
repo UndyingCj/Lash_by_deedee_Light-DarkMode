@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js"
 import crypto from "crypto"
 import { sendCustomerBookingConfirmation, sendAdminBookingNotification } from "@/lib/email"
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co', process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-service-key')
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,10 +18,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify webhook signature
-    const hash = crypto.createHmac("sha512", process.env.PAYSTACK_SECRET_KEY!).update(body).digest("hex")
+    const secretKey = process.env.PAYSTACK_SECRET_KEY || 'placeholder-secret'
+    const hash = crypto.createHmac("sha512", secretKey).update(body).digest("hex")
 
     if (hash !== signature) {
-      console.error("❌ Invalid signature")
+      console.error("❌ Invalid signature:", {
+        received: signature,
+        calculated: hash,
+        hasSecretKey: !!process.env.PAYSTACK_SECRET_KEY
+      })
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
 
@@ -111,10 +116,18 @@ export async function POST(request: NextRequest) {
           sendAdminBookingNotification(emailData)
         ])
 
-        console.log("📧 Email results:", {
-          customer: customerResult.success ? "✅ Sent" : "❌ Failed",
-          admin: adminResult.success ? "✅ Sent" : "❌ Failed",
+        console.log("📧 Email results (webhook):", {
+          customer: customerResult.success ? "✅ Sent" : `❌ Failed: ${customerResult.message}`,
+          admin: adminResult.success ? "✅ Sent" : `❌ Failed: ${adminResult.message}`,
         })
+
+        // Log detailed email results for debugging
+        if (!customerResult.success) {
+          console.error("❌ Customer email failed:", customerResult)
+        }
+        if (!adminResult.success) {
+          console.error("❌ Admin email failed:", adminResult)
+        }
       } catch (emailError) {
         console.error("⚠️ Warning: Email sending failed:", emailError)
       }

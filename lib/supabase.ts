@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key'
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
@@ -66,9 +66,9 @@ export interface BlockedTimeSlot {
 }
 
 // Server-side Supabase client with service role key
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+const supabaseAdminClient = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-service-key',
 )
 
 // Create a new booking
@@ -76,7 +76,7 @@ export async function createBooking(bookingData: CreateBookingData) {
   try {
     console.log("📝 Creating booking:", bookingData)
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabaseAdminClientClient
       .from("bookings")
       .insert([
         {
@@ -118,7 +118,7 @@ export async function createBooking(bookingData: CreateBookingData) {
 // Get all bookings
 export async function getBookings() {
   try {
-    const { data, error } = await supabaseAdmin.from("bookings").select("*").order("created_at", { ascending: false })
+    const { data, error } = await supabaseAdminClientClient.from("bookings").select("*").order("created_at", { ascending: false })
 
     if (error) {
       console.error("❌ Error fetching bookings:", error)
@@ -135,7 +135,7 @@ export async function getBookings() {
 // Update booking
 export async function updateBooking(id: number, updates: Partial<BookingRecord>) {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabaseAdminClientClient
       .from("bookings")
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq("id", id)
@@ -157,7 +157,7 @@ export async function updateBooking(id: number, updates: Partial<BookingRecord>)
 // Update booking payment status
 export async function updateBookingPaymentStatus(paymentReference: string, status: string) {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabaseAdminClientClient
       .from("bookings")
       .update({
         payment_status: status,
@@ -183,7 +183,7 @@ export async function updateBookingPaymentStatus(paymentReference: string, statu
 // Blocked dates operations
 export async function getBlockedDates() {
   try {
-    const { data, error } = await supabaseAdmin.from("blocked_dates").select("*").order("blocked_date")
+    const { data, error } = await supabaseAdminClientClient.from("blocked_dates").select("*").order("blocked_date")
 
     if (error) {
       console.error("❌ Error fetching blocked dates:", error)
@@ -199,7 +199,7 @@ export async function getBlockedDates() {
 
 export async function addBlockedDate(date: string, reason?: string) {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabaseAdminClientClient
       .from("blocked_dates")
       .upsert([{ blocked_date: date, reason }], {
         onConflict: "blocked_date",
@@ -222,7 +222,7 @@ export async function addBlockedDate(date: string, reason?: string) {
 
 export async function removeBlockedDate(date: string) {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabaseAdminClientClient
       .from("blocked_dates")
       .delete()
       .eq("blocked_date", date)
@@ -244,7 +244,7 @@ export async function removeBlockedDate(date: string) {
 // Blocked time slots operations
 export async function getBlockedTimeSlots() {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabaseAdminClientClient
       .from("blocked_time_slots")
       .select("*")
       .order("blocked_date")
@@ -264,7 +264,7 @@ export async function getBlockedTimeSlots() {
 
 export async function addBlockedTimeSlot(date: string, time: string, reason?: string) {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabaseAdminClientClient
       .from("blocked_time_slots")
       .upsert([{ blocked_date: date, blocked_time: time, reason }], {
         onConflict: "blocked_date,blocked_time",
@@ -287,7 +287,7 @@ export async function addBlockedTimeSlot(date: string, time: string, reason?: st
 
 export async function removeBlockedTimeSlot(date: string, time: string) {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabaseAdminClientClient
       .from("blocked_time_slots")
       .delete()
       .eq("blocked_date", date)
@@ -320,19 +320,19 @@ export async function getDashboardStats() {
     const monthStartStr = monthStart.toISOString().split("T")[0]
 
     // Today's bookings
-    const { count: todayBookings } = await supabaseAdmin
+    const { count: todayBookings } = await supabaseAdminClient
       .from("bookings")
       .select("*", { count: "exact", head: true })
       .eq("booking_date", today)
 
     // Weekly bookings
-    const { count: weeklyBookings } = await supabaseAdmin
+    const { count: weeklyBookings } = await supabaseAdminClient
       .from("bookings")
       .select("*", { count: "exact", head: true })
       .gte("booking_date", weekStartStr)
 
     // Monthly revenue
-    const { data: monthlyData } = await supabaseAdmin
+    const { data: monthlyData } = await supabaseAdminClient
       .from("bookings")
       .select("amount")
       .gte("booking_date", monthStartStr)
@@ -341,7 +341,7 @@ export async function getDashboardStats() {
     const monthlyRevenue = monthlyData?.reduce((sum, booking) => sum + (booking.amount || 0), 0) || 0
 
     // Pending bookings
-    const { count: pendingBookings } = await supabaseAdmin
+    const { count: pendingBookings } = await supabaseAdminClient
       .from("bookings")
       .select("*", { count: "exact", head: true })
       .eq("status", "pending")

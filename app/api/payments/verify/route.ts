@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
+import { sendCustomerBookingConfirmation, sendAdminBookingNotification } from "@/lib/email"
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY!
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co', 
+  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-service-key'
+)
 
 interface PaystackVerifyResponse {
   status: boolean
@@ -121,20 +127,139 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ Payment verification completed successfully")
 
-    return NextResponse.json({
-      success: true,
-      message: "Payment verified successfully",
-      data: {
-        reference: paymentData.reference,
-        amount: paymentData.amount / 100, // Convert from kobo to naira
-        status: paymentData.status,
-        paidAt: paymentData.paid_at,
-        channel: paymentData.channel,
-        currency: paymentData.currency,
-        customer: paymentData.customer,
-        fees: paymentData.fees / 100, // Convert from kobo to naira
+    // Find and update the booking
+    try {
+      console.log("🔍 Looking for booking with reference:", reference)
+
+      const { data: booking, error: bookingError } = await supabase
+        .from("bookings")
+        .select("*")
+        .eq("payment_reference", reference)
+        .single()
+
+      if (bookingError) {
+        console.error("❌ Booking not found for reference:", reference, bookingError)
+        return NextResponse.json({
+          success: false,
+          error: "Booking not found",
+          message: "Could not find booking associated with this payment"
+        }, { status: 404 })
       }
-    })
+
+      console.log("📋 Found booking:", booking.id)
+
+      // Update booking status if not already confirmed
+      if (booking.payment_status !== "completed") {
+        console.log("🔄 Updating booking status to confirmed")
+
+        const { error: updateError } = await supabase
+          .from("bookings")
+          .update({
+            payment_status: "completed",
+            status: "confirmed",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", booking.id)
+
+        if (updateError) {
+          console.error("❌ Error updating booking status:", updateError)
+        } else {
+          console.log("✅ Booking status updated successfully")
+
+          // Block the time slot to prevent double booking
+          try {
+            const { error: blockError } = await supabase.from("blocked_time_slots").upsert(
+              {
+                blocked_date: booking.booking_date,
+                blocked_time: booking.booking_time,
+                reason: `Booked by ${booking.client_name} - ${booking.service_name}`,
+              },
+              {
+                onConflict: "blocked_date,blocked_time",
+                ignoreDuplicates: true,
+              },
+            )
+
+            if (blockError) {
+              console.error("⚠️ Warning: Could not block time slot:", blockError.message)
+            } else {
+              console.log("🚫 Time slot blocked successfully")
+            }
+          } catch (blockError) {
+            console.error("⚠️ Warning: Error blocking time slot:", blockError)
+          }
+
+          // Send confirmation emails (as backup to webhook)
+          try {
+            console.log("📧 Sending confirmation emails (verify route backup)...")
+
+            const services = booking.service_name ? booking.service_name.split(", ") : [booking.service || "Service"]
+
+            const emailData = {
+              customerName: booking.client_name,
+              customerEmail: booking.client_email,
+              customerPhone: booking.client_phone || "",
+              services,
+              bookingDate: booking.booking_date,
+              bookingTime: booking.booking_time,
+              totalAmount: booking.total_amount,
+              depositAmount: booking.deposit_amount,
+              paymentReference: reference,
+              notes: booking.notes || "",
+              bookingId: booking.id.toString(),
+            }
+
+            const [customerResult, adminResult] = await Promise.all([
+              sendCustomerBookingConfirmation(emailData),
+              sendAdminBookingNotification(emailData)
+            ])
+
+            console.log("📧 Email results (verify route):", {
+              customer: customerResult.success ? "✅ Sent" : "❌ Failed",
+              admin: adminResult.success ? "✅ Sent" : "❌ Failed",
+            })
+          } catch (emailError) {
+            console.error("⚠️ Warning: Email sending failed (verify route):", emailError)
+          }
+        }
+      } else {
+        console.log("ℹ️ Booking already confirmed, skipping updates")
+      }
+
+      // Return booking data for success page
+      return NextResponse.json({
+        success: true,
+        status: "ok",
+        message: "Payment verified successfully",
+        booking: {
+          id: booking.id.toString(),
+          reference: reference,
+          customer_name: booking.client_name,
+          service: booking.service_name || booking.service,
+          date: booking.booking_date,
+          time: booking.booking_time,
+          amount: booking.total_amount,
+          deposit: booking.deposit_amount
+        },
+        payment: {
+          reference: paymentData.reference,
+          amount: paymentData.amount / 100, // Convert from kobo to naira
+          status: paymentData.status,
+          paidAt: paymentData.paid_at,
+          channel: paymentData.channel,
+          currency: paymentData.currency,
+          customer: paymentData.customer,
+          fees: paymentData.fees / 100, // Convert from kobo to naira
+        }
+      })
+
+    } catch (dbError) {
+      console.error("❌ Database error during booking processing:", dbError)
+      return NextResponse.json({
+        error: "Failed to process booking",
+        message: "Payment verified but booking processing failed"
+      }, { status: 500 })
+    }
 
   } catch (error) {
     console.error("❌ Payment verification error:", error)
