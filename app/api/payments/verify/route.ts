@@ -115,90 +115,40 @@ async function verifyPaystackPayment(reference: string): Promise<PaystackVerific
 async function sendBookingConfirmationEmails(bookingData: any, paymentData: any) {
   try {
     console.log("📧 Sending booking confirmation emails...")
-    
-    // Log customer confirmation email
-    console.log("📧 CUSTOMER CONFIRMATION EMAIL:")
-    console.log("To:", bookingData.client_email)
-    console.log("Subject: Booking Confirmed - Lashed by Deedee")
-    console.log(`
-Dear ${bookingData.client_name},
 
-🎉 Your booking has been confirmed!
+    // Import email functions
+    const { sendCustomerBookingConfirmation, sendAdminBookingNotification } = await import("@/lib/email")
 
-BOOKING DETAILS:
-- Services: ${bookingData.service_name}
-- Date: ${new Date(bookingData.booking_date + "T12:00:00Z").toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    })}
-- Time: ${bookingData.booking_time}
-- Total Amount: ₦${bookingData.total_amount.toLocaleString()}
-- Deposit Paid: ₦${bookingData.deposit_amount.toLocaleString()}
-- Balance Due: ₦${(bookingData.total_amount - bookingData.deposit_amount).toLocaleString()}
+    const emailData = {
+      customerName: bookingData.client_name,
+      customerEmail: bookingData.client_email,
+      customerPhone: bookingData.client_phone || bookingData.phone,
+      services: [bookingData.service_name],
+      bookingDate: bookingData.booking_date,
+      bookingTime: bookingData.booking_time,
+      totalAmount: bookingData.total_amount,
+      depositAmount: bookingData.deposit_amount || bookingData.amount,
+      paymentReference: paymentData.reference,
+      notes: bookingData.notes || bookingData.special_notes,
+      bookingId: bookingData.id?.toString()
+    }
 
-PAYMENT DETAILS:
-- Reference: ${paymentData.reference}
-- Amount Paid: ₦${(paymentData.amount / 100).toLocaleString()}
-- Payment Method: ${paymentData.channel}
-- Date: ${new Date(paymentData.paid_at).toLocaleString()}
+    // Send customer confirmation email
+    const customerEmailResult = await sendCustomerBookingConfirmation(emailData)
+    console.log("Customer email result:", customerEmailResult)
 
-IMPORTANT REMINDERS:
-- Please arrive on time for your appointment
-- Avoid wearing makeup on the day of your appointment
-- Bring a valid ID for verification
-- The remaining balance is due on the day of service
+    // Send admin notification email
+    const adminEmailResult = await sendAdminBookingNotification(emailData)
+    console.log("Admin email result:", adminEmailResult)
 
-If you need to reschedule or have any questions, please contact us via WhatsApp.
-
-Thank you for choosing Lashed by Deedee! ✨
-
-Best regards,
-Deedee
-Lashed by Deedee
-WhatsApp: +234 816 543 5528
-    `)
-
-    // Log admin notification email
-    console.log("📧 ADMIN NOTIFICATION EMAIL:")
-    console.log("To: admin@lashedbydeedee.com")
-    console.log("Subject: New Booking Confirmed - Payment Received")
-    console.log(`
-🎉 NEW BOOKING CONFIRMED
-
-CUSTOMER DETAILS:
-- Name: ${bookingData.client_name}
-- Email: ${bookingData.client_email}
-- Phone: ${bookingData.client_phone}
-
-BOOKING DETAILS:
-- Services: ${bookingData.service_name}
-- Date: ${new Date(bookingData.booking_date + "T12:00:00Z").toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    })}
-- Time: ${bookingData.booking_time}
-- Notes: ${bookingData.notes || "None"}
-
-PAYMENT DETAILS:
-- Reference: ${paymentData.reference}
-- Total Amount: ₦${bookingData.total_amount.toLocaleString()}
-- Deposit Paid: ₦${bookingData.deposit_amount.toLocaleString()}
-- Balance Due: ₦${(bookingData.total_amount - bookingData.deposit_amount).toLocaleString()}
-- Payment Method: ${paymentData.channel}
-- Paid At: ${new Date(paymentData.paid_at).toLocaleString()}
-
-Please prepare for this appointment and contact the customer if needed.
-    `)
-
-    console.log("✅ Email notifications logged successfully")
-    return { success: true }
+    return {
+      success: true,
+      customerEmail: customerEmailResult,
+      adminEmail: adminEmailResult
+    }
 
   } catch (error) {
-    console.error("❌ Error logging email notifications:", error)
+    console.error("❌ Error sending email notifications:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }

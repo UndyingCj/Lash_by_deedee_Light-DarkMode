@@ -17,68 +17,40 @@ function verifyPaystackSignature(payload: string, signature: string): boolean {
 async function sendBookingConfirmationEmails(bookingData: any, paymentData: any) {
   try {
     console.log("📧 Webhook: Sending booking confirmation emails...")
-    
-    // Log customer confirmation email
-    console.log("📧 WEBHOOK CUSTOMER CONFIRMATION EMAIL:")
-    console.log("To:", bookingData.client_email)
-    console.log("Subject: Booking Confirmed - Lashed by Deedee")
-    console.log(`
-Dear ${bookingData.client_name},
 
-🎉 Your booking has been confirmed via webhook!
+    // Import email functions
+    const { sendCustomerBookingConfirmation, sendAdminBookingNotification } = await import("@/lib/email")
 
-BOOKING DETAILS:
-- Services: ${bookingData.service_name}
-- Date: ${new Date(bookingData.booking_date + "T12:00:00Z").toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    })}
-- Time: ${bookingData.booking_time}
-- Total Amount: ₦${bookingData.total_amount.toLocaleString()}
-- Deposit Paid: ₦${bookingData.deposit_amount.toLocaleString()}
+    const emailData = {
+      customerName: bookingData.client_name,
+      customerEmail: bookingData.client_email,
+      customerPhone: bookingData.client_phone || bookingData.phone,
+      services: [bookingData.service_name],
+      bookingDate: bookingData.booking_date,
+      bookingTime: bookingData.booking_time,
+      totalAmount: bookingData.total_amount,
+      depositAmount: bookingData.deposit_amount || bookingData.amount,
+      paymentReference: paymentData.reference,
+      notes: bookingData.notes || bookingData.special_notes,
+      bookingId: bookingData.id?.toString()
+    }
 
-PAYMENT DETAILS:
-- Reference: ${paymentData.reference}
-- Amount Paid: ₦${(paymentData.amount / 100).toLocaleString()}
-- Payment Method: ${paymentData.channel}
+    // Send customer confirmation email
+    const customerEmailResult = await sendCustomerBookingConfirmation(emailData)
+    console.log("Webhook customer email result:", customerEmailResult)
 
-Thank you for choosing Lashed by Deedee! ✨
+    // Send admin notification email
+    const adminEmailResult = await sendAdminBookingNotification(emailData)
+    console.log("Webhook admin email result:", adminEmailResult)
 
-Best regards,
-Deedee
-Lashed by Deedee
-    `)
-
-    // Log admin notification email
-    console.log("📧 WEBHOOK ADMIN NOTIFICATION EMAIL:")
-    console.log("To: admin@lashedbydeedee.com")
-    console.log("Subject: New Booking Confirmed via Webhook")
-    console.log(`
-🎉 NEW BOOKING CONFIRMED VIA WEBHOOK
-
-CUSTOMER DETAILS:
-- Name: ${bookingData.client_name}
-- Email: ${bookingData.client_email}
-- Phone: ${bookingData.client_phone}
-
-BOOKING DETAILS:
-- Services: ${bookingData.service_name}
-- Date: ${new Date(bookingData.booking_date + "T12:00:00Z").toLocaleDateString()}
-- Time: ${bookingData.booking_time}
-
-PAYMENT DETAILS:
-- Reference: ${paymentData.reference}
-- Amount: ₦${(paymentData.amount / 100).toLocaleString()}
-- Channel: ${paymentData.channel}
-    `)
-
-    console.log("✅ Webhook email notifications logged successfully")
-    return { success: true }
+    return {
+      success: true,
+      customerEmail: customerEmailResult,
+      adminEmail: adminEmailResult
+    }
 
   } catch (error) {
-    console.error("❌ Webhook email logging error:", error)
+    console.error("❌ Webhook email sending error:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }

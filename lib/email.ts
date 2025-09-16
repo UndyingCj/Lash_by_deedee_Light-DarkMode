@@ -1,5 +1,5 @@
-// Simple email logging system (no external dependencies)
-// All emails are logged to console for development/testing
+// Zoho Mail API email system for Lashed by Deedee
+import nodemailer from 'nodemailer'
 
 export interface EmailData {
   customerName: string
@@ -15,12 +15,26 @@ export interface EmailData {
   bookingId?: string
 }
 
+// Create Zoho Mail transporter
+function createZohoTransporter() {
+  return nodemailer.createTransporter({
+    host: 'smtp.zoho.com',
+    port: 587,
+    secure: false, // TLS
+    auth: {
+      user: process.env.ZOHO_EMAIL_USER,
+      pass: process.env.ZOHO_EMAIL_PASSWORD,
+    },
+  })
+}
+
 export async function sendCustomerBookingConfirmation(data: EmailData) {
   try {
-    console.log("📧 CUSTOMER BOOKING CONFIRMATION EMAIL:")
-    console.log("To:", data.customerEmail)
-    console.log("Subject: Booking Confirmed - Lashed by Deedee")
-    console.log(`
+    console.log("📧 Sending customer booking confirmation email to:", data.customerEmail)
+
+    const transporter = createZohoTransporter()
+
+    const emailContent = `
 Dear ${data.customerName},
 
 🎉 Your booking has been confirmed!
@@ -57,21 +71,33 @@ Deedee
 Lashed by Deedee
 WhatsApp: +234 816 543 5528
 Email: hello@lashedbydeedee.com
-    `)
+    `
 
-    return { success: true, message: "Customer confirmation email logged" }
+    const mailOptions = {
+      from: `"Lashed by Deedee" <${process.env.ZOHO_EMAIL_USER}>`,
+      to: data.customerEmail,
+      subject: 'Booking Confirmed - Lashed by Deedee',
+      text: emailContent,
+      html: emailContent.replace(/\n/g, '<br>')
+    }
+
+    const result = await transporter.sendMail(mailOptions)
+    console.log("✅ Customer confirmation email sent successfully:", result.messageId)
+
+    return { success: true, message: "Customer confirmation email sent", messageId: result.messageId }
   } catch (error) {
-    console.error("❌ Error logging customer confirmation email:", error)
+    console.error("❌ Error sending customer confirmation email:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
 
 export async function sendAdminBookingNotification(data: EmailData) {
   try {
-    console.log("📧 ADMIN BOOKING NOTIFICATION EMAIL:")
-    console.log("To: admin@lashedbydeedee.com")
-    console.log("Subject: New Booking Confirmed - Payment Received")
-    console.log(`
+    console.log("📧 Sending admin booking notification email")
+
+    const transporter = createZohoTransporter()
+
+    const emailContent = `
 🎉 NEW BOOKING CONFIRMED
 
 CUSTOMER DETAILS:
@@ -100,21 +126,33 @@ PAYMENT DETAILS:
 Please prepare for this appointment and contact the customer if needed.
 
 Dashboard: ${process.env.NEXT_PUBLIC_SITE_URL}/egusi/bookings
-    `)
+    `
 
-    return { success: true, message: "Admin notification email logged" }
+    const mailOptions = {
+      from: `"Lashed by Deedee" <${process.env.ZOHO_EMAIL_USER}>`,
+      to: process.env.ZOHO_EMAIL_USER, // Send to the same email as from address for admin notifications
+      subject: 'New Booking Confirmed - Payment Received',
+      text: emailContent,
+      html: emailContent.replace(/\n/g, '<br>')
+    }
+
+    const result = await transporter.sendMail(mailOptions)
+    console.log("✅ Admin notification email sent successfully:", result.messageId)
+
+    return { success: true, message: "Admin notification email sent", messageId: result.messageId }
   } catch (error) {
-    console.error("❌ Error logging admin notification email:", error)
+    console.error("❌ Error sending admin notification email:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
 
 export async function sendBookingReminderEmail(data: EmailData) {
   try {
-    console.log("📧 BOOKING REMINDER EMAIL:")
-    console.log("To:", data.customerEmail)
-    console.log("Subject: Appointment Reminder - Lashed by Deedee")
-    console.log(`
+    console.log("📧 Sending booking reminder email to:", data.customerEmail)
+
+    const transporter = createZohoTransporter()
+
+    const emailContent = `
 Dear ${data.customerName},
 
 ⏰ This is a friendly reminder about your upcoming appointment!
@@ -142,21 +180,33 @@ Best regards,
 Deedee
 Lashed by Deedee
 WhatsApp: +234 816 543 5528
-    `)
+    `
 
-    return { success: true, message: "Booking reminder email logged" }
+    const mailOptions = {
+      from: `"Lashed by Deedee" <${process.env.ZOHO_EMAIL_USER}>`,
+      to: data.customerEmail,
+      subject: 'Appointment Reminder - Lashed by Deedee',
+      text: emailContent,
+      html: emailContent.replace(/\n/g, '<br>')
+    }
+
+    const result = await transporter.sendMail(mailOptions)
+    console.log("✅ Booking reminder email sent successfully:", result.messageId)
+
+    return { success: true, message: "Booking reminder email sent", messageId: result.messageId }
   } catch (error) {
-    console.error("❌ Error logging booking reminder email:", error)
+    console.error("❌ Error sending booking reminder email:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
 
 export async function sendBookingCancellationEmail(data: EmailData, reason?: string) {
   try {
-    console.log("📧 BOOKING CANCELLATION EMAIL:")
-    console.log("To:", data.customerEmail)
-    console.log("Subject: Booking Cancelled - Lashed by Deedee")
-    console.log(`
+    console.log("📧 Sending booking cancellation email to:", data.customerEmail)
+
+    const transporter = createZohoTransporter()
+
+    const emailContent = `
 Dear ${data.customerName},
 
 We're sorry to inform you that your booking has been cancelled.
@@ -185,11 +235,22 @@ Best regards,
 Deedee
 Lashed by Deedee
 WhatsApp: +234 816 543 5528
-    `)
+    `
 
-    return { success: true, message: "Booking cancellation email logged" }
+    const mailOptions = {
+      from: `"Lashed by Deedee" <${process.env.ZOHO_EMAIL_USER}>`,
+      to: data.customerEmail,
+      subject: 'Booking Cancelled - Lashed by Deedee',
+      text: emailContent,
+      html: emailContent.replace(/\n/g, '<br>')
+    }
+
+    const result = await transporter.sendMail(mailOptions)
+    console.log("✅ Booking cancellation email sent successfully:", result.messageId)
+
+    return { success: true, message: "Booking cancellation email sent", messageId: result.messageId }
   } catch (error) {
-    console.error("❌ Error logging booking cancellation email:", error)
+    console.error("❌ Error sending booking cancellation email:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
