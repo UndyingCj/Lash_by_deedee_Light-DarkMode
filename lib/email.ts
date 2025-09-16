@@ -15,10 +15,13 @@ export interface EmailData {
   bookingId?: string
 }
 
-// Create Zoho Mail transporter
-function createZohoTransporter() {
+// Create Email transporter (works with Gmail or Zoho)
+function createEmailTransporter() {
+  const emailUser = process.env.ZOHO_EMAIL_USER
+  const isGmail = emailUser?.includes('@gmail.com')
+
   return nodemailer.createTransport({
-    host: 'smtp.zoho.com',
+    host: isGmail ? 'smtp.gmail.com' : 'smtp.zoho.com',
     port: 587,
     secure: false, // TLS
     auth: {
@@ -32,7 +35,7 @@ export async function sendCustomerBookingConfirmation(data: EmailData) {
   try {
     console.log("📧 Sending customer booking confirmation email to:", data.customerEmail)
 
-    const transporter = createZohoTransporter()
+    const transporter = createEmailTransporter()
 
     const emailContent = `
 Dear ${data.customerName},
@@ -95,7 +98,7 @@ export async function sendAdminBookingNotification(data: EmailData) {
   try {
     console.log("📧 Sending admin booking notification email")
 
-    const transporter = createZohoTransporter()
+    const transporter = createEmailTransporter()
 
     const emailContent = `
 🎉 NEW BOOKING CONFIRMED
@@ -150,7 +153,7 @@ export async function sendBookingReminderEmail(data: EmailData) {
   try {
     console.log("📧 Sending booking reminder email to:", data.customerEmail)
 
-    const transporter = createZohoTransporter()
+    const transporter = createEmailTransporter()
 
     const emailContent = `
 Dear ${data.customerName},
@@ -204,7 +207,7 @@ export async function sendBookingCancellationEmail(data: EmailData, reason?: str
   try {
     console.log("📧 Sending booking cancellation email to:", data.customerEmail)
 
-    const transporter = createZohoTransporter()
+    const transporter = createEmailTransporter()
 
     const emailContent = `
 Dear ${data.customerName},
