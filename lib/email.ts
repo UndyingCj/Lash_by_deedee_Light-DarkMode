@@ -1,10 +1,10 @@
-// Simple email logging system - no external dependencies required
-// This system logs emails to console for development and testing
+// Simple email logging system (no external dependencies)
+// All emails are logged to console for development/testing
 
-interface BookingEmailData {
+export interface EmailData {
   customerName: string
   customerEmail: string
-  customerPhone?: string
+  customerPhone: string
   services: string[]
   bookingDate: string
   bookingTime: string
@@ -15,244 +15,210 @@ interface BookingEmailData {
   bookingId?: string
 }
 
-// Email logging function for development
-async function logEmail(type: string, to: string, subject: string, content: string): Promise<boolean> {
+export async function sendCustomerBookingConfirmation(data: EmailData) {
   try {
-    const timestamp = new Date().toISOString()
-    const logEntry = {
-      type: type.toUpperCase(),
-      to,
-      subject,
-      timestamp,
-      contentLength: content.length,
-      preview: content.substring(0, 200) + "..."
-    }
-    
-    console.log("📧 EMAIL LOG START")
-    console.log(JSON.stringify(logEntry, null, 2))
-    console.log("📧 EMAIL LOG END")
-    
-    // Simulate email sending delay
-    await new Promise(resolve => setTimeout(resolve, 100))
-    
-    return true // Always return success for logging
-  } catch (error) {
-    console.error(`❌ Email logging error [${type}]:`, error)
-    return false
-  }
-}
-
-export async function sendCustomerBookingConfirmation(data: BookingEmailData) {
-  try {
-    console.log("📧 Preparing customer confirmation email for:", data.customerEmail)
-
-    const servicesList = data.services.map(service => `• ${service}`).join('\n')
-    const formattedDate = new Date(data.bookingDate + 'T12:00:00Z').toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
-
-    const subject = `✅ Booking Confirmed - ${formattedDate} at ${data.bookingTime}`
-    
-    const emailContent = `
+    console.log("📧 CUSTOMER BOOKING CONFIRMATION EMAIL:")
+    console.log("To:", data.customerEmail)
+    console.log("Subject: Booking Confirmed - Lashed by Deedee")
+    console.log(`
 Dear ${data.customerName},
 
-🎉 Your booking has been confirmed! Thank you for choosing Lashed by Deedee.
+🎉 Your booking has been confirmed!
 
-📋 BOOKING DETAILS:
-${servicesList}
+BOOKING DETAILS:
+- Services: ${data.services.join(", ")}
+- Date: ${new Date(data.bookingDate + "T12:00:00Z").toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })}
+- Time: ${data.bookingTime}
+- Total Amount: ₦${data.totalAmount.toLocaleString()}
+- Deposit Paid: ₦${data.depositAmount.toLocaleString()}
+- Balance Due: ₦${(data.totalAmount - data.depositAmount).toLocaleString()}
 
-📅 Date: ${formattedDate}
-⏰ Time: ${data.bookingTime}
+PAYMENT DETAILS:
+- Reference: ${data.paymentReference}
+- Booking ID: ${data.bookingId || "N/A"}
 
-💰 PAYMENT SUMMARY:
-Total Service Cost: ₦${data.totalAmount.toLocaleString()}
-Deposit Paid: ₦${data.depositAmount.toLocaleString()}
-Balance Due: ₦${(data.totalAmount - data.depositAmount).toLocaleString()}
-Payment Reference: ${data.paymentReference}
-
-📍 LOCATION:
-Lashed by Deedee Studio
-[Address will be provided via WhatsApp]
-
-⚠️ IMPORTANT REMINDERS:
-• Please arrive on time. Late arrivals may result in rescheduling
-• Avoid wearing makeup to your appointment
-• Bring a valid ID
-• The remaining balance is due on the day of service
-
-${data.notes ? `📝 Special Notes: ${data.notes}` : ''}
+IMPORTANT REMINDERS:
+- Please arrive on time for your appointment
+- Avoid wearing makeup on the day of your appointment
+- Bring a valid ID for verification
+- The remaining balance is due on the day of service
 
 If you need to reschedule or have any questions, please contact us via WhatsApp.
 
-Thank you for trusting us with your beauty needs! ✨
+Thank you for choosing Lashed by Deedee! ✨
 
 Best regards,
 Deedee
 Lashed by Deedee
 WhatsApp: +234 816 543 5528
-    `
+Email: hello@lashedbydeedee.com
+    `)
 
-    const success = await logEmail("customer_confirmation", data.customerEmail, subject, emailContent)
-    
-    return {
-      success,
-      message: success ? "Customer email logged successfully" : "Failed to log customer email",
-      id: `log_${Date.now()}_customer`
-    }
+    return { success: true, message: "Customer confirmation email logged" }
   } catch (error) {
-    console.error("❌ Error in sendCustomerBookingConfirmation:", error)
-    return {
-      success: false,
-      message: "Error sending customer confirmation email",
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }
+    console.error("❌ Error logging customer confirmation email:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
 
-export async function sendAdminBookingNotification(data: BookingEmailData) {
+export async function sendAdminBookingNotification(data: EmailData) {
   try {
-    console.log("📧 Preparing admin notification email")
+    console.log("📧 ADMIN BOOKING NOTIFICATION EMAIL:")
+    console.log("To: admin@lashedbydeedee.com")
+    console.log("Subject: New Booking Confirmed - Payment Received")
+    console.log(`
+🎉 NEW BOOKING CONFIRMED
 
-    const servicesList = data.services.map(service => `• ${service}`).join('\n')
-    const formattedDate = new Date(data.bookingDate + 'T12:00:00Z').toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
+CUSTOMER DETAILS:
+- Name: ${data.customerName}
+- Email: ${data.customerEmail}
+- Phone: ${data.customerPhone}
 
-    const subject = `🚨 New Booking: ${data.customerName} - ${formattedDate}`
-    
-    const emailContent = `
-🎉 NEW BOOKING CONFIRMED!
+BOOKING DETAILS:
+- Services: ${data.services.join(", ")}
+- Date: ${new Date(data.bookingDate + "T12:00:00Z").toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })}
+- Time: ${data.bookingTime}
+- Notes: ${data.notes || "None"}
 
-👤 CUSTOMER DETAILS:
-Name: ${data.customerName}
-Email: ${data.customerEmail}
-Phone: ${data.customerPhone || 'Not provided'}
-
-💅 SERVICES BOOKED:
-${servicesList}
-
-📅 APPOINTMENT:
-Date: ${formattedDate}
-Time: ${data.bookingTime}
-
-💰 PAYMENT DETAILS:
-Total Amount: ₦${data.totalAmount.toLocaleString()}
-Deposit Paid: ₦${data.depositAmount.toLocaleString()}
-Balance Due: ₦${(data.totalAmount - data.depositAmount).toLocaleString()}
-Payment Reference: ${data.paymentReference}
-Payment Status: COMPLETED ✅
-
-${data.notes ? `📝 Special Notes: ${data.notes}` : ''}
-
-${data.bookingId ? `🆔 Booking ID: ${data.bookingId}` : ''}
+PAYMENT DETAILS:
+- Reference: ${data.paymentReference}
+- Total Amount: ₦${data.totalAmount.toLocaleString()}
+- Deposit Paid: ₦${data.depositAmount.toLocaleString()}
+- Balance Due: ₦${(data.totalAmount - data.depositAmount).toLocaleString()}
+- Booking ID: ${data.bookingId || "N/A"}
 
 Please prepare for this appointment and contact the customer if needed.
 
-📱 Next Steps:
-1. Block ${data.bookingTime} on ${formattedDate} in your calendar
-2. Prepare materials for: ${data.services.join(", ")}
-3. Contact client if needed: ${data.customerPhone || data.customerEmail}
-4. Set reminder for 24 hours before appointment
+Dashboard: ${process.env.NEXT_PUBLIC_SITE_URL}/egusi/bookings
+    `)
 
-The time slot has been automatically blocked in the system.
-    `
-
-    const success = await logEmail("admin_notification", "admin@lashedbydeedee.com", subject, emailContent)
-    
-    return {
-      success,
-      message: success ? "Admin email logged successfully" : "Failed to log admin email",
-      id: `log_${Date.now()}_admin`
-    }
+    return { success: true, message: "Admin notification email logged" }
   } catch (error) {
-    console.error("❌ Error in sendAdminBookingNotification:", error)
-    return {
-      success: false,
-      message: "Error sending admin notification email",
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }
+    console.error("❌ Error logging admin notification email:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
 
-export async function sendBookingReminder(data: BookingEmailData) {
+export async function sendBookingReminderEmail(data: EmailData) {
   try {
-    console.log("📧 Preparing booking reminder email for:", data.customerEmail)
-
-    const servicesList = data.services.map(service => `• ${service}`).join('\n')
-    const formattedDate = new Date(data.bookingDate + 'T12:00:00Z').toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
-
-    const subject = `⏰ Reminder: Your appointment tomorrow at ${data.bookingTime}`
-    
-    const emailContent = `
+    console.log("📧 BOOKING REMINDER EMAIL:")
+    console.log("To:", data.customerEmail)
+    console.log("Subject: Appointment Reminder - Lashed by Deedee")
+    console.log(`
 Dear ${data.customerName},
 
-⏰ This is a friendly reminder about your upcoming appointment with Lashed by Deedee.
+⏰ This is a friendly reminder about your upcoming appointment!
 
-📋 APPOINTMENT DETAILS:
-${servicesList}
+APPOINTMENT DETAILS:
+- Services: ${data.services.join(", ")}
+- Date: ${new Date(data.bookingDate + "T12:00:00Z").toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })}
+- Time: ${data.bookingTime}
+- Balance Due: ₦${(data.totalAmount - data.depositAmount).toLocaleString()}
 
-📅 Date: ${formattedDate}
-⏰ Time: ${data.bookingTime}
+REMINDERS:
+- Please arrive 10 minutes early
+- Avoid wearing makeup
+- Bring a valid ID
+- Payment of remaining balance is due on arrival
 
-💰 BALANCE DUE: ₦${(data.totalAmount - data.depositAmount).toLocaleString()}
-
-⚠️ REMINDERS:
-• Please arrive 10 minutes early
-• Avoid wearing makeup
-• Bring a valid ID
-• Payment of remaining balance is due on arrival
-
-If you need to reschedule, please contact us at least 24 hours in advance.
-
-Looking forward to seeing you! ✨
+Looking forward to seeing you!
 
 Best regards,
 Deedee
 Lashed by Deedee
 WhatsApp: +234 816 543 5528
-    `
+    `)
 
-    const success = await logEmail("booking_reminder", data.customerEmail, subject, emailContent)
-    
-    return {
-      success,
-      message: success ? "Reminder email logged successfully" : "Failed to log reminder email",
-      id: `log_${Date.now()}_reminder`
-    }
+    return { success: true, message: "Booking reminder email logged" }
   } catch (error) {
-    console.error("❌ Error in sendBookingReminder:", error)
-    return {
-      success: false,
-      message: "Error sending booking reminder email",
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }
+    console.error("❌ Error logging booking reminder email:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
 
-// Helper function to format booking data for emails
-export function formatBookingData(booking: any) {
-  return {
-    customerName: booking.client_name || booking.customerName,
-    customerEmail: booking.client_email || booking.customerEmail,
-    customerPhone: booking.client_phone || booking.customerPhone || "",
-    services: booking.service_name ? booking.service_name.split(", ") : [booking.service || "Service"],
-    bookingDate: booking.booking_date || booking.bookingDate,
-    bookingTime: booking.booking_time || booking.bookingTime,
-    totalAmount: booking.total_amount || booking.totalAmount || 0,
-    depositAmount: booking.deposit_amount || booking.depositAmount || 0,
-    paymentReference: booking.payment_reference || booking.paymentReference || "",
-    notes: booking.notes || "",
-    bookingId: booking.id || booking.bookingId || "",
+export async function sendBookingCancellationEmail(data: EmailData, reason?: string) {
+  try {
+    console.log("📧 BOOKING CANCELLATION EMAIL:")
+    console.log("To:", data.customerEmail)
+    console.log("Subject: Booking Cancelled - Lashed by Deedee")
+    console.log(`
+Dear ${data.customerName},
+
+We're sorry to inform you that your booking has been cancelled.
+
+CANCELLED BOOKING DETAILS:
+- Services: ${data.services.join(", ")}
+- Date: ${new Date(data.bookingDate + "T12:00:00Z").toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })}
+- Time: ${data.bookingTime}
+- Reference: ${data.paymentReference}
+
+${reason ? `REASON: ${reason}` : ""}
+
+REFUND INFORMATION:
+Your deposit of ₦${data.depositAmount.toLocaleString()} will be processed within 5-7 business days.
+
+If you have any questions or would like to reschedule, please contact us via WhatsApp.
+
+We apologize for any inconvenience caused.
+
+Best regards,
+Deedee
+Lashed by Deedee
+WhatsApp: +234 816 543 5528
+    `)
+
+    return { success: true, message: "Booking cancellation email logged" }
+  } catch (error) {
+    console.error("❌ Error logging booking cancellation email:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
+}
+
+// Test function to verify email system is working
+export async function testEmailSystem() {
+  console.log("🧪 Testing email system...")
+  
+  const testData: EmailData = {
+    customerName: "Test Customer",
+    customerEmail: "test@example.com",
+    customerPhone: "+234 800 000 0000",
+    services: ["Classic Lashes", "Brow Shaping"],
+    bookingDate: "2024-02-15",
+    bookingTime: "10:00 AM",
+    totalAmount: 50000,
+    depositAmount: 25000,
+    paymentReference: "test_ref_123",
+    notes: "Test booking",
+    bookingId: "test_booking_123"
+  }
+
+  const results = await Promise.all([
+    sendCustomerBookingConfirmation(testData),
+    sendAdminBookingNotification(testData),
+    sendBookingReminderEmail(testData),
+    sendBookingCancellationEmail(testData, "Testing cancellation")
+  ])
+
+  console.log("✅ Email system test completed:", results)
+  return results
 }

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY!
 
-interface PaystackVerifyResponse {
+interface PaystackVerificationResponse {
   status: boolean
   message: string
   data: {
@@ -18,31 +20,63 @@ interface PaystackVerifyResponse {
     channel: string
     currency: string
     ip_address: string
-    metadata: any
-    log: any
-    fees: number
-    fees_split: any
-    authorization: any
-    customer: any
+    metadata: {
+      customer_name?: string
+      customer_phone?: string
+      services?: string
+      booking_date?: string
+      booking_time?: string
+      notes?: string
+      total_amount?: number
+      deposit_amount?: number
+    }
+    customer: {
+      id: number
+      first_name: string | null
+      last_name: string | null
+      email: string
+      customer_code: string
+      phone: string | null
+      metadata: any
+      risk_action: string
+    }
+    authorization: {
+      authorization_code: string
+      bin: string
+      last4: string
+      exp_month: string
+      exp_year: string
+      channel: string
+      card_type: string
+      bank: string
+      country_code: string
+      brand: string
+      reusable: boolean
+      signature: string
+      account_name: string | null
+    }
     plan: any
     split: any
-    order_id: any
+    order_id: string | null
     paidAt: string
     createdAt: string
     requested_amount: number
+    pos_transaction_data: any
+    source: any
+    fees_breakdown: any
   }
 }
 
-async function verifyPaystackPayment(reference: string): Promise<PaystackVerifyResponse> {
+async function verifyPaystackPayment(reference: string): Promise<PaystackVerificationResponse> {
   const maxRetries = 3
-  const retryDelay = 1000 // 1 second
+  const retryDelay = 1000
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`🔍 Verifying payment attempt ${attempt}/${maxRetries} for reference: ${reference}`)
 
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
 
       const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
         method: "GET",
@@ -56,11 +90,12 @@ async function verifyPaystackPayment(reference: string): Promise<PaystackVerifyR
       clearTimeout(timeoutId)
 
       if (!response.ok) {
-        throw new Error(`Paystack API error: ${response.status} ${response.statusText}`)
+        const errorText = await response.text()
+        throw new Error(`Paystack verification API error: ${response.status} ${response.statusText} - ${errorText}`)
       }
 
-      const data: PaystackVerifyResponse = await response.json()
-      console.log(`✅ Payment verification successful for ${reference}:`, data.data.status)
+      const data: PaystackVerificationResponse = await response.json()
+      console.log(`✅ Payment verification successful for: ${reference}`)
       return data
 
     } catch (error) {
@@ -70,7 +105,6 @@ async function verifyPaystackPayment(reference: string): Promise<PaystackVerifyR
         throw error
       }
 
-      // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, retryDelay * attempt))
     }
   }
@@ -78,9 +112,101 @@ async function verifyPaystackPayment(reference: string): Promise<PaystackVerifyR
   throw new Error("Max retries exceeded")
 }
 
+async function sendBookingConfirmationEmails(bookingData: any, paymentData: any) {
+  try {
+    console.log("📧 Sending booking confirmation emails...")
+    
+    // Log customer confirmation email
+    console.log("📧 CUSTOMER CONFIRMATION EMAIL:")
+    console.log("To:", bookingData.client_email)
+    console.log("Subject: Booking Confirmed - Lashed by Deedee")
+    console.log(`
+Dear ${bookingData.client_name},
+
+🎉 Your booking has been confirmed!
+
+BOOKING DETAILS:
+- Services: ${bookingData.service_name}
+- Date: ${new Date(bookingData.booking_date + "T12:00:00Z").toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })}
+- Time: ${bookingData.booking_time}
+- Total Amount: ₦${bookingData.total_amount.toLocaleString()}
+- Deposit Paid: ₦${bookingData.deposit_amount.toLocaleString()}
+- Balance Due: ₦${(bookingData.total_amount - bookingData.deposit_amount).toLocaleString()}
+
+PAYMENT DETAILS:
+- Reference: ${paymentData.reference}
+- Amount Paid: ₦${(paymentData.amount / 100).toLocaleString()}
+- Payment Method: ${paymentData.channel}
+- Date: ${new Date(paymentData.paid_at).toLocaleString()}
+
+IMPORTANT REMINDERS:
+- Please arrive on time for your appointment
+- Avoid wearing makeup on the day of your appointment
+- Bring a valid ID for verification
+- The remaining balance is due on the day of service
+
+If you need to reschedule or have any questions, please contact us via WhatsApp.
+
+Thank you for choosing Lashed by Deedee! ✨
+
+Best regards,
+Deedee
+Lashed by Deedee
+WhatsApp: +234 816 543 5528
+    `)
+
+    // Log admin notification email
+    console.log("📧 ADMIN NOTIFICATION EMAIL:")
+    console.log("To: admin@lashedbydeedee.com")
+    console.log("Subject: New Booking Confirmed - Payment Received")
+    console.log(`
+🎉 NEW BOOKING CONFIRMED
+
+CUSTOMER DETAILS:
+- Name: ${bookingData.client_name}
+- Email: ${bookingData.client_email}
+- Phone: ${bookingData.client_phone}
+
+BOOKING DETAILS:
+- Services: ${bookingData.service_name}
+- Date: ${new Date(bookingData.booking_date + "T12:00:00Z").toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })}
+- Time: ${bookingData.booking_time}
+- Notes: ${bookingData.notes || "None"}
+
+PAYMENT DETAILS:
+- Reference: ${paymentData.reference}
+- Total Amount: ₦${bookingData.total_amount.toLocaleString()}
+- Deposit Paid: ₦${bookingData.deposit_amount.toLocaleString()}
+- Balance Due: ₦${(bookingData.total_amount - bookingData.deposit_amount).toLocaleString()}
+- Payment Method: ${paymentData.channel}
+- Paid At: ${new Date(paymentData.paid_at).toLocaleString()}
+
+Please prepare for this appointment and contact the customer if needed.
+    `)
+
+    console.log("✅ Email notifications logged successfully")
+    return { success: true }
+
+  } catch (error) {
+    console.error("❌ Error logging email notifications:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { reference } = await request.json()
+    const body = await request.json()
+    const { reference } = body
 
     if (!reference) {
       return NextResponse.json(
@@ -89,17 +215,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log("🔍 Starting payment verification for reference:", reference)
+    console.log("🔍 Verifying payment:", reference)
 
+    // Verify payment with Paystack
     const verificationResult = await verifyPaystackPayment(reference)
 
     if (!verificationResult.status) {
-      console.error("❌ Paystack verification failed:", verificationResult.message)
+      console.error("❌ Payment verification failed:", verificationResult.message)
       return NextResponse.json(
-        { 
-          error: "Payment verification failed",
-          message: verificationResult.message 
-        },
+        { error: "Payment verification failed", message: verificationResult.message },
         { status: 400 }
       )
     }
@@ -110,36 +234,97 @@ export async function POST(request: NextRequest) {
     if (paymentData.status !== "success") {
       console.error("❌ Payment was not successful:", paymentData.status)
       return NextResponse.json(
-        {
-          error: "Payment was not successful",
-          status: paymentData.status,
-          message: paymentData.gateway_response
-        },
+        { error: "Payment was not successful", status: paymentData.status },
         { status: 400 }
       )
     }
 
-    console.log("✅ Payment verification completed successfully")
+    console.log("✅ Payment verified successfully:", {
+      reference: paymentData.reference,
+      amount: paymentData.amount / 100,
+      customer: paymentData.customer.email,
+      status: paymentData.status
+    })
+
+    // Find and update the booking in database
+    const { data: booking, error: findError } = await supabase
+      .from("bookings")
+      .select("*")
+      .eq("payment_reference", reference)
+      .single()
+
+    if (findError || !booking) {
+      console.error("❌ Booking not found:", findError)
+      return NextResponse.json(
+        { error: "Booking not found" },
+        { status: 404 }
+      )
+    }
+
+    // Update booking status to confirmed (only using columns that exist)
+    const { data: updatedBooking, error: updateError } = await supabase
+      .from("bookings")
+      .update({
+        payment_status: "completed",
+        status: "confirmed",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", booking.id)
+      .select()
+      .single()
+
+    if (updateError) {
+      console.error("❌ Error updating booking:", updateError)
+      return NextResponse.json(
+        { error: "Failed to update booking status" },
+        { status: 500 }
+      )
+    }
+
+    console.log("✅ Booking updated successfully:", updatedBooking.id)
+
+    // Block the time slot to prevent double booking
+    try {
+      const { error: blockError } = await supabase
+        .from("blocked_time_slots")
+        .insert({
+          blocked_date: booking.booking_date,
+          blocked_time: booking.booking_time,
+          reason: `Booked by ${booking.client_name}`,
+          created_at: new Date().toISOString(),
+        })
+
+      if (blockError) {
+        console.error("⚠️ Warning: Could not block time slot:", blockError)
+        // Don't fail the entire process if blocking fails
+      } else {
+        console.log("✅ Time slot blocked successfully")
+      }
+    } catch (blockingError) {
+      console.error("⚠️ Warning: Time slot blocking failed:", blockingError)
+      // Continue with the process even if blocking fails
+    }
+
+    // Send confirmation emails (logged to console)
+    await sendBookingConfirmationEmails(updatedBooking, paymentData)
 
     return NextResponse.json({
       success: true,
-      message: "Payment verified successfully",
+      message: "Payment verified and booking confirmed",
       data: {
+        booking_id: updatedBooking.id,
         reference: paymentData.reference,
-        amount: paymentData.amount / 100, // Convert from kobo to naira
+        amount: paymentData.amount / 100,
         status: paymentData.status,
-        paidAt: paymentData.paid_at,
-        channel: paymentData.channel,
-        currency: paymentData.currency,
-        customer: paymentData.customer,
-        fees: paymentData.fees / 100, // Convert from kobo to naira
+        customer: paymentData.customer.email,
+        booking_status: updatedBooking.status,
+        payment_status: updatedBooking.payment_status,
       }
     })
 
   } catch (error) {
     console.error("❌ Payment verification error:", error)
 
-    // Handle specific error types
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
         return NextResponse.json(
@@ -148,9 +333,9 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      if (error.message.includes('Paystack API error')) {
+      if (error.message.includes('Paystack verification API error')) {
         return NextResponse.json(
-          { error: "Payment service temporarily unavailable. Please try again." },
+          { error: "Payment verification service temporarily unavailable. Please try again." },
           { status: 503 }
         )
       }
@@ -163,32 +348,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const reference = searchParams.get("reference")
-
-  if (!reference) {
-    return NextResponse.json(
-      { error: "Payment reference is required" },
-      { status: 400 }
-    )
-  }
-
-  try {
-    console.log("🔍 GET payment verification for reference:", reference)
-
-    const verificationResult = await verifyPaystackPayment(reference)
-
-    return NextResponse.json({
-      success: verificationResult.status,
-      data: verificationResult.data
-    })
-
-  } catch (error) {
-    console.error("❌ GET payment verification error:", error)
-    return NextResponse.json(
-      { error: "Payment verification failed" },
-      { status: 500 }
-    )
-  }
+export async function GET() {
+  return NextResponse.json({
+    message: "Paystack payment verification endpoint",
+    status: "active",
+    timestamp: new Date().toISOString(),
+  })
 }

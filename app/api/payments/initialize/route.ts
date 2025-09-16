@@ -14,56 +14,23 @@ interface PaystackInitializeResponse {
   }
 }
 
-async function initializePaystackPayment(paymentData: any): Promise<PaystackInitializeResponse> {
-  const maxRetries = 3
-  const retryDelay = 1000 // 1 second
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`💳 Initializing payment attempt ${attempt}/${maxRetries}`)
-
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
-
-      const response = await fetch("https://api.paystack.co/transaction/initialize", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(paymentData),
-        signal: controller.signal,
-      })
-
-      clearTimeout(timeoutId)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Paystack API error: ${response.status} ${response.statusText} - ${errorText}`)
-      }
-
-      const data: PaystackInitializeResponse = await response.json()
-      console.log(`✅ Payment initialization successful:`, data.data.reference)
-      return data
-
-    } catch (error) {
-      console.error(`❌ Payment initialization attempt ${attempt} failed:`, error)
-
-      if (attempt === maxRetries) {
-        throw error
-      }
-
-      // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, retryDelay * attempt))
-    }
-  }
-
-  throw new Error("Max retries exceeded")
-}
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    console.log("📥 Payment initialization request:", body)
+
+    // Validate required fields
+    const requiredFields = ['email', 'amount', 'customerName', 'services', 'bookingDate', 'bookingTime']
+    const missingFields = requiredFields.filter(field => !body[field])
+
+    if (missingFields.length > 0) {
+      console.error("❌ Missing required fields:", missingFields)
+      return NextResponse.json(
+        { error: "Missing required fields", fields: missingFields },
+        { status: 400 }
+      )
+    }
+
     const {
       email,
       amount,
@@ -75,79 +42,109 @@ export async function POST(request: NextRequest) {
       notes
     } = body
 
-    // Validate required fields
-    if (!email || !amount || !customerName || !services || !bookingDate || !bookingTime) {
+    // Validate email format
+    if (!email.includes('@')) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Invalid email format" },
         { status: 400 }
       )
     }
 
     // Validate amount
-    if (amount <= 0) {
+    if (typeof amount !== 'number' || amount <= 0) {
       return NextResponse.json(
         { error: "Invalid amount" },
         { status: 400 }
       )
     }
 
-    // Generate unique reference
-    const reference = `lbd_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
-
-    console.log("💳 Initializing payment for:", { email, amount, reference })
-
-    // Calculate amounts (amount should be the deposit amount)
-    const depositAmount = amount
-    const totalAmount = Array.isArray(services) 
-      ? services.reduce((total, service) => total + (service.price || 0), 0)
-      : amount * 2 // Default: assume deposit is 50% of total
-
-    // Prepare Paystack payment data
-    const paymentData = {
-      email,
-      amount: Math.round(depositAmount * 100), // Convert to kobo
-      reference,
-      currency: "NGN",
-      callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/booking/success?reference=${reference}`,
-      metadata: {
-        customer_name: customerName,
-        customer_phone: customerPhone || "",
-        services: Array.isArray(services) ? services.map(s => s.name || s).join(", ") : services,
-        booking_date: bookingDate,
-        booking_time: bookingTime,
-        notes: notes || "",
-        total_amount: totalAmount,
-        deposit_amount: depositAmount,
-      },
-      channels: ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
-    }
-
-    // Initialize payment with Paystack
-    const paymentResult = await initializePaystackPayment(paymentData)
-
-    if (!paymentResult.status) {
-      console.error("❌ Paystack initialization failed:", paymentResult.message)
+    // Validate date format
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(bookingDate)) {
       return NextResponse.json(
-        { error: "Payment initialization failed", message: paymentResult.message },
+        { error: "Invalid date format. Use YYYY-MM-DD" },
         { status: 400 }
       )
     }
 
-    // Store booking in database with pending status
+    // Generate unique reference
+    const reference = `lbd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+    console.log("💳 Initializing Paystack payment:", {
+      email,
+      amount,
+      reference,
+      customerName
+    })
+
+    // Initialize payment with Paystack
+    const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: email.toLowerCase().trim(),
+        amount: Math.round(amount * 100), // Convert to kobo
+        reference,
+        currency: "NGN",
+        metadata: {
+          customer_name: customerName,
+          customer_phone: customerPhone || "",
+          services: Array.isArray(services) ? services.join(", ") : services,
+          booking_date: bookingDate,
+          booking_time: bookingTime,
+          notes: notes || "",
+        },
+        callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/booking/success`,
+      }),
+    })
+
+    if (!paystackResponse.ok) {
+      const errorText = await paystackResponse.text()
+      console.error("❌ Paystack initialization failed:", errorText)
+      return NextResponse.json(
+        { error: "Payment initialization failed" },
+        { status: 500 }
+      )
+    }
+
+    const paystackData: PaystackInitializeResponse = await paystackResponse.json()
+
+    if (!paystackData.status) {
+      console.error("❌ Paystack returned error:", paystackData.message)
+      return NextResponse.json(
+        { error: paystackData.message || "Payment initialization failed" },
+        { status: 500 }
+      )
+    }
+
+    console.log("✅ Payment initialized successfully:", paystackData.data.reference)
+
+    // Create pending booking record
     const bookingData = {
       client_name: customerName,
-      client_email: email,
+      client_email: email.toLowerCase().trim(),
       client_phone: customerPhone || "",
-      service_name: Array.isArray(services) ? services.map(s => s.name || s).join(", ") : services,
+      phone: customerPhone || "",
+      email: email.toLowerCase().trim(),
+      service_name: Array.isArray(services) ? services.join(", ") : services,
+      service: Array.isArray(services) ? services.join(", ") : services,
       booking_date: bookingDate,
       booking_time: bookingTime,
-      total_amount: totalAmount,
-      deposit_amount: depositAmount,
-      payment_reference: reference,
+      total_amount: amount * 2, // Assuming deposit is 50%
+      amount: amount,
+      deposit_amount: amount,
       payment_status: "pending",
-      status: "pending",
+      payment_reference: reference,
+      special_notes: notes || "",
       notes: notes || "",
+      status: "pending",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     }
+
+    console.log("💾 Creating pending booking:", bookingData)
 
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
@@ -158,48 +155,29 @@ export async function POST(request: NextRequest) {
     if (bookingError) {
       console.error("❌ Error creating booking:", bookingError)
       return NextResponse.json(
-        { error: "Failed to create booking" },
+        { error: "Failed to create booking record" },
         { status: 500 }
       )
     }
 
-    console.log("✅ Booking created with ID:", booking.id)
+    console.log("✅ Pending booking created:", booking.id)
 
     return NextResponse.json({
       success: true,
       message: "Payment initialized successfully",
       data: {
-        authorization_url: paymentResult.data.authorization_url,
-        access_code: paymentResult.data.access_code,
-        reference: paymentResult.data.reference,
+        authorization_url: paystackData.data.authorization_url,
+        access_code: paystackData.data.access_code,
+        reference: paystackData.data.reference,
+        amount: amount,
         booking_id: booking.id,
-        amount: depositAmount,
-        currency: "NGN",
       }
     })
 
   } catch (error) {
     console.error("❌ Payment initialization error:", error)
-
-    // Handle specific error types
-    if (error instanceof Error) {
-      if (error.name === 'AbortError') {
-        return NextResponse.json(
-          { error: "Payment initialization timed out. Please try again." },
-          { status: 408 }
-        )
-      }
-
-      if (error.message.includes('Paystack API error')) {
-        return NextResponse.json(
-          { error: "Payment service temporarily unavailable. Please try again." },
-          { status: 503 }
-        )
-      }
-    }
-
     return NextResponse.json(
-      { error: "Payment initialization failed. Please try again." },
+      { error: "Internal server error" },
       { status: 500 }
     )
   }

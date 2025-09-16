@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { X, CreditCard, Shield, AlertCircle, Loader2 } from "lucide-react"
+import { X, CreditCard, Shield, AlertCircle, Loader2 } from 'lucide-react'
 import { useToast } from "@/hooks/use-toast"
 
 interface PaystackPaymentProps {
@@ -11,9 +11,9 @@ interface PaystackPaymentProps {
     customerName: string
     customerEmail: string
     customerPhone: string
-    services: string[] // This matches what's passed from the booking page
-    date: string // This matches what's passed from the booking page
-    time: string // This matches what's passed from the booking page
+    services: string[]
+    date: string
+    time: string
     totalAmount: number
     depositAmount: number
     notes?: string
@@ -23,7 +23,6 @@ interface PaystackPaymentProps {
   onClose: () => void
 }
 
-// Extend Window interface for TypeScript
 declare global {
   interface Window {
     PaystackPop: {
@@ -75,16 +74,15 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
         throw new Error("Valid deposit amount is required")
       }
 
-      // Prepare clean request data with correct field names
+      // Prepare request data with correct field names that match the API route
       const requestData = {
+        email: bookingData.customerEmail.trim().toLowerCase(),
+        amount: Number(bookingData.depositAmount),
         customerName: bookingData.customerName.trim(),
-        customerEmail: bookingData.customerEmail.trim().toLowerCase(),
         customerPhone: bookingData.customerPhone?.trim() || "",
         services: bookingData.services,
-        date: bookingData.date.trim(),
-        time: bookingData.time.trim(),
-        totalAmount: Number(bookingData.totalAmount),
-        depositAmount: Number(bookingData.depositAmount),
+        bookingDate: bookingData.date.trim(),
+        bookingTime: bookingData.time.trim(),
         notes: bookingData.notes?.trim() || "",
       }
 
@@ -111,12 +109,12 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
 
       if (!response.ok) {
         console.error("❌ HTTP error:", response.status, result)
-        throw new Error(result.message || result.error || `HTTP ${response.status}`)
+        throw new Error(result.error || result.message || `HTTP ${response.status}`)
       }
 
-      if (!result.status) {
+      if (!result.success) {
         console.error("❌ Payment initialization failed:", result.message)
-        throw new Error(result.message || result.error || "Payment initialization failed")
+        throw new Error(result.error || result.message || "Payment initialization failed")
       }
 
       if (!result.data) {
@@ -124,9 +122,9 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
         throw new Error("No payment data received from server")
       }
 
-      if (!result.data.public_key) {
-        console.error("❌ No public key received:", result.data)
-        throw new Error("Payment configuration error - missing public key")
+      if (!result.data.authorization_url) {
+        console.error("❌ No authorization URL received:", result.data)
+        throw new Error("Payment configuration error - missing authorization URL")
       }
 
       console.log("✅ Payment initialized:", result.data.reference)
@@ -147,9 +145,9 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
       console.log("💳 Opening Paystack payment modal")
 
       const handler = window.PaystackPop.setup({
-        key: result.data.public_key,
+        key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
         email: bookingData.customerEmail,
-        amount: result.data.amount,
+        amount: result.data.amount * 100, // Convert to kobo
         currency: "NGN",
         ref: result.data.reference,
         metadata: {
@@ -205,8 +203,7 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
       const result = await response.json()
       console.log("📊 Payment verification result:", result)
 
-      // Check if result.status is true (boolean)
-      if (result.status === true) {
+      if (result.success === true) {
         console.log("✅ Payment verified successfully")
         toast({
           title: "Payment Successful!",
@@ -214,7 +211,7 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
         })
         onSuccess(reference)
       } else {
-        throw new Error(result.message || "Payment verification failed")
+        throw new Error(result.error || result.message || "Payment verification failed")
       }
     } catch (error) {
       console.error("❌ Payment verification error:", error)
