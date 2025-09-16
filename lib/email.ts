@@ -17,7 +17,7 @@ export interface EmailData {
 
 // Create Zoho Mail transporter
 function createZohoTransporter() {
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     host: 'smtp.zoho.com',
     port: 587,
     secure: false, // TLS
