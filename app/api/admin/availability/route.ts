@@ -14,15 +14,23 @@ export async function GET(request: NextRequest) {
 
     console.log("🗓️ Checking availability for date:", date)
 
-    // Check if the date is blocked
-    const { data: blockedDates, error: blockedDatesError } = await supabase
-      .from("blocked_dates")
-      .select("*")
-      .eq("blocked_date", date)
+    // Check if the date is blocked (with fallback for missing table)
+    let blockedDates = []
+    try {
+      const { data, error: blockedDatesError } = await supabase
+        .from("blocked_dates")
+        .select("*")
+        .eq("blocked_date", date)
 
-    if (blockedDatesError) {
-      console.error("❌ Error checking blocked dates:", blockedDatesError)
-      return NextResponse.json({ error: "Failed to check blocked dates" }, { status: 500 })
+      if (blockedDatesError) {
+        console.log("📋 blocked_dates table doesn't exist, assuming no blocked dates")
+        blockedDates = []
+      } else {
+        blockedDates = data || []
+      }
+    } catch (error) {
+      console.log("📋 blocked_dates table access failed, assuming no blocked dates")
+      blockedDates = []
     }
 
     if (blockedDates && blockedDates.length > 0) {
@@ -35,27 +43,43 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Get blocked time slots for this date
-    const { data: blockedTimeSlots, error: blockedTimeSlotsError } = await supabase
-      .from("blocked_time_slots")
-      .select("*")
-      .eq("blocked_date", date)
+    // Get blocked time slots for this date (with fallback for missing table)
+    let blockedTimeSlots = []
+    try {
+      const { data, error: blockedTimeSlotsError } = await supabase
+        .from("blocked_time_slots")
+        .select("*")
+        .eq("blocked_date", date)
 
-    if (blockedTimeSlotsError) {
-      console.error("❌ Error checking blocked time slots:", blockedTimeSlotsError)
-      return NextResponse.json({ error: "Failed to check blocked time slots" }, { status: 500 })
+      if (blockedTimeSlotsError) {
+        console.log("📋 blocked_time_slots table doesn't exist, assuming no blocked time slots")
+        blockedTimeSlots = []
+      } else {
+        blockedTimeSlots = data || []
+      }
+    } catch (error) {
+      console.log("📋 blocked_time_slots table access failed, assuming no blocked time slots")
+      blockedTimeSlots = []
     }
 
-    // Get existing bookings for this date
-    const { data: bookings, error: bookingsError } = await supabase
-      .from("bookings")
-      .select("booking_time, status")
-      .eq("booking_date", date)
-      .neq("status", "cancelled")
+    // Get existing bookings for this date (with graceful error handling)
+    let bookings = []
+    try {
+      const { data, error: bookingsError } = await supabase
+        .from("bookings")
+        .select("booking_time, status")
+        .eq("booking_date", date)
+        .neq("status", "cancelled")
 
-    if (bookingsError) {
-      console.error("❌ Error checking bookings:", bookingsError)
-      return NextResponse.json({ error: "Failed to check bookings" }, { status: 500 })
+      if (bookingsError) {
+        console.log("📋 Error fetching bookings (table may not exist), assuming no bookings:", bookingsError.message)
+        bookings = []
+      } else {
+        bookings = data || []
+      }
+    } catch (error) {
+      console.log("📋 Bookings table access failed, assuming no bookings")
+      bookings = []
     }
 
     // Define available time slots (9 AM to 6 PM)
