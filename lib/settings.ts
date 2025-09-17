@@ -32,6 +32,29 @@ export interface Notification {
   expires_at?: string
 }
 
+// Default settings fallback
+const DEFAULT_SETTINGS: BusinessSettings = {
+  businessName: "Lashed by Deedee",
+  businessEmail: "bookings@lashedbydeedee.com",
+  businessPhone: "+234 816 543 5528",
+  businessAddress: "Port Harcourt, Nigeria",
+  businessDescription: "Where Beauty Meets Precision. Professional lash and brow services.",
+  bookingBuffer: 15,
+  maxAdvanceBooking: 30,
+  cancellationPolicy: 24,
+  autoConfirmBookings: false,
+  emailNotifications: true,
+  smsNotifications: false,
+  bookingReminders: true,
+  marketingEmails: false,
+  twoFactorAuth: false,
+  sessionTimeout: 60,
+  passwordExpiry: 90,
+  theme: "light",
+  primaryColor: "pink",
+  timezone: "Africa/Lagos",
+}
+
 // Get all business settings
 export async function getBusinessSettings(): Promise<BusinessSettings> {
   try {
@@ -41,11 +64,18 @@ export async function getBusinessSettings(): Promise<BusinessSettings> {
 
     if (error) {
       console.error("Error fetching settings:", error)
-      throw error
+      console.log("🔧 Returning default settings - table may not exist")
+      return DEFAULT_SETTINGS
+    }
+
+    // If no data found, return defaults
+    if (!data || data.length === 0) {
+      console.log("📋 No settings found in database, returning defaults")
+      return DEFAULT_SETTINGS
     }
 
     // Convert array to object with proper type conversion
-    const settings: any = {}
+    const settings: any = { ...DEFAULT_SETTINGS } // Start with defaults
     data?.forEach(({ setting_key, setting_value, setting_type }) => {
       const key = setting_key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
 
@@ -64,7 +94,8 @@ export async function getBusinessSettings(): Promise<BusinessSettings> {
     return settings as BusinessSettings
   } catch (error) {
     console.error("Error in getBusinessSettings:", error)
-    throw error
+    console.log("🔧 Falling back to default settings due to error")
+    return DEFAULT_SETTINGS
   }
 }
 
