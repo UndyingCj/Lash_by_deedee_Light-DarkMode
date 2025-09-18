@@ -214,6 +214,60 @@ export class AdminAuthService {
     }
   }
 
+  static async resetPasswordAndGetAdmin(token: string, newPassword: string): Promise<AdminUser | null> {
+    try {
+      // Verify token is valid and not expired
+      const { data: admin, error: selectError } = await supabaseAdmin
+        .from('admin_users')
+        .select('*')
+        .eq('reset_token', token)
+        .single()
+
+      if (selectError || !admin || !admin.reset_token_expires) {
+        return null
+      }
+
+      const now = new Date()
+      const expiresAt = new Date(admin.reset_token_expires)
+      if (now > expiresAt) {
+        return null
+      }
+
+      // Hash new password
+      const saltRounds = 10
+      const passwordHash = await bcrypt.hash(newPassword, saltRounds)
+
+      // Update password and clear reset token
+      const { error: updateError } = await supabaseAdmin
+        .from('admin_users')
+        .update({
+          password_hash: passwordHash,
+          reset_token: null,
+          reset_token_expires: null,
+          updated_at: now.toISOString(),
+          last_login: now.toISOString()
+        })
+        .eq('id', admin.id)
+
+      if (updateError) {
+        return null
+      }
+
+      return {
+        id: admin.id,
+        username: admin.username,
+        email: admin.email,
+        is_active: admin.is_active,
+        created_at: admin.created_at,
+        updated_at: now.toISOString(),
+        last_login: now.toISOString()
+      }
+    } catch (error) {
+      console.error('Error resetting password and getting admin:', error)
+      return null
+    }
+  }
+
   static async changePassword(adminId: string, currentPassword: string, newPassword: string): Promise<boolean> {
     try {
       // Verify current password

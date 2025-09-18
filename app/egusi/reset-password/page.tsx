@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, Suspense } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,7 @@ import Link from "next/link"
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const [token, setToken] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -60,6 +61,12 @@ function ResetPasswordForm() {
 
       if (response.ok) {
         setMessage(data.message)
+        // If admin data is returned, redirect to dashboard after a short delay
+        if (data.admin) {
+          setTimeout(() => {
+            router.push('/egusi/dashboard')
+          }, 2000)
+        }
       } else {
         setError(data.error || "Failed to reset password")
       }
@@ -102,11 +109,13 @@ function ResetPasswordForm() {
             <div className="text-center">
               <div className="text-green-600 text-sm mb-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-md">
                 {message}
+                <div className="mt-2 text-xs text-green-500">
+                  Redirecting to admin dashboard...
+                </div>
               </div>
-              <Link href="/egusi" className="text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 flex items-center justify-center gap-2">
-                <ArrowLeft className="w-4 h-4" />
-                Back to Login
-              </Link>
+              <div className="flex justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
+              </div>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
