@@ -35,10 +35,11 @@ export class AdminAuthService {
 
   static async authenticateAdmin(username: string, password: string): Promise<AdminUser | null> {
     try {
+      // Try to find admin by username or email
       const { data: admin, error } = await supabaseAdmin
         .from('admin_users')
         .select('*')
-        .eq('username', username)
+        .or(`username.eq.${username},email.eq.${username}`)
         .eq('is_active', true)
         .single()
 
