@@ -501,6 +501,30 @@ WhatsApp: +234 816 543 5528
   }
 }
 
+// Generic send email function for simple emails
+export async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }) {
+  try {
+    console.log("📧 Sending email to:", to)
+
+    const transporter = createEmailTransporter()
+
+    const mailOptions = {
+      from: `"Lashed by Deedee" <${process.env.ZOHO_EMAIL_USER}>`,
+      to,
+      subject,
+      html
+    }
+
+    const result = await transporter.sendMail(mailOptions)
+    console.log("✅ Email sent successfully:", result.messageId)
+
+    return { success: true, message: "Email sent", messageId: result.messageId }
+  } catch (error) {
+    console.error("❌ Error sending email:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+  }
+}
+
 // Test function to verify email system is working
 export async function testEmailSystem() {
   console.log("🧪 Testing email system...")
