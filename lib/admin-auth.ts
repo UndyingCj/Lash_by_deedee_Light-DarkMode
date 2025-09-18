@@ -108,23 +108,52 @@ export class AdminAuthService {
 
   static async validateSession(sessionToken: string): Promise<AdminUser | null> {
     try {
-      const { data, error } = await supabaseAdmin
-        .rpc('validate_admin_session', { token: sessionToken })
+      // Clean expired sessions first
+      await supabaseAdmin
+        .from('admin_sessions')
+        .delete()
+        .lt('expires_at', new Date().toISOString())
 
-      if (error || !data || data.length === 0) {
+      // Get session with admin data
+      const { data: session, error: sessionError } = await supabaseAdmin
+        .from('admin_sessions')
+        .select(`
+          admin_id,
+          expires_at,
+          admin_users!inner (
+            id,
+            username,
+            email,
+            is_active
+          )
+        `)
+        .eq('session_token', sessionToken)
+        .single()
+
+      if (sessionError || !session) {
         return null
       }
 
-      const sessionData = data[0]
-      if (!sessionData.is_valid) {
+      // Check if session is expired
+      if (new Date(session.expires_at) < new Date()) {
+        // Delete expired session
+        await supabaseAdmin
+          .from('admin_sessions')
+          .delete()
+          .eq('session_token', sessionToken)
+        return null
+      }
+
+      const admin = session.admin_users as any
+      if (!admin.is_active) {
         return null
       }
 
       return {
-        id: sessionData.admin_id,
-        username: sessionData.username,
-        email: sessionData.email,
-        is_active: true,
+        id: admin.id,
+        username: admin.username,
+        email: admin.email,
+        is_active: admin.is_active,
         created_at: '',
         updated_at: ''
       }
