@@ -2,12 +2,13 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Shield, Eye, EyeOff } from "lucide-react"
+import Link from "next/link"
 
 export default function AdminLoginPage() {
   const [credentials, setCredentials] = useState({
@@ -18,22 +19,47 @@ export default function AdminLoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
 
+  // Check if already authenticated
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/admin/auth/validate', {
+          credentials: 'include'
+        })
+        if (response.ok) {
+          window.location.href = "/egusi/dashboard"
+        }
+      } catch (error) {
+        // User is not authenticated, stay on login page
+      }
+    }
+    checkAuth()
+  }, [])
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
 
     try {
-      // Simulate login - replace with actual authentication
-      if (credentials.username === "deedee" && credentials.password === "admin123") {
-        // Store auth token/session
-        localStorage.setItem("adminAuth", "authenticated")
+      const response = await fetch('/api/admin/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify(credentials)
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
         window.location.href = "/egusi/dashboard"
       } else {
-        setError("Invalid credentials")
+        setError(data.error || "Login failed")
       }
     } catch (err) {
-      setError("Login failed. Please try again.")
+      setError("Network error occurred. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -99,6 +125,12 @@ export default function AdminLoginPage() {
             <Button type="submit" className="w-full bg-pink-500 hover:bg-pink-600 text-white" disabled={isLoading}>
               {isLoading ? "Signing in..." : "Sign In"}
             </Button>
+
+            <div className="text-center mt-4">
+              <Link href="/egusi/forgot-password" className="text-sm text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300">
+                Forgot your password?
+              </Link>
+            </div>
           </form>
         </CardContent>
       </Card>

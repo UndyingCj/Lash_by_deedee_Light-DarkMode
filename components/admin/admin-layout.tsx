@@ -1,16 +1,18 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Home, Calendar, Users, BarChart3, Settings, LogOut, Search, Plus, Menu, X, Heart } from "lucide-react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { AddBookingModal } from "@/components/admin/add-booking-modal"
 import { NotificationBell } from "@/components/admin/notification-bell"
+import { AdminAuthGuard } from "@/components/admin/admin-auth-guard"
+import { useAdminAuth } from "@/lib/hooks/use-admin-auth"
 
 interface AdminLayoutProps {
   children: React.ReactNode
@@ -18,25 +20,15 @@ interface AdminLayoutProps {
   subtitle?: string
 }
 
-export function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
+function AdminLayoutContent({ children, title, subtitle }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const pathname = usePathname()
-  const router = useRouter()
+  const { admin, logout } = useAdminAuth()
 
-  useEffect(() => {
-    // Check authentication
-    const isAuth = localStorage.getItem("adminAuth")
-    if (!isAuth) {
-      router.push("/egusi")
-      return
-    }
-  }, [router])
-
-  const handleLogout = () => {
-    localStorage.removeItem("adminAuth")
-    router.push("/egusi")
+  const handleLogout = async () => {
+    await logout()
   }
 
   const navigation = [
@@ -110,11 +102,14 @@ export function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
           <div className="p-4 border-t border-slate-200/50 dark:border-slate-700/50">
             <div className="flex items-center space-x-3 p-3 bg-slate-50 dark:bg-slate-700 rounded-xl">
               <Avatar className="w-8 h-8">
-                <AvatarImage src="/images/deedee-portrait.png" />
-                <AvatarFallback className="bg-pink-100 text-pink-600 text-sm">DD</AvatarFallback>
+                <AvatarFallback className="bg-pink-100 text-pink-600 text-sm">
+                  {admin?.username.slice(0, 2).toUpperCase() || 'AD'}
+                </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">Deedee</p>
+                <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                  {admin?.username || 'Admin'}
+                </p>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Administrator</p>
               </div>
             </div>
@@ -168,8 +163,9 @@ export function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                       <Avatar className="h-8 w-8">
-                        <AvatarImage src="/images/deedee-portrait.png" />
-                        <AvatarFallback className="bg-pink-100 text-pink-600">DD</AvatarFallback>
+                        <AvatarFallback className="bg-pink-100 text-pink-600">
+                          {admin?.username.slice(0, 2).toUpperCase() || 'AD'}
+                        </AvatarFallback>
                       </Avatar>
                     </Button>
                   </DropdownMenuTrigger>
@@ -215,5 +211,15 @@ export function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
         }}
       />
     </div>
+  )
+}
+
+export function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
+  return (
+    <AdminAuthGuard>
+      <AdminLayoutContent title={title} subtitle={subtitle}>
+        {children}
+      </AdminLayoutContent>
+    </AdminAuthGuard>
   )
 }
