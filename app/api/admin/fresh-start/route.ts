@@ -32,15 +32,26 @@ export async function POST() {
           continue
         }
 
-        // Use SQL to completely truncate the table
+        // First disable RLS temporarily to ensure we can delete everything
         try {
           await supabaseAdmin.rpc('sql', {
-            query: `TRUNCATE TABLE public.${tableName} RESTART IDENTITY CASCADE;`
+            query: `ALTER TABLE public.${tableName} DISABLE ROW LEVEL SECURITY;`
+          })
+        } catch (rlsError) {
+          console.log(`⚠️ Could not disable RLS on ${tableName}, continuing anyway`)
+        }
+
+        // Use SQL to completely delete all records with RESTART IDENTITY
+        try {
+          await supabaseAdmin.rpc('sql', {
+            query: `DELETE FROM public.${tableName}; ALTER SEQUENCE IF EXISTS public.${tableName}_id_seq RESTART WITH 1;`
           })
           console.log(`✅ Cleared table: ${tableName}`)
           clearedTables.push(tableName)
-        } catch (truncateError) {
-          // If truncate fails, try delete all records
+        } catch (deleteError) {
+          console.log(`❌ SQL delete failed for ${tableName}, trying Supabase client delete`)
+
+          // Fallback: try regular delete with Supabase client
           try {
             const { error: deleteError } = await supabaseAdmin
               .from(tableName)
@@ -53,9 +64,18 @@ export async function POST() {
               console.log(`✅ Cleared table: ${tableName}`)
               clearedTables.push(tableName)
             }
-          } catch (deleteError) {
-            console.log(`❌ Failed to clear table ${tableName}: ${deleteError}`)
+          } catch (fallbackError) {
+            console.log(`❌ All deletion methods failed for ${tableName}: ${fallbackError}`)
           }
+        }
+
+        // Re-enable RLS after clearing
+        try {
+          await supabaseAdmin.rpc('sql', {
+            query: `ALTER TABLE public.${tableName} ENABLE ROW LEVEL SECURITY;`
+          })
+        } catch (rlsError) {
+          console.log(`⚠️ Could not re-enable RLS on ${tableName}`)
         }
       } catch (error) {
         console.log(`📋 Table ${tableName} access failed: ${error}`)
