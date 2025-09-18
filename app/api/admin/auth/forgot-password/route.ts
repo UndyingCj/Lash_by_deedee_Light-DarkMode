@@ -25,7 +25,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Send reset email
-    const resetLink = `${process.env.NEXT_PUBLIC_SITE_URL}/egusi/reset-password?token=${resetToken}`
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://lashedbydeedee.com'
+    const resetLink = `${siteUrl}/egusi/reset-password?token=${resetToken}`
 
     try {
       await sendEmail({

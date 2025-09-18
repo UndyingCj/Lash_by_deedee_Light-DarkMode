@@ -93,14 +93,14 @@ GRANT SELECT ON public.blocked_time_slots TO anon;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO service_role;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon;
 
--- Create default admin user (password: Admin123!)
--- Password hash for 'Admin123!' using bcrypt
+-- Create default admin user (password: Deedee@700)
+-- Password hash for 'Deedee@700' using bcrypt
 INSERT INTO public.admin_users (username, email, password_hash)
 VALUES (
-    'deedee',
-    'admin@lashedbydeedee.com',
-    '$2b$10$rOzC8k8QGVvzqHvKGfJKQeCYMQKJ8YXjBFzHsHWxK8oGrFmQHm0Qu'
-) ON CONFLICT (username) DO NOTHING;
+    'lashedbydeedeee',
+    'lashedbydeedeee@gmail.com',
+    '$2b$10$QH8/uhy9ua3n4lnr7TESluLzpIFDBya3bBoliHPcKIA0JaiyB.f8q'
+) ON CONFLICT (email) DO NOTHING;
 
 -- Create function to clean expired sessions
 CREATE OR REPLACE FUNCTION clean_expired_admin_sessions()
