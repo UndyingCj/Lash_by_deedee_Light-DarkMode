@@ -32,18 +32,29 @@ export async function POST() {
           continue
         }
 
-        if (existingData !== null && existingData !== undefined) {
-          // Delete all records from the table
-          const { error: deleteError } = await supabaseAdmin
-            .from(tableName)
-            .delete()
-            .neq('id', 0) // Delete everything (using neq with impossible condition)
+        // Use SQL to completely truncate the table
+        try {
+          await supabaseAdmin.rpc('sql', {
+            query: `TRUNCATE TABLE public.${tableName} RESTART IDENTITY CASCADE;`
+          })
+          console.log(`✅ Cleared table: ${tableName}`)
+          clearedTables.push(tableName)
+        } catch (truncateError) {
+          // If truncate fails, try delete all records
+          try {
+            const { error: deleteError } = await supabaseAdmin
+              .from(tableName)
+              .delete()
+              .gte('id', 0) // Delete all records where id >= 0 (which is all records)
 
-          if (deleteError) {
-            console.log(`❌ Error clearing ${tableName}: ${deleteError.message}`)
-          } else {
-            console.log(`✅ Cleared table: ${tableName}`)
-            clearedTables.push(tableName)
+            if (deleteError) {
+              console.log(`❌ Error clearing ${tableName}: ${deleteError.message}`)
+            } else {
+              console.log(`✅ Cleared table: ${tableName}`)
+              clearedTables.push(tableName)
+            }
+          } catch (deleteError) {
+            console.log(`❌ Failed to clear table ${tableName}: ${deleteError}`)
           }
         }
       } catch (error) {
