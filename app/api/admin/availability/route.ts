@@ -8,8 +8,60 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const date = searchParams.get("date")
 
+    // If no date provided, return all calendar data for the frontend
     if (!date) {
-      return NextResponse.json({ error: "Date parameter is required" }, { status: 400 })
+      console.log("📅 Loading all calendar data for admin panel")
+
+      // Get all blocked dates
+      let blockedDates = []
+      try {
+        const { data, error: blockedDatesError } = await supabase
+          .from("blocked_dates")
+          .select("*")
+          .order("blocked_date", { ascending: true })
+
+        if (blockedDatesError) {
+          console.log("📋 blocked_dates table doesn't exist, assuming no blocked dates")
+          blockedDates = []
+        } else {
+          blockedDates = data || []
+        }
+      } catch (error) {
+        console.log("📋 blocked_dates table access failed, assuming no blocked dates")
+        blockedDates = []
+      }
+
+      // Get all blocked time slots
+      let blockedSlots = []
+      try {
+        const { data, error: blockedSlotsError } = await supabase
+          .from("blocked_time_slots")
+          .select("*")
+          .order("blocked_date", { ascending: true })
+
+        if (blockedSlotsError) {
+          console.log("📋 blocked_time_slots table doesn't exist, assuming no blocked time slots")
+          blockedSlots = []
+        } else {
+          blockedSlots = data || []
+        }
+      } catch (error) {
+        console.log("📋 blocked_time_slots table access failed, assuming no blocked time slots")
+        blockedSlots = []
+      }
+
+      console.log("✅ Calendar data loaded:", {
+        blockedDates: blockedDates.length,
+        blockedSlots: blockedSlots.length
+      })
+
+      // Return data in the format expected by the calendar frontend
+      return NextResponse.json({
+        success: true,
+        blockedDates: blockedDates,
+        blockedSlots: blockedSlots,
+        message: "Calendar data loaded successfully"
+      })
     }
 
     console.log("🗓️ Checking availability for date:", date)
@@ -122,11 +174,21 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { action, date, time, reason } = body
+    const { action, type, date, time, reason } = body
 
-    console.log("🔧 Availability management action:", { action, date, time, reason })
+    console.log("🔧 Availability management action:", { action, type, date, time, reason })
 
-    if (action === "block_date") {
+    // Handle the new format from calendar frontend
+    let actualAction = action
+    if (type && action) {
+      if (type === "date") {
+        actualAction = action === "block" ? "block_date" : "unblock_date"
+      } else if (type === "slot") {
+        actualAction = action === "block" ? "block_time" : "unblock_time"
+      }
+    }
+
+    if (actualAction === "block_date") {
       if (!date) {
         return NextResponse.json({ error: "Date is required" }, { status: 400 })
       }
@@ -151,7 +213,7 @@ export async function POST(request: NextRequest) {
       console.log("✅ Date blocked successfully:", date)
       return NextResponse.json({ success: true, data })
 
-    } else if (action === "unblock_date") {
+    } else if (actualAction === "unblock_date") {
       if (!date) {
         return NextResponse.json({ error: "Date is required" }, { status: 400 })
       }
@@ -169,7 +231,7 @@ export async function POST(request: NextRequest) {
       console.log("✅ Date unblocked successfully:", date)
       return NextResponse.json({ success: true })
 
-    } else if (action === "block_time") {
+    } else if (actualAction === "block_time") {
       if (!date || !time) {
         return NextResponse.json({ error: "Date and time are required" }, { status: 400 })
       }
@@ -195,7 +257,7 @@ export async function POST(request: NextRequest) {
       console.log("✅ Time slot blocked successfully:", { date, time })
       return NextResponse.json({ success: true, data })
 
-    } else if (action === "unblock_time") {
+    } else if (actualAction === "unblock_time") {
       if (!date || !time) {
         return NextResponse.json({ error: "Date and time are required" }, { status: 400 })
       }
