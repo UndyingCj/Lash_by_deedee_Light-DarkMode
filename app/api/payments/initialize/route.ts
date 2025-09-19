@@ -169,7 +169,8 @@ export async function POST(request: NextRequest) {
         authorization_url: paystackData.data.authorization_url,
         access_code: paystackData.data.access_code,
         reference: paystackData.data.reference,
-        amount: amount,
+        amount: Math.round(amount * 100), // Amount in kobo for frontend
+        public_key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
         booking_id: booking.id,
       }
     })
