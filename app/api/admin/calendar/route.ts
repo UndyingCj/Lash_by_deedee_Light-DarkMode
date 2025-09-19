@@ -6,7 +6,7 @@ import {
   getBlockedTimeSlots,
   addBlockedTimeSlot,
   removeBlockedTimeSlot,
-} from "@/lib/supabase"
+} from "@/lib/database-operations"
 
 export async function GET(request: NextRequest) {
   try {

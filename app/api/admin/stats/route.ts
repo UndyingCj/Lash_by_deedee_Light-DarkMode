@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getDashboardStats, getBookings } from "@/lib/supabase"
+import { getDashboardStats, getBookings } from "@/lib/database-operations"
 
 export async function GET(request: NextRequest) {
   try {

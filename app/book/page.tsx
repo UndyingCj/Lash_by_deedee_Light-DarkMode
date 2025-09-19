@@ -253,18 +253,18 @@ export default function BookingPage() {
     // Initial load
     loadAvailability(false)
 
-    // Setup very frequent polling for real-time updates
+    // ✅ PERFORMANCE FIX: Reduced polling frequency to prevent memory leaks
     const startPolling = () => {
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current)
       }
 
-      // Poll every 2 seconds for immediate updates
+      // Poll every 30 seconds instead of 2 seconds (reduced by 93%)
       pollingIntervalRef.current = setInterval(() => {
         if (mountedRef.current && !document.hidden) {
           loadAvailability(true)
         }
-      }, 2000)
+      }, 30000) // Changed from 2000ms to 30000ms
     }
 
     startPolling()
