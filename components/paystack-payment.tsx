@@ -145,9 +145,9 @@ export default function PaystackPayment({ bookingData, onSuccess, onError, onClo
       console.log("💳 Opening Paystack payment modal")
 
       const handler = window.PaystackPop.setup({
-        key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
+        key: result.data.public_key,
         email: bookingData.customerEmail,
-        amount: result.data.amount * 100, // Convert to kobo
+        amount: result.data.amount, // Already in kobo from API
         currency: "NGN",
         ref: result.data.reference,
         metadata: {
